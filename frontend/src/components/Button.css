@@ -1,0 +1,26 @@
+/* src/components/Button.css */
+.custom-btn {
+  width: 100%;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+/* Variante principal en Verde Fitness */
+.custom-btn.primary {
+  background-color: #10b981; /* Verde esmeralda */
+  color: #0f172a;           /* Texto oscuro para buen contraste */
+}
+
+.custom-btn.primary:hover {
+  background-color: #059669;
+  transform: translateY(-1px);
+}
+
+.custom-btn.primary:active {
+  transform: translateY(0);
+}
