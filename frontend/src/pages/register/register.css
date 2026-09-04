@@ -107,130 +107,525 @@
   font-weight: 600;
 }
 
+/* =========================================================
+   PÁGINA COMPLETA
+   ========================================================= */
+
+.register-page {
+  min-height: 100vh;
+  width: 100%;
+
+  background: #191919;
+  color: #ffffff;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  padding: 50px 30px;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   TARJETA PRINCIPAL
+   ========================================================= */
+
+.register-card {
+  width: 100%;
+  max-width: 1050px;
+
+  background: #202020;
+
+  border: 1px solid #111111;
+  border-radius: 14px;
+
+  padding: 35px 55px 40px;
+
+  box-sizing: border-box;
+
+  /*
+    En computadora usamos dos columnas:
+    
+    izquierda  -> datos del gimnasio
+    derecha    -> datos del dueño
+  */
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+
+  column-gap: 55px;
+  row-gap: 20px;
+
+  box-shadow:
+    0 15px 40px rgba(0, 0, 0, 0.35);
+}
+
+
+/* =========================================================
+   LOGO
+   ========================================================= */
+
+.register-logoImg {
+  width: 240px;
+  height: auto;
+
+  display: block;
+
+  /*
+    Como register-card es grid,
+    hacemos que el logo ocupe las dos columnas.
+  */
+  grid-column: 1 / -1;
+
+  justify-self: center;
+
+  margin-bottom: 0;
+
+  border-radius: 50%;
+}
+
+
+/* =========================================================
+   TÍTULO PRINCIPAL
+   ========================================================= */
+
+.register-card > h1 {
+  grid-column: 1 / -1;
+
+  margin: 0 0 10px;
+
+  text-align: center;
+
+  font-size: 30px;
+  font-weight: 700;
+
+  color: #ffffff;
+}
+
+
+/* =========================================================
+   SECCIONES
+   ========================================================= */
+
+.register-card > section {
+  display: flex;
+  flex-direction: column;
+
+  gap: 24px;
+
+  min-width: 0;
+}
+
+
+/* Título "Datos del gimnasio" / "Datos del dueño" */
+
+.register-card section h2 {
+  margin: 0 0 5px;
+
+  padding-bottom: 12px;
+
+  font-size: 19px;
+  font-weight: 700;
+
+  text-align: center;
+
+  color: #8cff00;
+
+  border-bottom: 1px solid #4d4d4d;
+}
+
+
+/* =========================================================
+   GRUPO DE INPUT
+   ========================================================= */
+
+.form-group {
+  position: relative;
+
+  display: flex;
+  flex-direction: column;
+
+  /*
+    Dejamos algo de espacio abajo por si aparece
+    un mensaje de error.
+  */
+  gap: 6px;
+}
+
+
+/* =========================================================
+   LABEL
+   ========================================================= */
+
+/*
+  El label queda apoyado sobre el borde del input,
+  como en el diseño de Figma.
+*/
+
+.form-group label {
+  position: absolute;
+
+  top: -8px;
+  left: 14px;
+
+  z-index: 2;
+
+  padding: 0 7px;
+
+  background: #2a2a2a;
+
+  color: #8cff00;
+
+  font-size: 13px;
+  font-weight: 700;
+
+  text-transform: uppercase;
+
+  line-height: 16px;
+}
+
+
+/* =========================================================
+   INPUTS
+   ========================================================= */
+
 .form-group input {
   width: 100%;
 
-  padding: 12px 14px;
+  min-height: 52px;
 
-  background: #0b0f14;
-  border: 1px solid #2b3642;
-  border-radius: 8px;
+  padding: 12px 15px;
+
+  box-sizing: border-box;
+
+  background: transparent;
+
+  border: 1.5px solid #83e600;
+  border-radius: 7px;
 
   color: #ffffff;
 
-  font-size: 14px;
+  font-size: 15px;
 
   outline: none;
 
   transition:
     border-color 0.2s ease,
-    box-shadow 0.2s ease;
+    box-shadow 0.2s ease,
+    background 0.2s ease;
 }
+
+
+/* Placeholder */
 
 .form-group input::placeholder {
-  color: #66717d;
+  color: #a5a5a5;
+  opacity: 0.8;
 }
+
+
+/* Al hacer click en el input */
 
 .form-group input:focus {
-  border-color: #22c55e;
+  border-color: #9cff00;
 
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
+  background: rgba(140, 255, 0, 0.025);
+
+  box-shadow:
+    0 0 0 3px rgba(140, 255, 0, 0.1);
 }
 
-.field-error {
-  color: #f87171;
+
+/* Efecto cuando pasamos el mouse */
+
+.form-group input:hover {
+  border-color: #9cff00;
+}
+
+
+/* Evita fondos blancos/azules de autocomplete en Chrome */
+
+.form-group input:-webkit-autofill,
+.form-group input:-webkit-autofill:hover,
+.form-group input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ffffff;
+
+  -webkit-box-shadow:
+    0 0 0 1000px #2a2a2a inset;
+
+  transition:
+    background-color 5000s ease-in-out 0s;
+}
+
+
+/* =========================================================
+   ERRORES DE VALIDACIÓN
+   ========================================================= */
+
+/*
+  En tu JSX los errores usan:
+  
+  <span className="error">
+*/
+
+.error {
+  margin-top: 2px;
+
+  color: #ff7272;
+
   font-size: 12px;
+  font-weight: 500;
 }
 
-.form-error {
-  padding: 12px 14px;
 
-  border-radius: 8px;
+/* =========================================================
+   ERROR DEL BACKEND
+   ========================================================= */
 
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+.backend-error {
+  grid-column: 1 / -1;
 
-  color: #fca5a5;
-
-  font-size: 14px;
-}
-
-.form-success {
-  padding: 12px 14px;
-
-  border-radius: 8px;
-
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-
-  color: #86efac;
-
-  font-size: 14px;
-}
-
-.register-button {
   width: 100%;
 
-  padding: 13px;
+  padding: 12px 15px;
+
+  box-sizing: border-box;
+
+  background: rgba(255, 70, 70, 0.1);
+
+  border: 1px solid rgba(255, 90, 90, 0.5);
+  border-radius: 7px;
+
+  color: #ff8888;
+
+  font-size: 14px;
+
+  text-align: center;
+}
+
+
+/* =========================================================
+   MENSAJE DE ÉXITO
+   ========================================================= */
+
+.success-message {
+  grid-column: 1 / -1;
+
+  width: 100%;
+
+  padding: 12px 15px;
+
+  box-sizing: border-box;
+
+  background: rgba(140, 255, 0, 0.08);
+
+  border: 1px solid rgba(140, 255, 0, 0.45);
+  border-radius: 7px;
+
+  color: #9cff00;
+
+  font-size: 14px;
+
+  text-align: center;
+}
+
+
+/* =========================================================
+   BOTÓN "CREAR CUENTA"
+   ========================================================= */
+
+/*
+  En tu JSX el botón NO tiene className,
+  así que lo seleccionamos directamente.
+*/
+
+.register-card > button {
+  grid-column: 1 / -1;
+
+  width: 100%;
+
+  max-width: 450px;
+
+  min-height: 58px;
+
+  justify-self: center;
+
+  margin-top: 10px;
 
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
 
-  background: #22c55e;
-  color: #07110a;
+  /*
+    Verde oscuro como el botón
+    "REGISTRARSE" del diseño móvil.
+  */
+  background: #064d0a;
 
-  font-size: 15px;
-  font-weight: 700;
+  color: #ffffff;
+
+  font-size: 17px;
+  font-weight: 800;
+
+  text-transform: uppercase;
 
   cursor: pointer;
 
-  transition: background 0.2s ease;
+  transition:
+    background 0.2s ease,
+    transform 0.15s ease,
+    box-shadow 0.2s ease;
 }
 
-.register-button:hover {
-  background: #16a34a;
+
+/* Hover */
+
+.register-card > button:hover:not(:disabled) {
+  background: #08720e;
+
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.3);
 }
 
-.register-button:disabled {
-  opacity: 0.6;
+
+/* Cuando se hace click */
+
+.register-card > button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+
+/* Mientras está registrando */
+
+.register-card > button:disabled {
+  opacity: 0.55;
+
   cursor: not-allowed;
 }
 
-.register-footer {
-  margin: 24px 0 0;
+
+/* =========================================================
+   TEXTO INFERIOR
+   ========================================================= */
+
+/*
+  Corresponde a:
+
+  ¿Ya tenés una cuenta? Iniciar sesión
+*/
+
+.register-card > p {
+  grid-column: 1 / -1;
+
+  margin: 0;
 
   text-align: center;
 
-  color: #9ca3af;
+  color: #d3d3d3;
+
   font-size: 14px;
 }
 
-.register-footer a {
-  color: #22c55e;
-  font-weight: 600;
+
+/* Link de iniciar sesión */
+
+.register-card > p a {
+  color: #8cff00;
+
+  font-weight: 700;
+
+  text-decoration: none;
+
+  transition: color 0.2s ease;
 }
 
-.register-footer a:hover {
+
+.register-card > p a:hover {
+  color: #afff4d;
+
   text-decoration: underline;
 }
 
-/* RESPONSIVE */
 
-@media (max-width: 600px) {
+/* =========================================================
+   TABLETS
+   ========================================================= */
+
+@media (max-width: 900px) {
+
+  .register-page {
+    padding: 30px 20px;
+  }
+
+  .register-card {
+    max-width: 700px;
+
+    padding: 35px 35px;
+
+    /*
+      En pantallas más pequeñas dejamos de usar
+      las dos columnas.
+    */
+    grid-template-columns: 1fr;
+
+    column-gap: 0;
+    row-gap: 28px;
+  }
+
+  .register-logoImg,
+  .register-card > h1,
+  .backend-error,
+  .success-message,
+  .register-card > button,
+  .register-card > p {
+    grid-column: 1;
+  }
+
+}
+
+
+/* =========================================================
+   CELULARES
+   ========================================================= */
+
+@media (max-width: 550px) {
+
   .register-page {
     padding: 20px 12px;
+
+    align-items: flex-start;
   }
 
   .register-card {
     padding: 28px 20px;
-    border-radius: 12px;
+
+    border-radius: 10px;
   }
 
-  .register-header h1 {
-    font-size: 26px;
+  .register-logoImg {
+    width: 125px;
   }
 
-  .form-row {
-    grid-template-columns: 1fr;
+  .register-card > h1 {
+    font-size: 25px;
   }
+
+  .register-card section h2 {
+    font-size: 17px;
+  }
+
+  .form-group input {
+    min-height: 50px;
+
+    font-size: 14px;
+  }
+
+  .register-card > button {
+    min-height: 55px;
+
+    font-size: 16px;
+  }
+
 }

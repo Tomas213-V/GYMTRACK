@@ -1,7 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&family=Press+Start+2P&display=swap');
 body{
     margin: 0%;
     padding: 0%;
-    background-color: rgb(167, 123, 123);
+    background-color: #151719;
+    font-family: 'Nunito Sans', sans-serif;
 }
 p{
     margin: 0%;
