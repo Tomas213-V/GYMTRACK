@@ -1,0 +1,15 @@
+.Caja-subtitulo{
+ position: relative;
+ z-index: 100;
+ display: flex;
+ justify-content: center;
+ font-family: "Archivo", sans-serif;
+ font-weight: 200;
+ font-size: 18px;
+ color: #ffffff52;
+ margin: 15px 0 0 0;
+}
+.Caja-subtitulo p{
+    width: 40%;
+    text-align: center;
+}

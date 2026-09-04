@@ -1,21 +1,27 @@
 import { Link } from "react-router-dom"
 import "./landing.css"
-
+import NavLanding from "../../components/landing/nav/nav"
+import Aviso from "../../components/landing/aviso/aviso"
+import Titulo from "../../components/landing/titulo-landing/titulo"
+import Subtitulo from "../../components/landing/subtitulo-landing/subtitulo"
+import Botones from "../../components/landing/botones-landing/botones"
+import Calificaciones from "../../components/landing/calificaciones/calificaciones"
+import Caracteristicas from "../../components/landing/caracteristicas/caracteristicas"
+import Foother from "../../components/Foother/foother"
 function Landing(params) {
     return (
         <>
             <div className="Caja-landing">
-                <p>Hola que tul </p>
-                <p>Hola que tul 1 </p>
-                <p>Hola que tul 2 </p>
-                <p>Hola que tul 3 </p>
-                <p>Hola que tul 4 </p>
-                <p>Hola que tul 5 </p>
-
-                <Link to={'/register'}>Register</Link>
-                <Link to={'/login'}>Login</Link>
+                 <NavLanding/>
+                 <Aviso/> 
+                 <Titulo/>
+                 <Subtitulo/>
+                 <Botones/>
+                 <Calificaciones/>
+                 <Caracteristicas/>
+                 <Foother/>
             </div>
-
+           
         </>
     )
 }

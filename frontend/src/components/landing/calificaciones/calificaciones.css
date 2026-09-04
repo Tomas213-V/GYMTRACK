@@ -1,0 +1,17 @@
+.Caja-calificaciones{
+    position: relative;
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    margin: 2% 0 0 0;
+    gap: 5px;
+}
+.Caja-calificaciones i{
+    color: #49c929;
+}
+.Caja-calificaiones-descripcion{
+    font-family: "Archivo", sans-serif;
+ font-weight: 200;
+ font-size: 16px;
+ color: #ffffff52;
+}
