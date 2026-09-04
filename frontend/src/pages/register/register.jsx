@@ -11,6 +11,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { register } from '../../services/authService.js'
 
 import logoImg from '../../assets/logo_verde.jpg'
+import PasswordInput from '../../components/PasswordInput/PasswordInput'
 
 // Importamos los estilos específicos de esta pantalla.
 import './register.css'
@@ -318,51 +319,25 @@ function Register() {
 
           </div>
 
-          <div className="form-group">
+          <PasswordInput
+            id="contrasena"
+            name="contrasena"
+            value={formData.contrasena}
+            onChange={handleChange}
+            placeholder="Mínimo 8 caracteres"
+            label="Contraseña"
+            error={errors.contrasena}
+          />
 
-            <label htmlFor="contrasena">
-              Contraseña
-            </label>
-
-            <input
-              id="contrasena"
-              name="contrasena"
-              type="password"
-              value={formData.contrasena}
-              onChange={handleChange}
-              placeholder="Mínimo 8 caracteres"
-            />
-
-            {errors.contrasena && (
-              <span className="error">
-                {errors.contrasena}
-              </span>
-            )}
-
-          </div>
-
-          <div className="form-group">
-
-            <label htmlFor="confirmarContrasena">
-              Confirmar contraseña
-            </label>
-
-            <input
-              id="confirmarContrasena"
-              name="confirmarContrasena"
-              type="password"
-              value={formData.confirmarContrasena}
-              onChange={handleChange}
-              placeholder="Repetí tu contraseña"
-            />
-
-            {errors.confirmarContrasena && (
-              <span className="error">
-                {errors.confirmarContrasena}
-              </span>
-            )}
-
-          </div>
+          <PasswordInput
+            id="confirmarContrasena"
+            name="confirmarContrasena"
+            value={formData.confirmarContrasena}
+            onChange={handleChange}
+            placeholder="Repetí tu contraseña"
+            label="Confirmar contraseña"
+            error={errors.confirmarContrasena}
+          />
 
         </section>
 
