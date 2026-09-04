@@ -1,0 +1,38 @@
+.Caja-botones{
+    position: relative;
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    margin: 2% 0 0 0;
+    gap: 20px;
+    align-items: center;
+}
+.Caja-botones a:nth-child(1){
+    color: #000000;
+    background: #00ff37;
+    box-shadow: 0 0 35px #00ff3796, 0 0 15px #00ff37;
+}
+.Caja-botones a:nth-child(2){
+    color: #ffffff;
+    background: #000000;
+   
+}
+.Caja-botones a{
+    font-family: "Oswald", sans-serif;
+    text-decoration: none;
+    color: #ffffff;
+    font-size: 20px;
+    font-weight: 500;
+    width: 200px;
+    padding: 10px  0 10px 0;
+    text-align: center;
+    border-radius: 5px;
+    transition: 0.4s;
+}
+.Caja-botones a:nth-child(1):hover{
+   scale: 1.05;
+   
+}
+.Caja-botones a:nth-child(2):hover{
+    scale: 1.05;
+}

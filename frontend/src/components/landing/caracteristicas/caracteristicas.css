@@ -1,0 +1,24 @@
+.Caja-caracteristicas{
+    position: relative;
+    display: flex;
+    justify-content: center;
+    z-index: 100;
+    gap: 40px;
+    margin: 2% 0 0 0;
+}
+.Caja-caracteristicas p{
+   
+ font-family: "Archivo", sans-serif;
+ font-weight: 100;
+    font-size: 18px;
+    color: #ffffff73;
+    padding: 0 0 0 0px;
+}
+.Caja-caracteristicas i {
+    color: #00ff15;
+    filter: drop-shadow(0 0 5px #00ff15);
+    margin: 0 10px 0 0;
+}
+.Caja-caracteristicas a {
+ 
+}

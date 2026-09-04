@@ -1,0 +1,18 @@
+
+.Caja-titulo{
+    position: relative;
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    font-family: "Oswald", sans-serif;
+}
+.Caja-titulo b{
+    font-size: 90px;
+    color: #ffffff;
+}
+.Caja-titulo span{
+    color: #00ff0d;
+    text-shadow: 0 0 35px #00ff0d;
+}
