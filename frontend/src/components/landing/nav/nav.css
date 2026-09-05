@@ -38,7 +38,11 @@ width: 85px;
     font-size: 20px;
    font-family: "Inter", sans-serif;
       font-weight: 300;
+      transition: 0.2s;
      
+}
+.Caja-nav-landing-opciones a:hover{
+    color: #ffffff;
 }
 .Caja-nav-landing-botones{
     display: flex;
@@ -55,6 +59,13 @@ font-family: "Oswald", sans-serif;
 }
 .Caja-nav-landing-botones a:nth-child(1){
   color: #ffffffb7;
+  transition: 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.Caja-nav-landing-botones a:hover:nth-child(1){
+    color: #ffffff;
 }
 .Caja-nav-landing-botones a:nth-child(2){
     background: #4dff3d;
@@ -62,4 +73,8 @@ font-family: "Oswald", sans-serif;
     padding: 5px;
     border-radius: 5px;
     box-shadow: 0 0 15px #4dff3d;
+    transition: 0.2s;
+}
+.Caja-nav-landing-botones a:hover:nth-child(2){
+    transform: scale(1.05);
 }

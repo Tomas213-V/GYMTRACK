@@ -16,7 +16,11 @@
     padding: 2% 0 2% 0;
     border: 2px #2b2b2b solid;
     border-radius: 10px;
-   
+   transition: 0.2s;
+}
+.Caja-tarjeta:hover{
+    transform: translateY(-15px);
+        box-shadow: 0 10px 20px #2b2b2b60;
 }
 .Caja-tarjeta-icono{
     color: #4dff3d;

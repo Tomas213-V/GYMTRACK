@@ -46,6 +46,12 @@
     margin: 25px 0 0 0;
     display: flex;
     gap: 25px;
+      
+ 
+}
+.Caja-publicidad-vinculos a:hover{
+    scale: 1.05;
+    
 }
 .Caja-publicidad-vinculos a:nth-child(1){
      background: #4dff3d;
@@ -58,6 +64,7 @@
     text-decoration: none;
     display: flex;
     gap: 25px;
+       transition: 0.4s;
 }
 
 .Caja-publicidad-vinculos a:nth-child(2){
@@ -71,6 +78,7 @@
     text-decoration: none;
     display: flex;
     gap: 25px;
+       transition: 0.4s;
 
     
 }
