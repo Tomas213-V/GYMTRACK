@@ -10,6 +10,7 @@ import Landing from './pages/landing/landing'
 import Login from './pages/login/login'
 import Register from './pages/register/register'
 import Dashboard from './pages/dashboard/dashboard'
+import Progress from './pages/progress/progress'
 
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -43,6 +44,10 @@ function App() {
               <Dashboard />
             </ProtectedRoute>
           }
+        />
+        <Route 
+          path="/progress"
+          element={<Progress/>}
         />
 
      </Routes>

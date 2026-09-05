@@ -14,15 +14,15 @@ function NavLanding() {
                 <div className="Caja-nav-landing-opciones">
                 <Link to="/">Inicio</Link>
                 <Link to="/">Ejercicios</Link>
-                <Link to="/">Progreso</Link>
+                <Link to="/progress">Progreso</Link>
                 <Link to="/">Precio</Link>
                 <Link to="/">Soporte</Link>  
                 </div>
                
                
                 <div className="Caja-nav-landing-botones">
-               <Link to="/"><FaExternalLinkAlt/>Iniciar sesion</Link>
-                <Link to="/">Registrarse</Link>  
+               <Link to="/login"><FaExternalLinkAlt/>Iniciar sesion</Link>
+                <Link to="/register">Registrarse</Link>  
                 </div>
 
               
