@@ -1,0 +1,68 @@
+.Caja-ejercicios{
+ background:#1b1b1b ;
+    width: 100%;
+    height: 100%;
+    position: relative;
+     box-shadow: inset 0 0 50px #000000 , inset 0 0 80px #000000, inset 0 80px 50px #000000;
+}
+.Caja-ejercicios::before{
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000000c5;
+     z-index: 10;
+     backdrop-filter: blur(5px);
+}
+.Caja-ejercicios-titulo{
+    display: flex;
+    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 100;
+    margin: 2% 0 0 0;
+}
+.Caja-ejercicios-titulo p:nth-child(1) {
+   font-size: 16px;
+   color: #3ef747;
+   font-family: "Archivo", sans-serif;
+   text-shadow: 0 0 5px #3ef74788;
+}
+.Caja-ejercicios-titulo b{
+    font-size: 50px;
+        font-family: "Oswald", sans-serif;
+        color: #ffffff;
+        width: 450px;
+        text-align: center;
+}
+.Caja-ejercicios-titulo span {
+    color: #3ef747;
+    text-shadow: 0 0 5px #3ef747c5;
+}
+.Caja-ejercicios-titulo p:nth-child(3){
+    color: #ffffff94;
+    width: 450px;
+    text-align: center;
+    margin: 1% 0 0 0;
+}
+.Caja-ejercicios-separador{
+    width: 3%;
+    height: 2px;
+    background: #3ef747;
+    margin: 2% auto 0 auto;
+    position: relative;
+    z-index: 100;
+    box-shadow: 0 0 5px #3ef747;
+}
+.Caja-ejercicios-titulo-2{
+    position: relative;
+    z-index: 100;
+    margin: 2% 0 2% 0;
+    color: #ffffff;
+    font-size: 24px;
+    text-align: center;
+    text-shadow: 0 0 5px #ffffff;
+}

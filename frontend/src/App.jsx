@@ -12,7 +12,7 @@ import Register from './pages/register/register'
 import Dashboard from './pages/dashboard/dashboard'
 
 import ProtectedRoute from './components/ProtectedRoute'
-
+import Ejercicios from './pages/ejercicios/ejercicios'
 import './App.css'
 
 function App() {
@@ -25,6 +25,7 @@ function App() {
      <Routes>
 
         <Route path="/" element={<Landing />} />
+        <Route path="/ejercicios" element ={<Ejercicios />}/>
 
         <Route
           path="/login"

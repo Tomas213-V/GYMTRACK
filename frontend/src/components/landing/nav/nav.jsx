@@ -13,7 +13,7 @@ function NavLanding() {
 
                 <div className="Caja-nav-landing-opciones">
                 <Link to="/">Inicio</Link>
-                <Link to="/">Ejercicios</Link>
+                <Link to="/ejercicios">Ejercicios</Link>
                 <Link to="/">Progreso</Link>
                 <Link to="/">Precio</Link>
                 <Link to="/">Soporte</Link>  
