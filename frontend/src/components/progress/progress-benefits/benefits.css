@@ -1,0 +1,73 @@
+.progress-benefits {
+    padding: 80px 8% 120px;
+    background: #080b08;
+}
+
+
+.benefits-titulo {
+    max-width: 750px;
+    margin: 0 auto 60px;
+    text-align: center;
+}
+
+
+.benefits-titulo h2 {
+    color: #ffffff;
+    font-family: "Oswald", sans-serif;
+    font-size: 38px;
+    margin-bottom: 20px;
+}
+
+
+.benefits-titulo p {
+    color: #bfc5bf;
+    font-family: "Inter", sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+}
+
+
+.benefits-contenedor {
+    max-width: 1100px;
+    margin: auto;
+
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+}
+
+
+.benefit-card {
+    width: 30%;
+    padding: 30px;
+
+    background: #101510;
+
+    border: 1px solid #263126;
+    border-radius: 12px;
+
+    transition: 0.3s;
+}
+
+
+.benefit-card:hover {
+    transform: translateY(-5px);
+    border-color: #4dff3d;
+    box-shadow: 0 0 20px #4dff3d22;
+}
+
+
+.benefit-card h3 {
+    color: #4dff3d;
+    font-family: "Oswald", sans-serif;
+    font-size: 24px;
+    margin-bottom: 15px;
+}
+
+
+.benefit-card p {
+    color: #c9cec9;
+    font-family: "Inter", sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+}
