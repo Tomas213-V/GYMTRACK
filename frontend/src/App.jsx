@@ -11,7 +11,7 @@ import Login from './pages/login/login'
 import Register from './pages/register/register'
 import Dashboard from './pages/dashboard/dashboard'
 import Progress from './pages/progress/progress'
-
+import Precio from './pages/precio/precio'
 import ProtectedRoute from './components/ProtectedRoute'
 import Ejercicios from './pages/ejercicios/ejercicios'
 import './App.css'
@@ -50,6 +50,11 @@ function App() {
           path="/progress"
           element={<Progress/>}
         />
+          <Route 
+          path="/precio"
+          element={<Precio/>}
+        />
+
 
      </Routes>
     </>

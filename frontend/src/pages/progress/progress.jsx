@@ -11,11 +11,15 @@ import './progress.css'
 function Progress(){
     return(
         <>
+        <div className="Caja-progreso">
+
+     
             <NavLanding/>
             <TituloProgress/>
             <PreviewProgress/>
             <BenefitsProgress/>
             <Foother/>
+               </div>
         </>
     );
 }

@@ -15,7 +15,7 @@ function NavLanding() {
                 <Link to="/">Inicio</Link>
                 <Link to="/ejercicios">Ejercicios</Link>
                 <Link to="/progress">Progreso</Link>
-                <Link to="/">Precio</Link>
+                <Link to="/precio">Precio</Link>
                 <Link to="/">Soporte</Link>  
                 </div>
                
