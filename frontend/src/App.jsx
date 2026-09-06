@@ -14,6 +14,7 @@ import Progress from './pages/progress/progress'
 import Precio from './pages/precio/precio'
 import ProtectedRoute from './components/ProtectedRoute'
 import Ejercicios from './pages/ejercicios/ejercicios'
+import Soporte from './pages/soporte/soporte'
 import './App.css'
 
 function App() {
@@ -53,6 +54,10 @@ function App() {
           <Route 
           path="/precio"
           element={<Precio/>}
+        />
+         <Route 
+          path="/soporte"
+          element={<Soporte/>}
         />
 
 
