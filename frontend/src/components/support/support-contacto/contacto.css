@@ -1,0 +1,63 @@
+.support-contacto {
+    padding: 40px 20px 120px;
+}
+
+
+.contacto-contenido {
+    max-width: 850px;
+    margin: auto;
+
+    text-align: center;
+
+    padding: 60px 30px;
+
+    background: #101510;
+
+    border: 1px solid #263126;
+    border-radius: 15px;
+
+    box-shadow: 0 0 30px #00000055;
+}
+
+
+.contacto-contenido h2 {
+    color: #4dff3d;
+    font-family: "Oswald", sans-serif;
+    font-size: 35px;
+    margin-bottom: 15px;
+}
+
+
+.contacto-contenido p {
+    max-width: 600px;
+    margin: 0 auto 30px;
+
+    color: #c9cec9;
+    font-family: "Inter", sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+
+.contacto-contenido button {
+    background: #4dff3d;
+    color: #000000;
+
+    border: none;
+    border-radius: 6px;
+
+    padding: 12px 25px;
+
+    font-family: "Oswald", sans-serif;
+    font-size: 18px;
+
+    cursor: pointer;
+
+    box-shadow: 0 0 15px #4dff3d;
+}
+
+
+.contacto-contenido button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 25px #4dff3d;
+}

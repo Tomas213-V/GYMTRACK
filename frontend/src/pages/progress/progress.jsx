@@ -13,7 +13,6 @@ function Progress(){
         <>
         <div className="Caja-progreso">
 
-     
             <NavLanding/>
             <TituloProgress/>
             <PreviewProgress/>
