@@ -1,0 +1,53 @@
+.Caja-indicaciones{
+    position: relative;
+    z-index: 100;
+  display: flex;
+    justify-content: center;
+
+     gap: 35px;
+    padding: 2% 0 2% 0;
+
+}
+
+.Caja-indicacion{
+    display: flex;
+     width: 370px;
+    gap: 25px;
+
+}
+.Caja-indicacion-numero{
+    font-size: 18px;
+    color: #4dff3d;
+    text-shadow: 0 0 5px #4dff3d;
+    display: flex;
+    align-items: start;
+    justify-content: center;
+ 
+}
+.Caja-indicacion-numero p{
+        background: #1a1a1a;
+       padding: 10px 17px 10px 17px;
+    border-radius: 50px;
+    text-align: center;
+}
+.Caja-indicacion-icono{
+
+   
+}
+.Caja-indicacion-icono i{
+     font-size: 32px;
+    color: #4dff3d;
+    text-shadow: 0 0 5px #4dff3d;
+    filter: drop-shadow(0 0 3px #4dff3d);
+}
+.Caja-indicacion-titulo-descripcion b{
+    font-size: 20px;
+     color: #ffffff;
+     font-weight: 600;
+   
+}
+.Caja-indicacion-titulo-descripcion p{
+    font-size: 14px;
+    color: #ffffff8a;
+    font-family: "Nunito Sans", sans-serif;
+}

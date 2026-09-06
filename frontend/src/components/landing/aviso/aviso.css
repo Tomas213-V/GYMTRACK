@@ -1,0 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
+
+.Caja-aviso{
+    position: relative;
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    margin: 5% 0 0% 0;
+    align-items: center;
+    gap: 15px;
+     font-family: "Nunito Sans", sans-serif;
+    
+    
+}
+.Caja-sub-aviso{
+  color: #3dff57;
+  
+     background: #01811265;
+       display: flex;
+    justify-content: center;
+ align-items: center;
+    gap: 15px;
+    padding: 5px 15px 5px 15px;
+    border-radius: 20px;
+    border: 1px solid #00ff007e;
+}
+.Caja-aviso p {
+    content: "";
+    width: 10px;
+    height: 10px;
+    background: #3dff57;
+    border-radius: 50%;
+    
+}
+.Caja-aviso b{
+   
+}

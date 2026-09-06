@@ -1,0 +1,21 @@
+.Caja-landing{
+    background: url("./gimnasio.jfif");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    width: 100%;
+    height: 100vh;
+    position: relative;
+     box-shadow: inset 0 0 50px #000000 , inset 0 0 80px #000000, inset 0 80px 50px #000000;
+}
+.Caja-landing::before{
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000000c5;
+     z-index: 10;
+     backdrop-filter: blur(5px);
+}

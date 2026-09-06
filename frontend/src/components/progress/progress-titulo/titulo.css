@@ -1,0 +1,24 @@
+.progress-titulo {
+    text-align: center;
+    padding: 80px 20px 50px;
+}
+
+.titulo-progress h1 {
+    color: #4dff3d;
+    font-family: "Oswald", sans-serif;
+    font-size: 55px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 15px #4dff3d;
+}
+
+.sub-titulo-progress {
+    max-width: 750px;
+    margin: auto;
+}
+
+.sub-titulo-progress p {
+    color: #e5e9e5;
+    font-family: "Inter", sans-serif;
+    font-size: 19px;
+    line-height: 1.6;
+}

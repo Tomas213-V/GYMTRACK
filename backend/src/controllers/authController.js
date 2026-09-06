@@ -44,36 +44,15 @@ const registerOwner = async (req, res) => {
       return res.status(400).json({ error: 'El email ingresado ya está registrado.' });
     }
 
-    // 3. Crear el Gimnasio en la base de datos
-    const { data: nuevoGimnasio, error: errorGym } = await supabase
-      .from('gimnasio')
-      .insert([
-        {
-          nombre: nombreGimnasio.trim(),
-          direccion: direccion ? direccion.trim() : null,
-          telefono: telefono ? telefono.trim() : null,
-          email: emailGimnasio ? emailGimnasio.trim().toLowerCase() : cleanEmail,
-          fecha_registro: new Date().toISOString(),
-          estado: 'activo'
-        }
-      ])
-      .select()
-      .single();
-
-    if (errorGym) {
-      return res.status(500).json({ error: 'Error al registrar el gimnasio: ' + errorGym.message });
-    }
-
-    // 4. Criterio de Aceptación: Encriptación / Hash de contraseña con bcrypt
+    // 3. Encriptar contraseña
     const saltRounds = 10;
     const contrasenaHash = await bcrypt.hash(contrasena, saltRounds);
 
-    // 5. Crea usuario asociado al gimnasio
+    // 4. PRIMERO: Insertar el Usuario (Dueño)
     const { data: nuevoUsuario, error: errorUser } = await supabase
       .from('usuario')
       .insert([
         {
-          id_gimnasio: nuevoGimnasio.id_gimnasio,
           nombre: nombre.trim(),
           apellido: apellido.trim(),
           email: cleanEmail,
@@ -83,11 +62,32 @@ const registerOwner = async (req, res) => {
           fecha_creacion: new Date().toISOString()
         }
       ])
-      .select('id_usuario, id_gimnasio, nombre, apellido, email, rol, estado, fecha_creacion')
+      .select('id_usuario, nombre, apellido, email, rol, estado, fecha_creacion')
       .single();
 
     if (errorUser) {
-      return res.status(500).json({ error: 'Error al registrar el dueño: ' + errorUser.message });
+      return res.status(500).json({ error: 'Error al registrar el usuario: ' + errorUser.message });
+    }
+
+    // 5. SEGUNDO: Insertar el Gimnasio vinculando el id_usuario recién creado
+    const { data: nuevoGimnasio, error: errorGym } = await supabase
+      .from('gimnasio')
+      .insert([
+        {
+          nombre: nombreGimnasio.trim(),
+          direccion: direccion ? direccion.trim() : null,
+          telefono: telefono ? telefono.trim() : null,
+          email: emailGimnasio ? emailGimnasio.trim().toLowerCase() : cleanEmail,
+          fecha_registro: new Date().toISOString(),
+          estado: 'activo',
+          id_usuario: nuevoUsuario.id_usuario // Se usa la nueva FK en la tabla gimnasio
+        }
+      ])
+      .select()
+      .single();
+
+    if (errorGym) {
+      return res.status(500).json({ error: 'Error al registrar el gimnasio: ' + errorGym.message });
     }
 
     // 6. Generar Token JWT para iniciar sesión automáticamente tras el registro
@@ -109,8 +109,8 @@ const registerOwner = async (req, res) => {
     return res.status(201).json({
       mensaje: 'Dueño y Gimnasio registrados exitosamente.',
       token,
-      gimnasio: nuevoGimnasio,
-      usuario: nuevoUsuario
+      usuario: nuevoUsuario,
+      gimnasio: nuevoGimnasio
     });
 
   } catch (error) {
@@ -127,7 +127,6 @@ const login = async (req, res) => {
     const { email, contrasena, password } = req.body;
     const passwordInput = contrasena || password;
 
-    // 1. Criterio de Aceptación: Validar campos obligatorios
     if (!email || !passwordInput) {
       return res.status(400).json({ 
         error: 'Por favor, proporciona tanto el email como la contraseña.' 
@@ -142,87 +141,32 @@ const login = async (req, res) => {
       });
     }
 
-    // 2. Buscar al usuario en la base de datos por email junto con los datos de su gimnasio
-    let usuario = null;
-
-    // Intento 1: Consulta directa con relacionamiento a gimnasio
-    const { data: usuarioConGimnasio, error: errorUsuario } = await supabase
+    // 1. Buscar al usuario por su email
+    const { data: usuario, error: errorUsuario } = await supabase
       .from('usuario')
-      .select(`
-        id_usuario,
-        id_gimnasio,
-        nombre,
-        apellido,
-        email,
-        contrasena,
-        rol,
-        estado,
-        fecha_creacion,
-        gimnasio (
-          id_gimnasio,
-          nombre,
-          direccion,
-          telefono,
-          estado
-        )
-      `)
+      .select('id_usuario, nombre, apellido, email, contrasena, rol, estado, fecha_creacion')
       .ilike('email', cleanEmail)
       .maybeSingle();
 
     if (errorUsuario) {
-      // Fallback: Si el join falla por nombre de relación o FK, consultar usuario por separado
-      const { data: usuarioSimple, error: errorSimple } = await supabase
-        .from('usuario')
-        .select(`
-          id_usuario,
-          id_gimnasio,
-          nombre,
-          apellido,
-          email,
-          contrasena,
-          rol,
-          estado,
-          fecha_creacion
-        `)
-        .ilike('email', cleanEmail)
-        .maybeSingle();
-
-      if (errorSimple) {
-        return res.status(500).json({ 
-          error: 'Error al consultar la base de datos: ' + errorSimple.message 
-        });
-      }
-
-      if (usuarioSimple) {
-        usuario = usuarioSimple;
-        if (usuario.id_gimnasio) {
-          const { data: gym } = await supabase
-            .from('gimnasio')
-            .select('id_gimnasio, nombre, direccion, telefono, estado')
-            .eq('id_gimnasio', usuario.id_gimnasio)
-            .maybeSingle();
-          usuario.gimnasio = gym || null;
-        }
-      }
-    } else {
-      usuario = usuarioConGimnasio;
+      return res.status(500).json({ 
+        error: 'Error al consultar la base de datos: ' + errorUsuario.message 
+      });
     }
 
-    // 3. Criterio de Aceptación: Si el usuario no existe, rechazar con mensaje seguro
     if (!usuario) {
       return res.status(401).json({ 
         error: 'Credenciales inválidas. Verifica tu email y contraseña.' 
       });
     }
 
-    // 4. Criterio de Aceptación: Verificar estado de la cuenta
     if (usuario.estado !== 'activo') {
       return res.status(403).json({ 
         error: 'Tu cuenta se encuentra inactiva o suspendida. Por favor, contacta al administrador.' 
       });
     }
 
-    // 5. Criterio de Aceptación: Comparar contraseña con el hash almacenado usando bcrypt
+    // 2. Comparar la contraseña con bcrypt
     const passwordValida = await bcrypt.compare(passwordInput, usuario.contrasena);
 
     if (!passwordValida) {
@@ -231,30 +175,36 @@ const login = async (req, res) => {
       });
     }
 
-    // 6. Criterio de Aceptación: Generar token de autenticación JWT
+    // 3. Buscar el gimnasio asociado al usuario (si existe)
+    const { data: gimnasio } = await supabase
+      .from('gimnasio')
+      .select('id_gimnasio, nombre, direccion, telefono, estado')
+      .eq('id_usuario', usuario.id_usuario)
+      .maybeSingle();
+
+    // 4. Generar token JWT
     const jwtSecret = process.env.JWT_SECRET || 'gymtrack_jwt_secret_key_2026';
     const expiresIn = process.env.JWT_EXPIRES_IN || '24h';
 
     const tokenPayload = {
       id_usuario: usuario.id_usuario,
-      id_gimnasio: usuario.id_gimnasio,
+      id_gimnasio: gimnasio ? gimnasio.id_gimnasio : null,
       email: usuario.email,
       rol: usuario.rol
     };
 
     const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn });
 
-    // 7. Respuesta exitosa con información del usuario (sin exponer contraseña) y token
+    // 5. Devolver datos al cliente
     const usuarioSeguro = {
       id_usuario: usuario.id_usuario,
-      id_gimnasio: usuario.id_gimnasio,
       nombre: usuario.nombre,
       apellido: usuario.apellido,
       email: usuario.email,
       rol: usuario.rol,
       estado: usuario.estado,
       fecha_creacion: usuario.fecha_creacion,
-      gimnasio: usuario.gimnasio || null
+      gimnasio: gimnasio || null
     };
 
     return res.status(200).json({
@@ -282,67 +232,23 @@ const getMe = async (req, res) => {
       return res.status(401).json({ error: 'Usuario no autenticado.' });
     }
 
-    let usuario = null;
-
-    const { data: usuarioConGimnasio, error: errorConGimnasio } = await supabase
+    const { data: usuario, error: errorUsuario } = await supabase
       .from('usuario')
-      .select(`
-        id_usuario,
-        id_gimnasio,
-        nombre,
-        apellido,
-        email,
-        rol,
-        estado,
-        fecha_creacion,
-        gimnasio (
-          id_gimnasio,
-          nombre,
-          direccion,
-          telefono,
-          estado
-        )
-      `)
+      .select('id_usuario, nombre, apellido, email, rol, estado, fecha_creacion')
       .eq('id_usuario', idUsuario)
       .maybeSingle();
 
-    if (errorConGimnasio) {
-      const { data: usuarioSimple, error: errorSimple } = await supabase
-        .from('usuario')
-        .select(`
-          id_usuario,
-          id_gimnasio,
-          nombre,
-          apellido,
-          email,
-          rol,
-          estado,
-          fecha_creacion
-        `)
-        .eq('id_usuario', idUsuario)
-        .maybeSingle();
-
-      if (errorSimple || !usuarioSimple) {
-        return res.status(404).json({ error: 'Usuario no encontrado.' });
-      }
-
-      usuario = usuarioSimple;
-
-      if (usuario.id_gimnasio) {
-        const { data: gym } = await supabase
-          .from('gimnasio')
-          .select('id_gimnasio, nombre, direccion, telefono, estado')
-          .eq('id_gimnasio', usuario.id_gimnasio)
-          .maybeSingle();
-        usuario.gimnasio = gym || null;
-      }
-    } else {
-      usuario = usuarioConGimnasio;
-    }
-
-    if (!usuario) {
+    if (errorUsuario || !usuario) {
       return res.status(404).json({ error: 'Usuario no encontrado.' });
     }
+
+    const { data: gimnasio } = await supabase
+      .from('gimnasio')
+      .select('id_gimnasio, nombre, direccion, telefono, estado')
+      .eq('id_usuario', usuario.id_usuario)
+      .maybeSingle();
+
+    usuario.gimnasio = gimnasio || null;
 
     return res.status(200).json({
       usuario
@@ -356,4 +262,4 @@ module.exports = {
   registerOwner,
   login,
   getMe
-};
+};

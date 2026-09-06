@@ -1,0 +1,80 @@
+
+.Caja-nav-landing{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5%;
+    padding: 15px 0 0 0;
+    z-index: 1000;
+    position: relative;
+   
+}
+.Caja-nav-landing-imagen {
+display: flex;
+justify-content: center;
+align-items: center;
+gap: 15px;
+}
+.Caja-nav-landing-imagen b{
+    color: #ffffff;
+    font-size: 30px;
+    font-family: "Oswald", sans-serif;
+}
+.Caja-nav-landing-imagen img{
+height: 70px;
+width: 85px;
+}
+.Caja-nav-landing-opciones{
+  display: flex;
+  justify-content: center;
+  gap: 80px;
+   font-family: "Nunito Sans", sans-serif;
+  
+  
+}
+.Caja-nav-landing-opciones a {
+    text-decoration: none;
+    color: #ffffffa8;
+    font-size: 20px;
+   font-family: "Inter", sans-serif;
+      font-weight: 300;
+      transition: 0.2s;
+     
+}
+.Caja-nav-landing-opciones a:hover{
+    color: #ffffff;
+}
+.Caja-nav-landing-botones{
+    display: flex;
+    justify-content: center;
+    gap: 35px;
+    align-items: center;
+    
+}
+.Caja-nav-landing-botones a{
+font-family: "Oswald", sans-serif;
+    color: #ffffff;
+    text-decoration: none;
+    font-size: 18px;
+}
+.Caja-nav-landing-botones a:nth-child(1){
+  color: #ffffffb7;
+  transition: 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.Caja-nav-landing-botones a:hover:nth-child(1){
+    color: #ffffff;
+}
+.Caja-nav-landing-botones a:nth-child(2){
+    background: #4dff3d;
+    color: #000000;
+    padding: 5px;
+    border-radius: 5px;
+    box-shadow: 0 0 15px #4dff3d;
+    transition: 0.2s;
+}
+.Caja-nav-landing-botones a:hover:nth-child(2){
+    transform: scale(1.05);
+}
