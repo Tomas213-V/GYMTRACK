@@ -51,13 +51,18 @@ function App() {
           path="/progress"
           element={<Progress/>}
         />
-          <Route 
+        <Route 
           path="/precio"
           element={<Precio/>}
         />
-         <Route 
+        <Route 
           path="/soporte"
           element={<Soporte/>}
+        />
+        <Route 
+          path="/support"
+          element={<Soporte/>}
+        />
         />
 
 

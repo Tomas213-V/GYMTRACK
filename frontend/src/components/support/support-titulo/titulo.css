@@ -1,0 +1,22 @@
+.support-titulo {
+    text-align: center;
+    padding: 80px 20px 60px;
+}
+
+.support-titulo h1 {
+    color: #4dff3d;
+    font-family: "Oswald", sans-serif;
+    font-size: 55px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 15px #4dff3d;
+}
+
+.support-titulo p {
+    max-width: 700px;
+    margin: auto;
+
+    color: #d5d9d5;
+    font-family: "Inter", sans-serif;
+    font-size: 18px;
+    line-height: 1.6;
+}
