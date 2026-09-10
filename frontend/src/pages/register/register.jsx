@@ -1,307 +1,157 @@
-// useState permite guardar información que puede cambiar
-// mientras el usuario utiliza la pantalla.
-import { useState } from 'react'
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { register } from '../../services/authService.js';
+import logoImg from '../../assets/logo_verde.jpg';
+import PasswordInput from '../../components/PasswordInput/PasswordInput';
+import './register.css';
 
-// Link sirve para navegar entre páginas sin recargar el sitio.
-// useNavigate permite cambiar de página desde JavaScript.
-import { Link, useNavigate } from 'react-router-dom'
-
-// Importamos la función que se encarga de comunicarse
-// con nuestro backend para registrar al usuario.
-import { register } from '../../services/authService.js'
-
-import logoImg from '../../assets/logo_verde.jpg'
-import PasswordInput from '../../components/PasswordInput/PasswordInput'
-
-// Importamos los estilos específicos de esta pantalla.
-import './register.css'
-
-// Componente principal de la página de registro.
-// En React, los componentes son funciones que devuelven HTML (JSX).
 function Register() {
+  const navigate = useNavigate();
 
-  // navigate nos permite enviar al usuario a otra ruta.
-  // Por ejemplo: navigate('/login')
-  const navigate = useNavigate()
-
-  // formData contiene TODOS los datos escritos en el formulario.
-  //
-  // Cada propiedad representa un campo del formulario.
   const [formData, setFormData] = useState({
-    nombreGimnasio: '',
-    direccion: '',
-    telefono: '',
-    emailGimnasio: '',
     nombre: '',
     apellido: '',
     email: '',
     contrasena: '',
     confirmarContrasena: '',
-  })
+  });
 
-  // errors guarda los errores de validación del formulario.
-  //
-  // Ejemplo:
-  // {
-  //   email: 'El email no es válido.',
-  //   contrasena: 'La contraseña debe tener al menos 8 caracteres.'
-  // }
-  const [errors, setErrors] = useState({})
+  const [errors, setErrors] = useState({});
+  const [backendError, setBackendError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState('');
 
-  // backendError guarda un error que venga directamente
-  // desde nuestro servidor.
-  //
-  // Por ejemplo, si el email ya existe en la base de datos.
-  const [backendError, setBackendError] = useState('')
-
-  // loading indica si estamos esperando una respuesta del backend.
-  //
-  // Es útil para evitar que el usuario presione varias veces
-  // el botón mientras se está procesando el registro.
-  const [loading, setLoading] = useState(false)
-
-  // success contiene un mensaje cuando el registro
-  // se realizó correctamente.
-  const [success, setSuccess] = useState('')
-
-  // Esta función se ejecuta cada vez que el usuario
-  // modifica alguno de los inputs.
   const handleChange = (event) => {
-
-    // event.target contiene el input que fue modificado.
-    //
-    // name = nombre del campo
-    // value = contenido escrito por el usuario
-    const { name, value } = event.target
-
-    // Actualizamos formData.
-    //
-    // ...formData significa:
-    // "conservá todos los datos que ya teníamos".
-    //
-    // [name]: value significa:
-    // "modificá solamente el campo que acaba de cambiar".
-    setFormData({
-      ...formData,
+    const { name, value } = event.target;
+    setFormData((prev) => ({
+      ...prev,
       [name]: value,
-    })
-  }
+    }));
+  };
 
-  // Esta función comprueba que los datos ingresados
-  // sean correctos ANTES de enviarlos al backend.
   const validateForm = () => {
+    const newErrors = {};
 
-    // Acá vamos a guardar los errores encontrados.
-    const newErrors = {}
-
-    // Comprobamos que el nombre del gimnasio exista.
-    if (!formData.nombreGimnasio.trim()) {
-      newErrors.nombreGimnasio = 'El nombre del gimnasio es obligatorio.'
-    }
-
-    // Comprobamos el nombre del dueño.
     if (!formData.nombre.trim()) {
-      newErrors.nombre = 'El nombre es obligatorio.'
+      newErrors.nombre = 'El nombre es obligatorio.';
     }
 
-    // Comprobamos el apellido.
     if (!formData.apellido.trim()) {
-      newErrors.apellido = 'El apellido es obligatorio.'
+      newErrors.apellido = 'El apellido es obligatorio.';
     }
 
-    // Comprobamos que haya un email.
     if (!formData.email.trim()) {
-
-      newErrors.email = 'El email es obligatorio.'
-
-    // Si hay email, comprobamos que tenga un formato válido.
+      newErrors.email = 'El email es obligatorio.';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-
-      newErrors.email = 'Ingresá un email válido.'
+      newErrors.email = 'Ingresá un email válido.';
     }
 
-    // La contraseña es obligatoria.
     if (!formData.contrasena) {
-
-      newErrors.contrasena = 'La contraseña es obligatoria.'
-
-    // Y debe tener como mínimo 8 caracteres.
+      newErrors.contrasena = 'La contraseña es obligatoria.';
     } else if (formData.contrasena.length < 8) {
-
-      newErrors.contrasena =
-        'La contraseña debe tener al menos 8 caracteres.'
+      newErrors.contrasena = 'La contraseña debe tener al menos 8 caracteres.';
     }
 
-    // Comprobamos que el usuario haya repetido la contraseña.
     if (!formData.confirmarContrasena) {
-
-      newErrors.confirmarContrasena =
-        'Debés confirmar la contraseña.'
-
-    // Comprobamos que ambas contraseñas coincidan.
-    } else if (
-      formData.contrasena !== formData.confirmarContrasena
-    ) {
-
-      newErrors.confirmarContrasena =
-        'Las contraseñas no coinciden.'
+      newErrors.confirmarContrasena = 'Debés confirmar la contraseña.';
+    } else if (formData.contrasena !== formData.confirmarContrasena) {
+      newErrors.confirmarContrasena = 'Las contraseñas no coinciden.';
     }
 
-    // Guardamos los errores encontrados.
-    setErrors(newErrors)
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
-    // Si newErrors está vacío, significa que no encontramos
-    // ningún problema.
-    //
-    // Object.keys({}) devuelve [].
-    //
-    // Por eso:
-    // true = formulario válido
-    // false = formulario con errores
-    return Object.keys(newErrors).length === 0
-  }
-
-  // Esta función se ejecuta cuando el usuario presiona
-  // el botón "Crear cuenta".
   const handleSubmit = async (event) => {
+    event.preventDefault();
+    setBackendError('');
+    setSuccess('');
 
-    // Evita que el navegador recargue la página
-    // al enviar el formulario.
-    event.preventDefault()
-
-    // Limpiamos mensajes anteriores.
-    setBackendError('')
-    setSuccess('')
-
-    // Primero validamos el formulario.
-    //
-    // Si hay algún error, salimos de la función.
     if (!validateForm()) {
-      return
+      return;
     }
 
-    // Indicamos que estamos procesando el registro.
-    setLoading(true)
+    setLoading(true);
 
     try {
-      // Enviamos los datos al backend.
-      //
-      // IMPORTANTE:
-      // confirmarContrasena NO se envía.
-      //
-      // Solamente necesitamos la contraseña real.
-      const data = await register({
-
-        nombreGimnasio: formData.nombreGimnasio,
-        direccion: formData.direccion,
-        telefono: formData.telefono,
-        emailGimnasio: formData.emailGimnasio,
-
-        nombre: formData.nombre,
-        apellido: formData.apellido,
-        email: formData.email,
+      await register({
+        nombre: formData.nombre.trim(),
+        apellido: formData.apellido.trim(),
+        email: formData.email.trim(),
         contrasena: formData.contrasena,
-      })
+      });
 
-      // Si llegamos hasta acá significa que el backend
-      // respondió correctamente.
-      console.log(data)
+      setSuccess('¡Cuenta creada correctamente! Redirigiendo para iniciar sesión...');
 
-      // Mostramos un mensaje de éxito.
-      setSuccess(
-        '¡Cuenta creada correctamente! Ahora podés iniciar sesión.'
-      )
-
-      // Después de 2 segundos llevamos al usuario
-      // automáticamente a la pantalla de Login.
       setTimeout(() => {
-        navigate('/login')
-      }, 2000)
-
+        navigate('/login');
+      }, 1500);
     } catch (error) {
-
-      // Si el backend respondió con un error,
-      // mostramos el mensaje al usuario.
-      setBackendError(error.message)
-
+      setBackendError(error.message);
     } finally {
-
-      // Independientemente de si salió bien o mal,
-      // dejamos de mostrar el estado de "cargando".
-      setLoading(false)
+      setLoading(false);
     }
-  }
-  // Todo lo que está dentro de return es JSX.
-  //
-  // JSX parece HTML, pero en realidad forma parte de JavaScript
-  // y React lo utiliza para construir la interfaz.
+  };
+
   return (
-
     <main className="register-page">
-
       <div className="register-card">
-        <img src={logoImg} alt="GymTrack Logo" className="register-logoImg" />
-        <h1>Crear cuenta</h1>
+        <img src={logoImg} alt="GymTrack Logo" className="register-logo" />
 
-        {/* 
-          FORMULARIO DEL GIMNASIO
-        */}
-        <section>
+        <div className="register-header">
+          <h1>Crear cuenta</h1>
+          <p>Registrate como dueño para comenzar a gestionar tu gimnasio</p>
+        </div>
 
-          <h2>Datos del dueño</h2>
+        {backendError && (
+          <div className="register-alerta register-alerta-error">
+            {backendError}
+          </div>
+        )}
 
-          <div className="form-group">
+        {success && (
+          <div className="register-alerta register-alerta-exito">
+            {success}
+          </div>
+        )}
 
-            <label htmlFor="nombre">
-              Nombre
-            </label>
+        <form onSubmit={handleSubmit} className="register-form">
+          <div className="register-form-row">
+            <div className="register-form-group">
+              <label htmlFor="nombre">Nombre</label>
+              <input
+                id="nombre"
+                name="nombre"
+                type="text"
+                value={formData.nombre}
+                onChange={handleChange}
+                placeholder="Tu nombre"
+                className={errors.nombre ? 'register-input-error' : ''}
+              />
+              {errors.nombre && (
+                <span className="register-error-msg">{errors.nombre}</span>
+              )}
+            </div>
 
-            <input
-              id="nombre"
-              name="nombre"
-              type="text"
-              value={formData.nombre}
-              onChange={handleChange}
-              placeholder="Tu nombre"
-            />
-
-            {errors.nombre && (
-              <span className="error">
-                {errors.nombre}
-              </span>
-            )}
-
+            <div className="register-form-group">
+              <label htmlFor="apellido">Apellido</label>
+              <input
+                id="apellido"
+                name="apellido"
+                type="text"
+                value={formData.apellido}
+                onChange={handleChange}
+                placeholder="Tu apellido"
+                className={errors.apellido ? 'register-input-error' : ''}
+              />
+              {errors.apellido && (
+                <span className="register-error-msg">{errors.apellido}</span>
+              )}
+            </div>
           </div>
 
-          <div className="form-group">
-
-            <label htmlFor="apellido">
-              Apellido
-            </label>
-
-            <input
-              id="apellido"
-              name="apellido"
-              type="text"
-              value={formData.apellido}
-              onChange={handleChange}
-              placeholder="Tu apellido"
-            />
-
-            {errors.apellido && (
-              <span className="error">
-                {errors.apellido}
-              </span>
-            )}
-
-          </div>
-
-          <div className="form-group">
-
-            <label htmlFor="email">
-              Email
-            </label>
-
+          <div className="register-form-group">
+            <label htmlFor="email">Email</label>
             <input
               id="email"
               name="email"
@@ -309,14 +159,11 @@ function Register() {
               value={formData.email}
               onChange={handleChange}
               placeholder="tu@email.com"
+              className={errors.email ? 'register-input-error' : ''}
             />
-
             {errors.email && (
-              <span className="error">
-                {errors.email}
-              </span>
+              <span className="register-error-msg">{errors.email}</span>
             )}
-
           </div>
 
           <PasswordInput
@@ -339,157 +186,24 @@ function Register() {
             error={errors.confirmarContrasena}
           />
 
-        </section>
+          <button
+            type="submit"
+            className="register-btn-submit"
+            disabled={loading}
+          >
+            {loading ? 'Creando cuenta...' : 'Crear cuenta'}
+          </button>
+        </form>
 
-        <section>
-
-          <h2>Datos del gimnasio</h2>
-
-          <div className="form-group">
-
-            <label htmlFor="nombreGimnasio">
-              Nombre del gimnasio
-            </label>
-
-            <input
-              id="nombreGimnasio"
-
-              // name permite saber qué propiedad de formData
-              // debemos modificar.
-              name="nombreGimnasio"
-
-              type="text"
-
-              value={formData.nombreGimnasio}
-
-              onChange={handleChange}
-
-              placeholder="Ej: GymTrack Fitness"
-            />
-
-            {/* 
-              Si existe un error para este campo,
-              mostramos el mensaje.
-            */}
-            {errors.nombreGimnasio && (
-              <span className="error">
-                {errors.nombreGimnasio}
-              </span>
-            )}
-
-          </div>
-
-          <div className="form-group">
-
-            <label htmlFor="direccion">
-              Dirección
-            </label>
-
-            <input
-              id="direccion"
-              name="direccion"
-              type="text"
-              value={formData.direccion}
-              onChange={handleChange}
-              placeholder="Ej: Av. Siempre Viva 123"
-            />
-
-          </div>
-
-          <div className="form-group">
-
-            <label htmlFor="telefono">
-              Teléfono
-            </label>
-
-            <input
-              id="telefono"
-              name="telefono"
-              type="tel"
-              value={formData.telefono}
-              onChange={handleChange}
-              placeholder="Ej: 341 1234567"
-            />
-
-          </div>
-
-          <div className="form-group">
-
-            <label htmlFor="emailGimnasio">
-              Email del gimnasio
-            </label>
-
-            <input
-              id="emailGimnasio"
-              name="emailGimnasio"
-              type="email"
-              value={formData.emailGimnasio}
-              onChange={handleChange}
-              placeholder="contacto@gimnasio.com"
-            />
-
-          </div>
-
-        </section>
-
-        {/* 
-          DATOS DEL DUEÑO
-        */}
-
-        {/* 
-          ERROR DEVUELTO POR EL BACKEND
-        */}
-
-        {backendError && (
-          <div className="backend-error">
-            {backendError}
-          </div>
-        )}
-
-        {/* 
-          MENSAJE DE ÉXITO
-        */}
-
-        {success && (
-          <div className="success-message">
-            {success}
-          </div>
-        )}
-
-        {/* 
-          BOTÓN PARA ENVIAR EL FORMULARIO
-        */}
-
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={loading}
-        >
-
-          {loading ? 'Registrando...' : 'Crear cuenta'}
-
-        </button>
-
-
-        {/* 
-          Link permite ir a Login sin recargar toda la página.
-        */}
-
-        <p>
-
+        <p className="register-footer-text">
           ¿Ya tenés una cuenta?{' '}
-
           <Link to="/login">
             Iniciar sesión
           </Link>
-
         </p>
-
       </div>
-
     </main>
-  )
+  );
 }
 
-// Exportamos el componente para poder utilizarlo
-export default Register
+export default Register;

@@ -4,7 +4,8 @@
     border-right: 1px solid #ffffff28;
     width: 220px;
     height: 100%;
-    min-height: 100vh;
+    min-height: calc(100vh - 70px);
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     padding: 0 15px 0 0;
@@ -13,11 +14,6 @@
     display: flex;
     flex-direction: column;
     gap: 30px;
-}
-.Caja-sidebar-bottom{
-
-}
-.Caja-sidebar-opciones{
     letter-spacing: 3px;
     padding: 25px 0 0 0;
 }
@@ -25,12 +21,42 @@
     color: #ffffff91;
     text-decoration: none;
     font-size: 16px;
-  font-family: "Quicksand", sans-serif;
+    font-family: "Quicksand", sans-serif;
     display: flex;
-    gap: 10px;
-    font-weight: 400;
-    padding: 0 0 0 25px;
+    align-items: center;
+    gap: 12px;
+    font-weight: 500;
+    padding: 10px 16px 10px 25px;
+    margin: 0 8px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
 }
 .Caja-sidebar-opciones a:hover{
+    color: #00ff11;
+    background: rgba(255, 255, 255, 0.03);
+}
+.Caja-sidebar-opciones a.Caja-sidebar-link-activo{
+    color: #00ff11;
+    background: rgba(0, 255, 17, 0.08);
+    font-weight: 600;
+}
+.Caja-sidebar-bottom{
+    margin-top: auto;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0 0 25px 0;
+    width: 100%;
+}
+.Caja-sidebar-bottom button{
+    background: none;
+    color: #ffffff;
+    border: none;
+    font-size: 20px;
+    font-family: "Oswald", sans-serif;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+.Caja-sidebar-bottom button:hover{
     color: #00ff11ee;
 }

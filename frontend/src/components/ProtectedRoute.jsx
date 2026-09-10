@@ -1,38 +1,46 @@
-// Navigate nos permite redirigir al usuario
-// hacia otra ruta.
-import { Navigate } from 'react-router-dom'
+// Navigate nos permite redirigir al usuario hacia otra ruta.
+import { Navigate } from 'react-router-dom';
 
-// Importamos la función que comprueba
-// si existe una sesión iniciada.
-import { isAuthenticated } from '../services/authService'
+// Importamos la función que comprueba si existe una sesión iniciada.
+import { isAuthenticated } from '../services/authService';
 
+/**
+ * ProtectedRoute protege las rutas privadas.
+ * @param {Object} props
+ * @param {React.ReactNode} props.children
+ * @param {boolean} props.permitirSinGimnasio - Si es true (ej: en /crear-gimnasio), permite el acceso aunque no tenga gimnasio.
+ */
+function ProtectedRoute({ children, permitirSinGimnasio = false }) {
+  // 1. Comprobamos si el usuario está autenticado.
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
 
-// ProtectedRoute recibe un componente mediante "children".
-//
-// Por ejemplo:
-//
-// <ProtectedRoute>
-//     <Dashboard />
-// </ProtectedRoute>
-//
-// En ese caso, children sería <Dashboard />.
-function ProtectedRoute({ children }) {
+  // 2. Comprobamos si el usuario tiene un gimnasio asociado.
+  const usuarioGuardado = localStorage.getItem('usuario');
+  let tieneGimnasio = false;
 
-    // Comprobamos si el usuario está autenticado.
-    if (!isAuthenticated()) {
-
-        // Si NO está autenticado,
-        // lo mandamos al Login.
-        return <Navigate to="/login" replace />
+  if (usuarioGuardado) {
+    try {
+      const u = JSON.parse(usuarioGuardado);
+      tieneGimnasio = Boolean(u.gimnasio && u.gimnasio.id_gimnasio);
+    } catch {
+      // Ignorar error de lectura
     }
+  }
 
+  // 3. Si la ruta requiere gimnasio y no lo tiene, mandarlo a crear su gimnasio
+  if (!permitirSinGimnasio && !tieneGimnasio) {
+    return <Navigate to="/crear-gimnasio" replace />;
+  }
 
-    // Si está autenticado,
-    // mostramos la página que estaba intentando visitar.
-    return children
+  // 4. Si ya tiene gimnasio y visita /crear-gimnasio, mandarlo al dashboard
+  if (permitirSinGimnasio && tieneGimnasio) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Si cumple las condiciones, mostramos la página solicitada.
+  return children;
 }
 
-
-// Exportamos el componente para poder utilizarlo
-// desde App.jsx.
-export default ProtectedRoute
+export default ProtectedRoute;

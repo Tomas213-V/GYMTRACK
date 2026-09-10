@@ -16,6 +16,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Ejercicios from './pages/ejercicios/ejercicios'
 import Soporte from './pages/support/support'
 import Pagos from './pages/pagos/pagos'
+import CrearGimnasio from './pages/crear-gimnasio/crear-gimnasio'
 import './App.css'
 
 function App() {
@@ -38,6 +39,15 @@ function App() {
         <Route
           path="/register"
           element={<Register />}
+        />
+
+        <Route
+          path="/crear-gimnasio"
+          element={
+            <ProtectedRoute permitirSinGimnasio={true}>
+              <CrearGimnasio />
+            </ProtectedRoute>
+          }
         />
 
         <Route
@@ -64,7 +74,11 @@ function App() {
         
         <Route 
         path="/pagos" 
-        element={<Pagos/>}
+        element={
+          <ProtectedRoute>
+            <Pagos/>
+          </ProtectedRoute>
+        }
         />
 
      </Routes>

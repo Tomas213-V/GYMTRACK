@@ -2,22 +2,23 @@ const express = require('express');
 const router = express.Router();
 const pagoController = require('../controllers/pagoController');
 
-// LOG DE DIAGNÓSTICO: Nos muestra en la consola qué funciones se importaron
-console.log("Funciones importadas del controlador:", pagoController);
-
 const {
   getPagos,
   getPagoById,
   registrarPago,
   actualizarEstadoPago,
-  getResumenPagos
+  eliminarPago,
+  getResumenPagos,
+  getMembresias
 } = pagoController;
 
 // Definición de Endpoints
 router.get('/', getPagos);
-router.get('/resumen', getResumenPagos); // encima de id para evitar conflictos con la ruta de obtener pago por ID
+router.get('/resumen', getResumenPagos);
+router.get('/membresias', getMembresias);
 router.get('/:id', getPagoById);
 router.post('/', registrarPago);
 router.patch('/:id/estado', actualizarEstadoPago);
+router.delete('/:id', eliminarPago);
 
 module.exports = router;
