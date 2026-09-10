@@ -1,0 +1,36 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@300..700&display=swap');
+.Caja-sidebar{
+    border-right: 1px solid #ffffff28;
+    width: 220px;
+    height: 100%;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 0 15px 0 0;
+}
+.Caja-sidebar-opciones{
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+.Caja-sidebar-bottom{
+
+}
+.Caja-sidebar-opciones{
+    letter-spacing: 3px;
+    padding: 25px 0 0 0;
+}
+.Caja-sidebar-opciones a{
+    color: #ffffff91;
+    text-decoration: none;
+    font-size: 16px;
+  font-family: "Quicksand", sans-serif;
+    display: flex;
+    gap: 10px;
+    font-weight: 400;
+    padding: 0 0 0 25px;
+}
+.Caja-sidebar-opciones a:hover{
+    color: #00ff11ee;
+}
