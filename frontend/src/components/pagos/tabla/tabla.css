@@ -1,0 +1,306 @@
+/* Sección Pagos Recientes y Tabla */
+.Caja-pagos-recientes {
+  background: #181b1f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.Caja-pagos-recientes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.Caja-pagos-recientes-header h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+}
+
+.Caja-pagos-btn-ver-todos {
+  background: none;
+  border: none;
+  color: #00ff11;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity 0.2s ease;
+}
+
+.Caja-pagos-btn-ver-todos:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.Caja-pagos-tabla-contenedor {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.Caja-pagos-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.Caja-pagos-tabla th {
+  color: #8c93a0;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.Caja-pagos-th-socio { width: 32%; }
+.Caja-pagos-th-plan { width: 20%; }
+.Caja-pagos-th-fecha { width: 18%; }
+.Caja-pagos-th-monto { width: 16%; }
+.Caja-pagos-th-estado { width: 10%; }
+.Caja-pagos-th-accion { width: 4%; text-align: right; }
+
+.Caja-pagos-fila {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.15s ease;
+}
+
+.Caja-pagos-fila:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.Caja-pagos-tabla td {
+  padding: 13px 14px;
+  vertical-align: middle;
+  color: #c4cbd4;
+  font-size: 13.5px;
+}
+
+/* Item de Socio (Avatar + Nombre + DNI) */
+.Caja-pagos-socio-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.Caja-pagos-socio-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #21252b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8c93a0;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.Caja-pagos-socio-detalles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.Caja-pagos-socio-nombre {
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.Caja-pagos-socio-dni {
+  color: #8c93a0;
+  font-size: 11.5px;
+}
+
+.Caja-pagos-td-plan {
+  color: #9aa3af;
+}
+
+.Caja-pagos-td-fecha {
+  color: #9aa3af;
+}
+
+.Caja-pagos-td-monto {
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 15px;
+  font-family: 'Oswald', sans-serif;
+  letter-spacing: 0.5px;
+}
+
+/* Badges / Píldoras de Estado */
+.Caja-pagos-badge {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.Caja-pagos-estado-selector-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.Caja-pagos-badge-select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 26px 5px 12px;
+  border-radius: 20px;
+  transition: all 0.2s ease;
+}
+
+.Caja-pagos-badge-select:hover {
+  filter: brightness(1.2);
+  transform: translateY(-1px);
+}
+
+.Caja-pagos-badge-select option {
+  background: #181b1f;
+  color: #ffffff;
+  padding: 8px 12px;
+}
+
+.Caja-pagos-badge-flecha {
+  position: absolute;
+  right: 10px;
+  font-size: 9px;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.Caja-pagos-badge-pagado {
+  background: rgba(0, 255, 17, 0.12);
+  color: #00ff11;
+  border: 1px solid rgba(0, 255, 17, 0.35);
+}
+
+.Caja-pagos-badge-pagado:hover {
+  box-shadow: 0 0 10px rgba(0, 255, 17, 0.25);
+}
+
+.Caja-pagos-badge-pendiente {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.Caja-pagos-badge-pendiente:hover {
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+}
+
+.Caja-pagos-badge-vencido {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.Caja-pagos-badge-vencido:hover {
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.25);
+}
+
+.Caja-pagos-btn-accion-fila {
+  background: none;
+  border: none;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.2s ease;
+}
+
+.Caja-pagos-btn-accion-fila:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.Caja-pagos-fila-flecha {
+  color: #5a6270;
+  font-size: 13px;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.Caja-pagos-btn-accion-fila:hover .Caja-pagos-fila-flecha {
+  transform: translateX(3px);
+  color: #00ff11;
+}
+
+.Caja-pagos-sin-resultados {
+  text-align: center;
+  padding: 36px 0;
+  color: #8c93a0;
+  font-size: 14px;
+}
+
+/* Paginación */
+.Caja-pagos-paginacion {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.Caja-pagos-paginacion-info {
+  color: #8c93a0;
+  font-size: 13px;
+}
+
+.Caja-pagos-paginacion-controles {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.Caja-pagos-pag-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #1e2227;
+  color: #c4cbd4;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.Caja-pagos-pag-btn:hover:not(:disabled) {
+  background: #282d34;
+  color: #ffffff;
+}
+
+.Caja-pagos-pag-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.Caja-pagos-pag-activo {
+  background: #00ff11;
+  color: #000000;
+  font-weight: 700;
+  border-color: #00ff11;
+}
+
+.Caja-pagos-pag-activo:hover {
+  background: #00ff11 !important;
+  color: #000000 !important;
+}

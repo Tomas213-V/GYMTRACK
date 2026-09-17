@@ -15,6 +15,8 @@ import Precio from './pages/precio/precio'
 import ProtectedRoute from './components/ProtectedRoute'
 import Ejercicios from './pages/ejercicios/ejercicios'
 import Soporte from './pages/support/support'
+import Pagos from './pages/pagos/pagos'
+import CrearGimnasio from './pages/crear-gimnasio/crear-gimnasio'
 import './App.css'
 
 function App() {
@@ -40,6 +42,15 @@ function App() {
         />
 
         <Route
+          path="/crear-gimnasio"
+          element={
+            <ProtectedRoute permitirSinGimnasio={true}>
+              <CrearGimnasio />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/dashboard"
           element={
             <ProtectedRoute>
@@ -61,7 +72,14 @@ function App() {
           element={<Soporte/>}
         />
         
-
+        <Route 
+        path="/pagos" 
+        element={
+          <ProtectedRoute>
+            <Pagos/>
+          </ProtectedRoute>
+        }
+        />
 
      </Routes>
     </>

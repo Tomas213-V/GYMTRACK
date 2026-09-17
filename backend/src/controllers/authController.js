@@ -23,7 +23,7 @@ const registerOwner = async (req, res) => {
     } = req.body;
 
     // 1. Criterio de Aceptación: Validar datos obligatorios
-    if (!nombreGimnasio || !nombre || !apellido || !email || !contrasena) {
+    if (!nombre || !apellido || !email || !contrasena) {
       return res.status(400).json({ error: 'Todos los campos obligatorios deben ser completados.' });
     }
 
@@ -69,25 +69,29 @@ const registerOwner = async (req, res) => {
       return res.status(500).json({ error: 'Error al registrar el usuario: ' + errorUser.message });
     }
 
-    // 5. SEGUNDO: Insertar el Gimnasio vinculando el id_usuario recién creado
-    const { data: nuevoGimnasio, error: errorGym } = await supabase
-      .from('gimnasio')
-      .insert([
-        {
-          nombre: nombreGimnasio.trim(),
-          direccion: direccion ? direccion.trim() : null,
-          telefono: telefono ? telefono.trim() : null,
-          email: emailGimnasio ? emailGimnasio.trim().toLowerCase() : cleanEmail,
-          fecha_registro: new Date().toISOString(),
-          estado: 'activo',
-          id_usuario: nuevoUsuario.id_usuario // Se usa la nueva FK en la tabla gimnasio
-        }
-      ])
-      .select()
-      .single();
+    // 5. SEGUNDO: Insertar el Gimnasio si se proporcionó nombreGimnasio
+    let nuevoGimnasio = null;
+    if (nombreGimnasio && nombreGimnasio.trim()) {
+      const { data: gymData, error: errorGym } = await supabase
+        .from('gimnasio')
+        .insert([
+          {
+            nombre: nombreGimnasio.trim(),
+            direccion: direccion ? direccion.trim() : null,
+            telefono: telefono ? telefono.trim() : null,
+            email: emailGimnasio ? emailGimnasio.trim().toLowerCase() : cleanEmail,
+            fecha_registro: new Date().toISOString().split('T')[0],
+            estado: 'activo',
+            id_usuario: nuevoUsuario.id_usuario
+          }
+        ])
+        .select()
+        .single();
 
-    if (errorGym) {
-      return res.status(500).json({ error: 'Error al registrar el gimnasio: ' + errorGym.message });
+      if (errorGym) {
+        return res.status(500).json({ error: 'Error al registrar el gimnasio: ' + errorGym.message });
+      }
+      nuevoGimnasio = gymData;
     }
 
     // 6. Generar Token JWT para iniciar sesión automáticamente tras el registro
@@ -97,7 +101,7 @@ const registerOwner = async (req, res) => {
     const token = jwt.sign(
       {
         id_usuario: nuevoUsuario.id_usuario,
-        id_gimnasio: nuevoUsuario.id_gimnasio,
+        id_gimnasio: nuevoGimnasio ? nuevoGimnasio.id_gimnasio : null,
         email: nuevoUsuario.email,
         rol: nuevoUsuario.rol
       },
@@ -107,9 +111,14 @@ const registerOwner = async (req, res) => {
 
     // 7. Respuesta exitosa para el frontend (sin exponer el hash)
     return res.status(201).json({
-      mensaje: 'Dueño y Gimnasio registrados exitosamente.',
+      mensaje: nuevoGimnasio
+        ? 'Dueño y Gimnasio registrados exitosamente.'
+        : 'Usuario registrado exitosamente.',
       token,
-      usuario: nuevoUsuario,
+      usuario: {
+        ...nuevoUsuario,
+        gimnasio: nuevoGimnasio
+      },
       gimnasio: nuevoGimnasio
     });
 

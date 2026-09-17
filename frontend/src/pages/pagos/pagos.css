@@ -1,0 +1,79 @@
+/* ==========================================================================
+   GYMTRACK - PÁGINA DE PAGOS (LAYOUT PRINCIPAL)
+   ========================================================================== */
+
+.Caja-pagos {
+  background-color: #121417;
+  color: #ffffff;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  font-family: 'Nunito Sans', 'Inter', sans-serif;
+}
+
+/* Contenedor flexible del cuerpo: Sidebar a la izquierda, contenido principal a la derecha */
+.Caja-pagos-cuerpo {
+  display: flex;
+  flex: 1;
+  min-height: calc(100vh - 70px);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Área principal de contenido */
+.Caja-pagos-contenido {
+  flex: 1;
+  padding: 32px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+/* Encabezado */
+.Caja-pagos-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.Caja-pagos-header-titulo {
+  font-size: 32px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.Caja-pagos-header-subtitulo {
+  font-size: 14px;
+  color: #8c93a0;
+  margin: 0;
+}
+
+/* Grid principal de dos columnas (Tabla a la izquierda, Resumen a la derecha) */
+.Caja-pagos-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 24px;
+  align-items: start;
+}
+
+/* Adaptabilidad Responsiva */
+@media (max-width: 1100px) {
+  .Caja-pagos-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .Caja-pagos-cuerpo {
+    flex-direction: column;
+  }
+
+  .Caja-pagos-contenido {
+    padding: 20px 16px;
+  }
+}

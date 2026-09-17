@@ -1,0 +1,235 @@
+/* ==========================================================================
+   GYMTRACK - CREAR GIMNASIO
+   ========================================================================== */
+
+.Caja-crear-gimnasio-pagina {
+  background-color: #121417;
+  color: #ffffff;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Nunito Sans', 'Inter', sans-serif;
+  box-sizing: border-box;
+}
+
+/* Header superior */
+.Caja-crear-gimnasio-header-nav {
+  height: 70px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 40px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: #151719;
+}
+
+.Caja-crear-gimnasio-marca b {
+  font-size: 24px;
+  font-family: 'Oswald', sans-serif;
+  letter-spacing: 4px;
+  color: #ffffff;
+}
+
+.Caja-crear-gimnasio-marca span {
+  color: #00ff11;
+}
+
+.Caja-crear-gimnasio-btn-logout {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #9aa3af;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.Caja-crear-gimnasio-btn-logout:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* Cuerpo central */
+.Caja-crear-gimnasio-cuerpo {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.Caja-crear-gimnasio-card {
+  background: #181b1f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 560px;
+  padding: 36px 40px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.Caja-crear-gimnasio-icono-badge {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: rgba(0, 255, 17, 0.12);
+  color: #00ff11;
+  border: 1px solid rgba(0, 255, 17, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin-bottom: 20px;
+}
+
+.Caja-crear-gimnasio-titulos h1 {
+  font-size: 26px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 8px 0;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: -0.5px;
+}
+
+.Caja-crear-gimnasio-titulos p {
+  font-size: 14px;
+  color: #8c93a0;
+  line-height: 1.5;
+  margin: 0 0 24px 0;
+}
+
+/* Alertas */
+.Caja-crear-gimnasio-alerta {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  margin-bottom: 20px;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.Caja-crear-gimnasio-alerta-error {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.Caja-crear-gimnasio-alerta-exito {
+  background: rgba(0, 255, 17, 0.12);
+  color: #00ff11;
+  border: 1px solid rgba(0, 255, 17, 0.3);
+}
+
+/* Formulario */
+.Caja-crear-gimnasio-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  text-align: left;
+}
+
+.Caja-crear-gimnasio-grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.Caja-crear-gimnasio-grupo label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #c4cbd4;
+}
+
+.Caja-crear-gimnasio-input-wrapper {
+  display: flex;
+  align-items: center;
+  background: #121417;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 12px 14px;
+  gap: 12px;
+  transition: all 0.2s ease;
+}
+
+.Caja-crear-gimnasio-input-wrapper:focus-within {
+  border-color: #00ff11;
+  box-shadow: 0 0 10px rgba(0, 255, 17, 0.15);
+}
+
+.Caja-crear-gimnasio-input-icono {
+  color: #64748b;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.Caja-crear-gimnasio-input-wrapper input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 14px;
+  width: 100%;
+  font-family: inherit;
+}
+
+.Caja-crear-gimnasio-input-wrapper input::placeholder {
+  color: #5a6270;
+}
+
+.Caja-crear-gimnasio-fila {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.Caja-crear-gimnasio-btn-submit {
+  background: #00ff11;
+  border: none;
+  color: #000000;
+  padding: 14px 20px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: all 0.2s ease;
+  width: 100%;
+  font-family: inherit;
+}
+
+.Caja-crear-gimnasio-btn-submit:hover:not(:disabled) {
+  background: #00e60f;
+  box-shadow: 0 0 20px rgba(0, 255, 17, 0.35);
+  transform: translateY(-1px);
+}
+
+.Caja-crear-gimnasio-btn-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .Caja-crear-gimnasio-card {
+    padding: 24px 20px;
+  }
+
+  .Caja-crear-gimnasio-fila {
+    grid-template-columns: 1fr;
+  }
+
+  .Caja-crear-gimnasio-header-nav {
+    padding: 0 20px;
+  }
+}

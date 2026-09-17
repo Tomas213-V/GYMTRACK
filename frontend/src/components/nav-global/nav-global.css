@@ -1,0 +1,170 @@
+/* ==========================================================================
+   GYMTRACK - NAV GLOBAL
+   ========================================================================== */
+
+.Caja-nav-global {
+  display: flex;
+  position: relative;
+  width: 100%;
+  height: 70px;
+  background-color: #151719;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-sizing: border-box;
+  z-index: 100;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 36px 0 24px;
+}
+
+/* Sección izquierda: Hamburguesa y Logo */
+.Caja-nav-global-logo {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.Caja-nav-global-menu-btn {
+  background: transparent;
+  border: none;
+  color: #c4cbd4;
+  font-size: 19px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.Caja-nav-global-menu-btn:hover {
+  color: #00ff11;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.Caja-nav-global-marca {
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+}
+
+.Caja-nav-global-marca b {
+  font-size: 24px;
+  font-family: 'Oswald', sans-serif;
+  letter-spacing: 4px;
+  color: #ffffff;
+  transition: opacity 0.2s ease;
+}
+
+.Caja-nav-global-marca b:hover {
+  opacity: 0.9;
+}
+
+.Caja-nav-global-marca span {
+  color: #00ff11;
+}
+
+/* Sección derecha: Notificaciones y Perfil */
+.Caja-nav-global-icono-perfil {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* Botón de campana con punto de aviso */
+.Caja-nav-global-notificacion-btn {
+  position: relative;
+  background: transparent;
+  border: none;
+  color: #9aa3af;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.Caja-nav-global-notificacion-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.Caja-nav-global-notificacion-punto {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 7px;
+  height: 7px;
+  background-color: #00ff11;
+  border-radius: 50%;
+  border: 1.5px solid #151719;
+}
+
+/* Chip de usuario / Perfil */
+.Caja-nav-global-icono-usuario {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 5px 12px 5px 6px;
+  border-radius: 24px;
+  transition: background 0.2s ease;
+  user-select: none;
+}
+
+.Caja-nav-global-icono-usuario:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.Caja-nav-global-usuario-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #252930;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #c4cbd4;
+  transition: border-color 0.2s ease;
+}
+
+.Caja-nav-global-icono-usuario:hover .Caja-nav-global-usuario-avatar {
+  border-color: rgba(0, 255, 17, 0.4);
+  color: #00ff11;
+}
+
+.Caja-nav-global-icono-usuario p {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+  font-family: 'Inter', 'Nunito Sans', sans-serif;
+}
+
+.Caja-nav-global-usuario-chevron {
+  font-size: 10px;
+  color: #64748b;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.Caja-nav-global-icono-usuario:hover .Caja-nav-global-usuario-chevron {
+  color: #ffffff;
+  transform: translateY(1px);
+}
+
+/* Responsividad */
+@media (max-width: 600px) {
+  .Caja-nav-global {
+    padding: 0 16px;
+  }
+
+  .Caja-nav-global-icono-usuario p,
+  .Caja-nav-global-usuario-chevron {
+    display: none;
+  }
+}

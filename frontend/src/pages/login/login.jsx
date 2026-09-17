@@ -103,8 +103,12 @@ function Login() {
         JSON.stringify(data.usuario)
       )
 
-      // Vamos al Dashboard.
-      navigate('/dashboard')
+      // Comprobamos si el usuario tiene un gimnasio asociado.
+      if (data.usuario?.gimnasio?.id_gimnasio) {
+        navigate('/dashboard')
+      } else {
+        navigate('/crear-gimnasio')
+      }
 
     } catch (error) {
 

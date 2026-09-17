@@ -1,0 +1,293 @@
+/* Estilos para PagosDetalleModal */
+.Caja-pagos-detalle-modal {
+  max-width: 580px;
+  width: 92%;
+}
+
+.Caja-pagos-detalle-cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Banner de Monto y Estado */
+.Caja-pagos-detalle-banner {
+  background: linear-gradient(135deg, rgba(0, 255, 17, 0.08) 0%, rgba(24, 27, 31, 0.8) 100%);
+  border: 1px solid rgba(0, 255, 17, 0.25);
+  border-radius: 12px;
+  padding: 18px 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.Caja-pagos-detalle-monto-grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.Caja-pagos-detalle-monto-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #8c93a0;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.Caja-pagos-detalle-monto-valor {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffffff;
+  font-family: 'Oswald', sans-serif;
+  letter-spacing: 0.5px;
+}
+
+.Caja-pagos-detalle-estado-selector {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.Caja-pagos-detalle-estado-selector label {
+  font-size: 11px;
+  color: #8c93a0;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* Secciones de Datos */
+.Caja-pagos-detalle-seccion {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.Caja-pagos-detalle-seccion-titulo {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #64748b;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+/* Tarjeta de Socio */
+.Caja-pagos-detalle-socio-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.Caja-pagos-detalle-socio-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.Caja-pagos-detalle-socio-info h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+}
+
+.Caja-pagos-detalle-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.Caja-pagos-detalle-chip {
+  background: #21252b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: #c4cbd4;
+}
+
+/* Grilla de Transacción */
+.Caja-pagos-detalle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.Caja-pagos-detalle-item {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.Caja-pagos-detalle-item-label {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.Caja-pagos-detalle-item-valor {
+  font-size: 14px;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.Caja-pagos-metodo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #00ff11;
+}
+
+/* Zona de Eliminación */
+.Caja-pagos-detalle-zona-eliminar {
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.Caja-pagos-detalle-eliminar-barra {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  background: rgba(239, 68, 68, 0.04);
+  border: 1px dashed rgba(239, 68, 68, 0.3);
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+
+.Caja-pagos-detalle-eliminar-barra p {
+  margin: 0;
+  font-size: 12.5px;
+  color: #94a3b8;
+}
+
+.Caja-pagos-btn-eliminar-pago {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.Caja-pagos-btn-eliminar-pago:hover {
+  background: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.4);
+}
+
+/* Cuadro de Confirmación de Eliminación */
+.Caja-pagos-detalle-confirmar-caja {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 10px;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: Caja-pagos-aparecer 0.2s ease-out;
+}
+
+.Caja-pagos-confirmar-texto {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.Caja-pagos-confirmar-icono {
+  color: #ef4444;
+  font-size: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.Caja-pagos-confirmar-texto strong {
+  color: #ffffff;
+  font-size: 14px;
+  display: block;
+}
+
+.Caja-pagos-confirmar-texto p {
+  color: #cbd5e1;
+  font-size: 12px;
+  margin: 4px 0 0 0;
+}
+
+.Caja-pagos-confirmar-botones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.Caja-pagos-btn-peligro-confirmar {
+  background: #ef4444;
+  color: #ffffff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.Caja-pagos-btn-peligro-confirmar:hover:not(:disabled) {
+  background: #dc2626;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.5);
+}
+
+.Caja-pagos-btn-peligro-confirmar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 540px) {
+  .Caja-pagos-detalle-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .Caja-pagos-detalle-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .Caja-pagos-detalle-estado-selector {
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .Caja-pagos-detalle-eliminar-barra {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .Caja-pagos-btn-eliminar-pago {
+    width: 100%;
+    justify-content: center;
+  }
+}
