@@ -18,6 +18,7 @@ const supabase = require("./src/config/supabase");
 // importa ruta
 const authRoutes = require("./src/routes/authRoutes");
 const pagoRoutes = require("./src/routes/pagoRoutes");
+const ejercicioRoutes = require('./src/routes/ejercicioRoutes');
 
 // 2. INICIALIZACIÓN DE LA APLICACIÓN
 // Crea una instancia de la aplicación Express
@@ -65,6 +66,7 @@ app.get("/api/health", async (req, res) => {
 // Registrar las rutas de Autenticación (/api/auth/register y /api/auth/login)
 app.use("/api/auth", authRoutes);
 app.use("/api/pagos", pagoRoutes);
+app.use('/api/ejercicios', ejercicioRoutes);
 
 
 // 5. CONFIGURACIÓN DEL PUERTO Y PUESTA EN MARCHA DEL SERVIDOR
