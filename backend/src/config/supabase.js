@@ -34,3 +34,4 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Exportamos la instancia para que pueda ser reutilizada en controladores, servicios y rutas
 // siguiendo el patrón singleton (una sola conexión compartida en toda la app)
 module.exports = supabase;
+
