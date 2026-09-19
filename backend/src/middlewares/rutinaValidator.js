@@ -9,13 +9,14 @@ exports.validateRutina = (req, res, next) => {
 };
 
 exports.validateEjercicioAsociacion = (req, res, next) => {
-  const { id_ejercicio, serie, repeticiones } = req.body;
+  const { id_ejercicio, series, serie, repeticiones } = req.body;
 
   if (!id_ejercicio || isNaN(Number(id_ejercicio))) {
     return res.status(400).json({ error: 'El id_ejercicio es obligatorio y debe ser numérico.' });
   }
 
-  if (serie !== undefined && (isNaN(Number(serie)) || Number(serie) <= 0)) {
+  const numSeries = series !== undefined ? series : serie;
+  if (numSeries !== undefined && (isNaN(Number(numSeries)) || Number(numSeries) <= 0)) {
     return res.status(400).json({ error: 'Las series deben ser un número entero mayor a 0.' });
   }
 

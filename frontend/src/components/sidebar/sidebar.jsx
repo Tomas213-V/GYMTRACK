@@ -1,6 +1,6 @@
 import "./sidebar.css"
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { FaMoneyBill, FaHeadset, FaUsers } from "react-icons/fa";
+import { FaMoneyBill, FaHeadset, FaUsers, FaCalendarCheck, FaDumbbell } from "react-icons/fa";
 import { FaHouse } from "react-icons/fa6";
 
 function Sidebar() {
@@ -10,9 +10,12 @@ function Sidebar() {
     const opciones = [
         { ruta: "/dashboard", nombre: "Inicio", icono: <FaHouse /> },
         { ruta: "/socios", nombre: "Socios", icono: <FaUsers /> },
+        { ruta: "/asistencias", nombre: "Asistencias", icono: <FaCalendarCheck /> },
+        { ruta: "/rutinas", nombre: "Rutinas", icono: <FaDumbbell /> },
         { ruta: "/pagos", nombre: "Pagos", icono: <FaMoneyBill /> },
         { ruta: "/support", nombre: "Soporte", icono: <FaHeadset /> }
     ];
+
 
     const handleLogout = () => {
         localStorage.removeItem('token');

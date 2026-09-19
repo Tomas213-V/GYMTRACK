@@ -18,7 +18,11 @@ import Soporte from './pages/support/support'
 import Pagos from './pages/pagos/pagos'
 import CrearGimnasio from './pages/crear-gimnasio/crear-gimnasio'
 import Socios from './pages/socios/socios'
+import Asistencias from './pages/asistencias/asistencias'
+import Rutinas from './pages/rutinas/rutinas'
 import './App.css'
+
+
 
 function App() {
   
@@ -100,7 +104,27 @@ function App() {
         }
         />
 
+        <Route 
+        path="/asistencias" 
+        element={
+          <ProtectedRoute>
+            <Asistencias/>
+          </ProtectedRoute>
+        }
+        />
+
+        <Route 
+        path="/rutinas" 
+        element={
+          <ProtectedRoute>
+            <Rutinas/>
+          </ProtectedRoute>
+        }
+        />
+
      </Routes>
+
+
     </>
   )
 }
