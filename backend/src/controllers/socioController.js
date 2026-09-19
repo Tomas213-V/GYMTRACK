@@ -18,11 +18,6 @@ const getSocios = async (req, res) => {
       .from('socio')
       .select(`
         *,
-        usuario (
-          nombre,
-          apellido,
-          email
-        ),
         membresia (
           *,
           plan_membresia (*)
@@ -39,7 +34,6 @@ const getSocios = async (req, res) => {
     if (search) {
       const cleanSearch = search.trim();
       query = query.or(`nombre.ilike.%${cleanSearch}%,apellido.ilike.%${cleanSearch}%,dni.ilike.%${cleanSearch}%,telefono.ilike.%${cleanSearch}%`);
-    }
     }
 
     // Paginación condicional: solo paginar si limit NO es 'all' o '0'
@@ -84,18 +78,10 @@ const getSocioById = async (req, res) => {
       .from('socio')
       .select(`
         *,
-        usuario (
-          id_usuario,
-          nombre,
-          apellido,
-          email
-        ),
         membresia (
           *,
           plan_membresia (*)
         ),
-        asistencia (*),
-        progreso (*)
         asistencia (*),
         progreso (*)
       `)
@@ -163,36 +149,17 @@ const createSocio = async (req, res) => {
       return res.status(400).json({ error: 'Ya existe un socio registrado con este DNI.' });
     }
 
-    // 1. Crear el usuario asociado al socio
-    const { data: nuevoUsuario, error: errorUsuario } = await supabase
-      .from('usuario')
-      .insert([
-        {
-          nombre: nombre.trim(),
-          apellido: apellido ? apellido.trim() : '',
-          email: email ? email.trim() : `${dni.toString().trim()}@gymtrack.local`,
-          contrasena: 'socio_default_pass',
-          rol: 'socio',
-          estado: estado || 'activo',
-          fecha_creacion: new Date().toISOString()
-        }
-      ])
-      .select()
-      .single();
-
-    if (errorUsuario) {
-      return res.status(500).json({ error: 'Error al registrar usuario del socio: ' + errorUsuario.message });
-    }
-
-    // 2. Crear la ficha de socio
+    // Crear la ficha de socio directamente
     const { data: nuevoSocio, error: errorSocio } = await supabase
       .from('socio')
       .insert([
         {
-          id_usuario: nuevoUsuario.id_usuario,
           id_gimnasio: idGimnasio,
+          nombre: nombre.trim(),
+          apellido: apellido ? apellido.trim() : '',
           dni: dni.toString().trim(),
           telefono: telefono ? telefono.trim() : null,
+          email: email ? email.trim() : null,
           fecha_alta: new Date().toISOString().split('T')[0],
           estado: estado || 'activo'
         }
@@ -266,8 +233,6 @@ const createSocio = async (req, res) => {
       mensaje: 'Socio registrado exitosamente.',
       socio: {
         ...nuevoSocio,
-        nombre: nuevoUsuario.nombre,
-        apellido: nuevoUsuario.apellido,
         membresia
       }
     });
@@ -290,7 +255,7 @@ const updateSocio = async (req, res) => {
     // Verificar pertenencia al gimnasio
     let query = supabase
       .from('socio')
-      .select('id_socio, id_usuario, id_gimnasio')
+      .select('id_socio, id_gimnasio')
       .eq('id_socio', id);
 
     if (idGimnasio) {
@@ -303,29 +268,16 @@ const updateSocio = async (req, res) => {
       return res.status(404).json({ error: 'Socio no encontrado o sin permisos.' });
     }
 
-    // Actualizar datos del usuario relacionado si existe
-    if (socioActual?.id_usuario && (nombre || apellido || email !== undefined)) {
-      await supabase
-        .from('usuario')
-        .update({
-          ...(nombre && { nombre: nombre.trim() }),
-          ...(apellido !== undefined && { apellido: apellido ? apellido.trim() : '' }),
-          ...(email !== undefined && { email: email ? email.trim() : null })
-        })
-        .eq('id_usuario', socioActual.id_usuario);
-    }
-
-    // Actualizar datos de la tabla socio
+    // Actualizar datos de la tabla socio directamente
     const { data: socioActualizado, error: errorUpdate } = await supabase
       .from('socio')
       .update({
+        ...(nombre && { nombre: nombre.trim() }),
+        ...(apellido !== undefined && { apellido: apellido ? apellido.trim() : '' }),
         ...(dni && { dni: dni.toString().trim() }),
         ...(telefono !== undefined && { telefono: telefono ? telefono.trim() : null }),
         ...(email !== undefined && { email: email ? email.trim() : null }),
         ...(estado && { estado: estado.toLowerCase() })
-      })
-      .eq('id_socio', id)
-      .select()
       })
       .eq('id_socio', id)
       .select()
@@ -415,7 +367,6 @@ const changeEstadoSocio = async (req, res) => {
     const idGimnasio = req.usuario?.id_gimnasio;
     const { estado } = req.body;
 
-    // Criterio: Validar estados permitidos
     const estadosPermitidos = ['activo', 'pendiente', 'inactivo'];
     if (!estado || !estadosPermitidos.includes(estado.toLowerCase())) {
       return res.status(400).json({ 
@@ -516,6 +467,7 @@ const deleteSocio = async (req, res) => {
     return res.status(500).json({ error: 'Error al eliminar socio: ' + error.message });
   }
 };
+
 module.exports = {
   getSocios,
   getSocioById,
