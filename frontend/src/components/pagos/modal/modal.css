@@ -180,6 +180,62 @@
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
+.Caja-pagos-modo-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.Caja-pagos-modo-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #8c93a0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.Caja-pagos-modo-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.Caja-pagos-modo-btn.activo {
+  background: rgba(0, 255, 17, 0.12);
+  border-color: #00ff11;
+  color: #00ff11;
+}
+
+.Caja-pagos-modo-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.Caja-pagos-aviso-nuevo {
+  background: rgba(0, 255, 17, 0.06);
+  border: 1px dashed rgba(0, 255, 17, 0.3);
+  color: #bbf7d0;
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-top: 2px;
+}
+
+.Caja-pagos-form-grupo input:read-only {
+  background: rgba(255, 255, 255, 0.04);
+  color: #94a3b8;
+  cursor: default;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
 @media (max-width: 768px) {
   .Caja-pagos-form-fila {
     grid-template-columns: 1fr;

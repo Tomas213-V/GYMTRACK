@@ -5,8 +5,8 @@ function Botones() {
         <>
         
         <div className="Caja-botones">
-            <Link>Empezar a trabajar</Link>
-            <Link>Ver precios</Link>
+            <Link to="/register">Empezar a trabajar</Link>
+            <Link to="/precio">Ver precios</Link>
         </div>
 
          

@@ -91,6 +91,27 @@ export async function getMembresias({ id_gimnasio = '' } = {}) {
 }
 
 /**
+ * Obtener lista de planes de membresía disponibles
+ * @param {Object} params - { id_gimnasio }
+ */
+export async function getPlanes({ id_gimnasio = '' } = {}) {
+  try {
+    const query = new URLSearchParams();
+    if (id_gimnasio) query.append('id_gimnasio', id_gimnasio);
+
+    const res = await fetch(`${API_URL}/pagos/planes?${query.toString()}`, {
+      headers: getHeaders()
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Error en getPlanes:', error);
+    return [];
+  }
+}
+
+/**
  * Registrar un nuevo pago
  * @param {Object} datos - { id_membresia, monto, fecha_pago, metodo_pago, estado, comprobante, nombreSocio, dniSocio, plan, id_gimnasio }
  */

@@ -85,16 +85,18 @@ function PagosDetalleModal({
   // Datos extraídos del detalle de Supabase o del objeto pago de la tabla
   const socioData = detalle?.membresia?.socio || {};
   const usuarioData = socioData.usuario || {};
-  const nombreSocio = usuarioData.nombre
-    ? `${usuarioData.nombre} ${usuarioData.apellido || ""}`.trim()
-    : (pago.socio?.nombre || "Socio");
+  const nombreSocio = socioData.nombre
+    ? `${socioData.nombre} ${socioData.apellido || ""}`.trim()
+    : (usuarioData.nombre
+        ? `${usuarioData.nombre} ${usuarioData.apellido || ""}`.trim()
+        : (pago.socio?.nombre || "Socio"));
   const dniSocio = socioData.dni || pago.socio?.dni || "S/D";
   const telefonoSocio = socioData.telefono || "No especificado";
-  const emailSocio = usuarioData.email || "No especificado";
+  const emailSocio = socioData.email || usuarioData.email || "No especificado";
   const metodoPago = detalle?.metodo_pago || pago.metodo_pago || "efectivo";
   const estadoActual = (pago.estado || detalle?.estado || "pagado").toLowerCase();
   const fechaPago = pago.fecha || formatearFecha(detalle?.fecha_pago);
-  const planNombre = detalle?.membresia?.tipo || pago.plan || "Plan General";
+  const planNombre = detalle?.membresia?.plan_membresia?.nombre || detalle?.membresia?.tipo || pago.plan || "Plan General";
   const vencimientoMembresia = detalle?.membresia?.fecha_vencimiento
     ? formatearFecha(detalle.membresia.fecha_vencimiento)
     : "Sin vencimiento fijo";
@@ -255,7 +257,7 @@ function PagosDetalleModal({
                     disabled={eliminando}
                   >
                     <FaTrash />
-                    <span>{eliminando ? "Eliminando..." : "Sí, eliminar definitivamente"}</span>
+                    <span>"Sí, eliminar definitivamente"</span>
                   </button>
                 </div>
               </div>

@@ -1,0 +1,33 @@
+.socios-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.socios-header h1 {
+  font-size: 1.8rem;
+  color: #ffffff;
+  margin: 0;
+}
+
+.socios-header p {
+  color: #8e8e93;
+  margin-top: 4px;
+  font-size: 0.9rem;
+}
+
+.btn-nuevo-socio {
+  background-color: #2ecc71; /* Verde neón GymTrack */
+  color: #000;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-nuevo-socio:hover {
+  background-color: #27ae60;
+}

@@ -9,13 +9,15 @@ const {
   actualizarEstadoPago,
   eliminarPago,
   getResumenPagos,
-  getMembresias
+  getMembresias,
+  getPlanes
 } = pagoController;
 
 // Definición de Endpoints
 router.get('/', getPagos);
 router.get('/resumen', getResumenPagos);
 router.get('/membresias', getMembresias);
+router.get('/planes', getPlanes);
 router.get('/:id', getPagoById);
 router.post('/', registrarPago);
 router.patch('/:id/estado', actualizarEstadoPago);

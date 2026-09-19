@@ -16,8 +16,8 @@ function Publicidad() {
            <b>Empezá hoy mismo a entrenar mejor</b>
            <p>Unite a miles de personas que ya transformaron su entrenamiento con GymTrack</p>
           <div className="Caja-publicidad-vinculos">
- <Link to="/register">Crear mi cuenta <i><FaArrowRight/></i></Link>
-            <Link to="">Ver precios</Link>
+            <Link to="/register">Crear mi cuenta <i><FaArrowRight/></i></Link>
+            <Link to="/precio">Ver precios</Link>
           </div>
           
          </div>

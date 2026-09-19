@@ -47,6 +47,18 @@ function Pagos() {
   };
 
   // Cargar pagos y métricas desde el backend con los datos del usuario autenticado
+  // Función auxiliar para obtener el ID de gimnasio del usuario logueado
+  const obtenerGymId = (u) => {
+    if (!u) return "";
+    if (u.gimnasio && typeof u.gimnasio === 'object') {
+      if (Array.isArray(u.gimnasio)) {
+        return u.gimnasio[0]?.id_gimnasio || "";
+      }
+      return u.gimnasio.id_gimnasio || "";
+    }
+    return u.id_gimnasio || "";
+  };
+
   const cargarDatos = useCallback(async () => {
     setCargando(true);
     try {
@@ -56,40 +68,26 @@ function Pagos() {
         try {
           const u = JSON.parse(guardado);
           setUsuarioActual(u);
-          if (u.gimnasio?.id_gimnasio) {
-            gymId = u.gimnasio.id_gimnasio;
-          }
+          gymId = obtenerGymId(u);
         } catch {
           // Ignorar error de parseo
         }
       }
 
-      // 1. Obtener pagos reales de la base de datos (filtrados por gimnasio si existe)
+      // 1. Obtener pagos reales de la base de datos (filtrados exclusivamente por su gimnasio)
       let resPagos = await getPagos({ limit: 100, id_gimnasio: gymId });
-      
-      // Fallback amigable: si no trajo pagos filtrados por el gimnasio específico, consultar los pagos globales
-      if ((!resPagos || !resPagos.datos || resPagos.datos.length === 0) && gymId) {
-        try {
-          const resFallback = await getPagos({ limit: 100 });
-          if (resFallback && Array.isArray(resFallback.datos) && resFallback.datos.length > 0) {
-            resPagos = resFallback;
-          }
-        } catch (err) {
-          console.warn("Fallback pagos:", err);
-        }
-      }
-
       let pagosFormateados = [];
 
       if (resPagos && Array.isArray(resPagos.datos)) {
         pagosFormateados = resPagos.datos.map((item) => {
           const socio = item.membresia?.socio || {};
-          const usuario = socio.usuario || {};
-          const nombreCompleto = usuario.nombre
-            ? `${usuario.nombre} ${usuario.apellido || ""}`.trim()
-            : (socio.dni ? `Socio DNI ${socio.dni}` : "Socio");
+          const nombreCompleto = socio.nombre
+            ? `${socio.nombre} ${socio.apellido || ""}`.trim()
+            : (socio.usuario?.nombre
+                ? `${socio.usuario.nombre} ${socio.usuario.apellido || ""}`.trim()
+                : (socio.dni ? `Socio DNI ${socio.dni}` : "Socio"));
           const dni = socio.dni || "S/D";
-          const planNombre = item.membresia?.tipo || "Plan Básico";
+          const planNombre = item.membresia?.plan_membresia?.nombre || item.membresia?.tipo || "Plan Básico";
 
           return {
             id: item.id_pago,
@@ -104,19 +102,8 @@ function Pagos() {
       }
       setPagos(pagosFormateados);
 
-      // 2. Obtener resumen de métricas reales de la base de datos
+      // 2. Obtener resumen de métricas reales del gimnasio
       let resResumen = await getResumenPagos({ id_gimnasio: gymId });
-      if ((!resResumen || (resResumen.pagos_realizados === 0 && resResumen.total_recaudado === 0)) && gymId) {
-        try {
-          const resResFallback = await getResumenPagos({});
-          if (resResFallback && (resResFallback.pagos_realizados > 0 || resResFallback.total_recaudado > 0)) {
-            resResumen = resResFallback;
-          }
-        } catch (err) {
-          console.warn("Fallback resumen:", err);
-        }
-      }
-
       if (resResumen) {
         setResumen({
           total_recaudado: resResumen.total_recaudado || 0,
@@ -125,7 +112,6 @@ function Pagos() {
           pagos_vencidos: resResumen.pagos_vencidos || 0
         });
       } else {
-        // Calcular dinámicamente si no respondió el resumen
         const rec = pagosFormateados.reduce((acc, p) => {
           if (p.estado === "pagado") {
             acc.total_recaudado += p.monto;
@@ -153,10 +139,12 @@ function Pagos() {
 
   // Guardar nuevo pago conectando directamente a la API
   const handleGuardarPago = async (formulario) => {
-    let gymId = usuarioActual?.gimnasio?.id_gimnasio || 20;
+    const gymId = obtenerGymId(usuarioActual);
 
     await registrarPago({
+      id_socio: formulario.id_socio || undefined,
       id_membresia: formulario.id_membresia || undefined,
+      id_plan_membresia: formulario.id_plan_membresia || undefined,
       nombreSocio: formulario.nombreSocio,
       dniSocio: formulario.dniSocio,
       plan: formulario.plan,
@@ -318,7 +306,7 @@ function Pagos() {
             abierto={modalAbierto}
             onCerrar={() => setModalAbierto(false)}
             onGuardarPago={handleGuardarPago}
-            gymId={usuarioActual?.gimnasio?.id_gimnasio}
+            gymId={obtenerGymId(usuarioActual)}
           />
 
           {/* Componente Modular: Modal de Detalle Completo y Eliminación */}

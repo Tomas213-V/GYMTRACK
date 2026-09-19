@@ -1,0 +1,18 @@
+.socios-page-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: #0d0d0d;
+  color: #ffffff;
+}
+
+.socios-main-wrapper {
+  display: flex;
+  flex: 1;
+}
+
+.socios-content-area {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
