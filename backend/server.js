@@ -21,6 +21,7 @@ const pagoRoutes = require("./src/routes/pagoRoutes");
 const gimnasioRoutes = require("./src/routes/gimnasioRoutes");
 const socioRoutes = require("./src/routes/socioRoutes");
 const rutinaRoutes = require("./src/routes/rutinaRoutes");
+const ejercicioRoutes = require("./src/routes/ejercicioRoutes");
 
 // 2. INICIALIZACIÓN DE LA APLICACIÓN
 // Crea una instancia de la aplicación Express
@@ -71,6 +72,7 @@ app.use("/api/pagos", pagoRoutes);
 app.use("/api/gimnasios", gimnasioRoutes);
 app.use("/api/socios", socioRoutes);
 app.use("/api/rutinas", rutinaRoutes);
+app.use("/api/ejercicios", ejercicioRoutes);
 
 
 // 5. CONFIGURACIÓN DEL PUERTO Y PUESTA EN MARCHA DEL SERVIDOR
