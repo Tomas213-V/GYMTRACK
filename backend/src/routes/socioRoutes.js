@@ -5,7 +5,8 @@ const {
   getSocioById, 
   createSocio, 
   updateSocio, 
-  changeEstadoSocio 
+  changeEstadoSocio,
+  deleteSocio
 } = require('../controllers/socioController');
 const { verifyToken } = require('../middlewares/authMiddleware');
 
@@ -18,5 +19,6 @@ router.get('/:id', getSocioById);
 router.post('/', createSocio);
 router.put('/:id', updateSocio);
 router.patch('/:id/estado', changeEstadoSocio);
+router.delete('/:id', deleteSocio);
 
 module.exports = router;

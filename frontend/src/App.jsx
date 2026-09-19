@@ -17,6 +17,7 @@ import Ejercicios from './pages/ejercicios/ejercicios'
 import Soporte from './pages/support/support'
 import Pagos from './pages/pagos/pagos'
 import CrearGimnasio from './pages/crear-gimnasio/crear-gimnasio'
+import Socios from './pages/socios/socios'
 import './App.css'
 
 function App() {
@@ -29,7 +30,8 @@ function App() {
      <Routes>
 
         <Route path="/" element={<Landing />} />
-        <Route path="/ejercicios" element ={<Ejercicios />}/>
+        <Route path="/ejercicios" element={<Ejercicios />} />
+        <Route path="/ejerciciosLanding" element={<Ejercicios />} />
 
         <Route
           path="/login"
@@ -63,7 +65,15 @@ function App() {
           element={<Progress/>}
         />
         <Route 
+          path="/progressLanding"
+          element={<Progress/>}
+        />
+        <Route 
           path="/precio"
+          element={<Precio/>}
+        />
+        <Route 
+          path="/precioLanding"
           element={<Precio/>}
         />
       
@@ -77,6 +87,15 @@ function App() {
         element={
           <ProtectedRoute>
             <Pagos/>
+          </ProtectedRoute>
+        }
+        />
+
+        <Route 
+        path="/socios" 
+        element={
+          <ProtectedRoute>
+            <Socios/>
           </ProtectedRoute>
         }
         />
