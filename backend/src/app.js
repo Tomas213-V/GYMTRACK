@@ -6,7 +6,8 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 // Importación de las rutas
 const authRoutes = require('./routes/authRoutes');
-const socioRoutes = require('./routes/socioRoutes'); // 👈 Importante agregar esto
+const socioRoutes = require('./routes/socioRoutes');
+const asistenciaRoutes = require('./routes/asistenciaRoutes'); // 👈 Importante agregar esto
 
 const app = express();
 
@@ -15,7 +16,8 @@ app.use(express.json());
 
 // Registro de endpoints base
 app.use('/api/auth', authRoutes);
-app.use('/api/socios', socioRoutes); // 👈 Importante agregar esto
+app.use('/api/socios', socioRoutes);
+app.use('/api/asistencias', asistenciaRoutes); // 👈 Importante agregar esto
 
 app.get('/', (req, res) => {
   res.send('Servidor GymTrack funcionando correctamente 🚀');
