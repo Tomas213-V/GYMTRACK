@@ -22,6 +22,7 @@ const gimnasioRoutes = require("./src/routes/gimnasioRoutes");
 const socioRoutes = require("./src/routes/socioRoutes");
 const asistenciaRoutes = require("./src/routes/asistenciaRoutes");
 const planMembresiaRoutes = require('./src/routes/planMembresiaRoutes');
+const membresiaRoutes = require('./src/routes/membresiaRoutes');
 
 // 2. INICIALIZACIÓN DE LA APLICACIÓN
 // Crea una instancia de la aplicación Express
@@ -76,6 +77,7 @@ app.use("/api/gimnasios", gimnasioRoutes);
 app.use("/api/socios", socioRoutes);
 app.use("/api/asistencias", asistenciaRoutes);
 app.use('/api/planes-membresia', planMembresiaRoutes);
+app.use('/api/membresias', membresiaRoutes);
 
 // 5. CONFIGURACIÓN DEL PUERTO Y PUESTA EN MARCHA DEL SERVIDOR
 // Usa el puerto definido en el archivo .env (PORT), o el 3000 por defecto si no está especificado
