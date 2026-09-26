@@ -1,5 +1,7 @@
 const supabase = require('../config/supabase');
 
+const supabase = require('../config/supabase');
+
 /**
  * 1. OBTENER ASISTENCIAS
  * Soporta paginación, búsqueda por nombre/apellido/DNI, rango de fechas y filtro por socio
@@ -9,10 +11,8 @@ const getAsistencias = async (req, res) => {
   try {
     const { page = 1, limit = 10, search, desde, hasta, id_socio, id_gimnasio } = req.query;
     const gymId = id_gimnasio || req.usuario?.id_gimnasio;
-
     const offset = (Number(page) - 1) * Number(limit);
 
-    // Consulta base con JOIN a la tabla 'socio'
     let query = supabase
       .from('asistencia')
       .select(`
@@ -33,35 +33,28 @@ const getAsistencias = async (req, res) => {
         )
       `, { count: 'exact' });
 
-    // Filtrar por gimnasio si está disponible
     if (gymId) {
       query = query.eq('socio.id_gimnasio', gymId);
     }
 
-    // Filtrar por socio específico
     if (id_socio && id_socio !== 'todos') {
       query = query.eq('id_socio', id_socio);
     }
 
-    // Rango de fechas (hora_ingreso)
     if (desde) {
-      // Inicio del día en formato ISO
       const fechaDesde = desde.includes('T') ? desde : `${desde}T00:00:00.000Z`;
       query = query.gte('hora_ingreso', fechaDesde);
     }
     if (hasta) {
-      // Fin del día en formato ISO
       const fechaHasta = hasta.includes('T') ? hasta : `${hasta}T23:59:59.999Z`;
       query = query.lte('hora_ingreso', fechaHasta);
     }
 
-    // Búsqueda por texto (nombre, apellido, dni)
     if (search && search.trim()) {
       const s = search.trim();
       query = query.or(`nombre.ilike.%${s}%,apellido.ilike.%${s}%,dni.ilike.%${s}%`, { foreignTable: 'socio' });
     }
 
-    // Ordenar de más reciente a más antiguo
     query = query
       .order('hora_ingreso', { ascending: false })
       .range(offset, offset + Number(limit) - 1);
@@ -72,15 +65,11 @@ const getAsistencias = async (req, res) => {
       return res.status(500).json({ error: 'Error al consultar asistencias: ' + error.message });
     }
 
-    const total = count || 0;
-    const parsedLimit = Number(limit);
-    const parsedPage = Number(page);
-
     return res.status(200).json({
-      total,
-      page: parsedPage,
-      totalPages: Math.ceil(total / parsedLimit) || 1,
-      limit: parsedLimit,
+      total: count || 0,
+      page: Number(page),
+      totalPages: Math.ceil((count || 0) / Number(limit)) || 1,
+      limit: Number(limit),
       asistencias: asistencias || []
     });
 
@@ -89,22 +78,22 @@ const getAsistencias = async (req, res) => {
   }
 };
 
-/**
- * 2. REGISTRAR ASISTENCIA
- * Permite registrar asistencia buscando al socio por id_socio o por dni
- * POST /api/asistencias
- * Body: { id_socio } o { dni }
- */
+const createAsistencia = async (req, res) => {
+  return registrarAsistencia(req, res);
+};
+    const { data: nuevaAsistencia, error: insertError } = await supabase
+      .from('asistencia')
+      .insert([
+        {
 const registrarAsistencia = async (req, res) => {
   try {
-    const { id_socio, dni } = req.body;
+    const { id_socio, dni, hora_ingreso, estado } = req.body;
     const gymId = req.usuario?.id_gimnasio || req.body.id_gimnasio;
 
     if (!id_socio && !dni) {
       return res.status(400).json({ error: 'Debes proporcionar el ID o el DNI del socio.' });
     }
 
-    // 1. Buscar al socio para confirmar existencia y obtener datos completos
     let socioQuery = supabase
       .from('socio')
       .select(`
@@ -124,7 +113,6 @@ const registrarAsistencia = async (req, res) => {
           precio
         )
       `);
-
 
     if (id_socio) {
       socioQuery = socioQuery.eq('id_socio', id_socio);
@@ -146,25 +134,23 @@ const registrarAsistencia = async (req, res) => {
       return res.status(404).json({ error: 'No se encontró ningún socio con el identificador ingresado.' });
     }
 
-    // 2. Registrar la asistencia
-    const horaIngreso = new Date().toISOString();
+    const horaIngreso = hora_ingreso || new Date().toISOString();
+
     const { data: nuevaAsistencia, error: insertError } = await supabase
       .from('asistencia')
       .insert([
         {
           id_socio: socio.id_socio,
           hora_ingreso: horaIngreso,
-          estado: 'registrada'
+          estado: estado || 'presente'
         }
       ])
-      .select()
-      .single();
+      .select();
 
     if (insertError) {
       return res.status(500).json({ error: 'Error al registrar la asistencia: ' + insertError.message });
     }
 
-    // Estructurar respuesta con la información completa del socio
     const asistenciaCompleta = {
       ...nuevaAsistencia,
       socio: {
@@ -188,6 +174,14 @@ const registrarAsistencia = async (req, res) => {
     return res.status(500).json({ error: 'Error interno al registrar la asistencia: ' + error.message });
   }
 };
+        }
+      ])
+      .select()
+      .single();
+
+    if (insertError) {
+      return res.status(500).json({ error: 'Error al registrar la asistencia: ' + insertError.message });
+    }
 
 /**
  * 3. OBTENER ESTADÍSTICAS DE ASISTENCIAS
@@ -200,24 +194,19 @@ const getEstadisticas = async (req, res) => {
 
     const ahora = new Date();
     const yearActual = ahora.getFullYear();
-    const mesActual = ahora.getMonth(); // 0-indexed
+    const mesActual = ahora.getMonth();
 
-    // Fechas mes actual
     const inicioMesActual = new Date(yearActual, mesActual, 1).toISOString();
     const finMesActual = new Date(yearActual, mesActual + 1, 0, 23, 59, 59, 999).toISOString();
-
-    // Fechas mes anterior
     const inicioMesAnterior = new Date(yearActual, mesActual - 1, 1).toISOString();
     const finMesAnterior = new Date(yearActual, mesActual, 0, 23, 59, 59, 999).toISOString();
 
-    // Consulta mes actual
     let qActual = supabase
       .from('asistencia')
       .select('id_asistencia, socio!inner(id_gimnasio)', { count: 'exact', head: true })
       .gte('hora_ingreso', inicioMesActual)
       .lte('hora_ingreso', finMesActual);
 
-    // Consulta mes anterior
     let qAnterior = supabase
       .from('asistencia')
       .select('id_asistencia, socio!inner(id_gimnasio)', { count: 'exact', head: true })
@@ -230,11 +219,9 @@ const getEstadisticas = async (req, res) => {
     }
 
     const [resActual, resAnterior] = await Promise.all([qActual, qAnterior]);
-
     const totalMesActual = resActual.count || 0;
     const totalMesAnterior = resAnterior.count || 0;
 
-    // Calcular cambio porcentual
     let porcentajeCambio = 0;
     let tendencia = 'neutral';
 
@@ -293,10 +280,17 @@ const getAsistenciasPorSocio = async (req, res) => {
   }
 };
 
-/**
- * 5. ELIMINAR ASISTENCIA
- * DELETE /api/asistencias/:id
- */
+const getAsistenciasBySocio = async (req, res) => {
+  return getAsistenciasPorSocio(req, res);
+};
+      asistencias: asistencias || []
+    });
+
+  } catch (error) {
+    return res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
+  }
+};
+
 const eliminarAsistencia = async (req, res) => {
   try {
     const { id } = req.params;
@@ -322,8 +316,72 @@ const eliminarAsistencia = async (req, res) => {
   }
 };
 
+const checkoutAsistencia = async (req, res) => {
+  try {
+    const idGimnasio = req.usuario?.id_gimnasio;
+    const { id } = req.params;
+    const { estado, hora_salida } = req.body;
+
+    const { data: asistencia, error: findError } = await supabase
+      .from('asistencia')
+      .select(`
+        *,
+        socio!inner (
+          id_gimnasio
+        )
+      `)
+      .eq('id_asistencia', id)
+      .eq('socio.id_gimnasio', idGimnasio)
+      .single();
+
+    if (findError || !asistencia) {
+      return res.status(404).json({ error: 'La asistencia no existe o no pertenece a este gimnasio.' });
+    }
+
+    if (asistencia.estado !== 'presente' && asistencia.estado !== 'registrada') {
+      return res.status(400).json({
+        error: `No se puede registrar la salida. El estado actual de la asistencia es '${asistencia.estado}'.`
+      });
+    }
+
+    const nuevoEstado = estado || 'completado';
+    const nuevaHoraSalida = hora_salida || new Date().toISOString();
+
+    const { data: asistenciaActualizada, error: updateError } = await supabase
+      .from('asistencia')
+      .update({
+        estado: nuevoEstado,
+        hora_salida: nuevaHoraSalida
+      })
+      .eq('id_asistencia', id)
+      .select()
+      .single();
+
+    if (updateError) {
+      return res.status(500).json({ error: 'Error al registrar la salida: ' + updateError.message });
+    }
+
+    return res.status(200).json({
+      mensaje: 'Salida registrada correctamente.',
+      asistencia: asistenciaActualizada
+    });
+
+  } catch (error) {
+    return res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
+  }
+};
+
+  } catch (error) {
+    return res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
+  }
+};
+
 module.exports = {
+module.exports = {
+  createAsistencia,
   getAsistencias,
+  getAsistenciasBySocio,
+  checkoutAsistencia,
   registrarAsistencia,
   getEstadisticas,
   getAsistenciasPorSocio,
