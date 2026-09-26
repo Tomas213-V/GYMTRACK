@@ -85,8 +85,6 @@ const registerOwner = async (req, res) => {
         ])
         .select()
         .single();
-      nuevoGimnasio = gymData;
-    }
 
       if (errorGym) {
         return res.status(500).json({ error: 'Error al registrar el gimnasio: ' + errorGym.message });
@@ -229,26 +227,29 @@ const login = async (req, res) => {
 };
 
 /**
- * Valida número de socio (id_socio), DNI, estado activo, rol socio y contraseña.
+ * Valida email, DNI y contraseña directamente en la tabla socio.
  */
 const loginSocio = async (req, res) => {
   try {
-    const { numero_socio, dni, contrasena, password } = req.body;
+    const { email, dni, contrasena, password } = req.body;
     const passwordInput = contrasena || password;
 
     // 1. Validar campos requeridos
-    if (!numero_socio || !dni || !passwordInput) {
+    if (!email || !dni || !passwordInput) {
       return res.status(400).json({
-        error: 'El número de socio, DNI y contraseña son obligatorios.'
+        error: 'El correo electrónico, DNI y contraseña son obligatorios.'
       });
     }
 
-    // 2. Buscar al socio por id_socio y DNI en la tabla socio
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanDni = dni.toString().trim();
+
+    // 2. Buscar al socio por email y DNI en la tabla socio
     const { data: socio, error: socioError } = await supabase
       .from('socio')
-      .select('id_socio, id_gimnasio, dni, telefono, fecha_alta, estado, nombre, apellido, email')
-      .eq('id_socio', numero_socio)
-      .eq('dni', dni.toString().trim())
+      .select('id_socio, id_gimnasio, dni, telefono, fecha_alta, estado, nombre, apellido, email, contrasena')
+      .ilike('email', cleanEmail)
+      .eq('dni', cleanDni)
       .maybeSingle();
 
     if (socioError) {
@@ -259,45 +260,36 @@ const loginSocio = async (req, res) => {
 
     if (!socio) {
       return res.status(401).json({
-        error: 'Credenciales inválidas. Verifique su número de socio y DNI.'
+        error: 'Credenciales inválidas. Verifique su correo electrónico y DNI.'
       });
     }
 
     // 3. Verificar estado del socio (Debe ser activo)
     if (socio.estado?.toLowerCase() !== 'activo') {
       return res.status(403).json({
-        error: 'El socio se encuentra inactivo. Comuníquese con la administración.'
+        error: 'El socio se encuentra inactivo. Comuníquese con la administración del gimnasio.'
       });
     }
 
-    // 4. Buscar las credenciales en la tabla usuario (por email de socio o por id)
-    let query = supabase
-      .from('usuario')
-      .select('id_usuario, nombre, apellido, email, contrasena, rol, estado');
-
-    if (socio.email) {
-      query = query.ilike('email', socio.email.trim());
-    } else {
-      query = query.eq('id_usuario', socio.id_socio);
-    }
-
-    const { data: usuario, error: usuarioError } = await query.maybeSingle();
-
-    if (usuarioError || !usuario) {
+    // 4. Verificar que tenga una contraseña asignada
+    if (!socio.contrasena) {
       return res.status(401).json({
-        error: 'No se encontraron credenciales de acceso asociadas a este socio.'
+        error: 'Este socio aún no tiene una contraseña asignada. Solicite su registro en el gimnasio.'
       });
     }
 
-    // 5. Verificar que el usuario tenga rol exclusivo de 'socio'
-    if (usuario.rol?.toLowerCase() !== 'socio') {
-      return res.status(403).json({
-        error: 'Acceso denegado. Este formulario de login es exclusivo para socios.'
-      });
+    // 5. Verificar contraseña con bcrypt
+    let passwordValida = false;
+    try {
+      passwordValida = await bcrypt.compare(passwordInput, socio.contrasena);
+    } catch {
+      passwordValida = false;
     }
 
-    // 6. Verificar contraseña con bcrypt
-    const passwordValida = await bcrypt.compare(passwordInput, usuario.contrasena);
+    // Fallback de contingencia en caso de coincidencia directa
+    if (!passwordValida && passwordInput === socio.contrasena) {
+      passwordValida = true;
+    }
 
     if (!passwordValida) {
       return res.status(401).json({
@@ -305,35 +297,50 @@ const loginSocio = async (req, res) => {
       });
     }
 
+    // 6. Consultar datos del gimnasio asociado
+    let gimnasio = null;
+    if (socio.id_gimnasio) {
+      const { data: gymData } = await supabase
+        .from('gimnasio')
+        .select('id_gimnasio, nombre, direccion, telefono, estado')
+        .eq('id_gimnasio', socio.id_gimnasio)
+        .maybeSingle();
+      gimnasio = gymData;
+    }
+
     // 7. Generar Token JWT
     const jwtSecret = process.env.JWT_SECRET || 'gymtrack_jwt_secret_key_2026';
     const expiresIn = process.env.JWT_EXPIRES_IN || '24h';
 
     const tokenPayload = {
-      id_usuario: usuario.id_usuario,
       id_socio: socio.id_socio,
       id_gimnasio: socio.id_gimnasio,
       dni: socio.dni,
-      email: usuario.email,
-      rol: usuario.rol
+      email: socio.email,
+      rol: 'socio'
     };
 
     const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn });
+
+    const socioSeguro = {
+      id_socio: socio.id_socio,
+      id_gimnasio: socio.id_gimnasio,
+      nombre: socio.nombre,
+      apellido: socio.apellido,
+      dni: socio.dni,
+      email: socio.email,
+      telefono: socio.telefono,
+      estado: socio.estado,
+      rol: 'socio',
+      gimnasio
+    };
 
     // 8. Devolver respuesta exitosa
     return res.status(200).json({
       mensaje: 'Inicio de sesión exitoso.',
       token,
-      socio: {
-        id_socio: socio.id_socio,
-        id_gimnasio: socio.id_gimnasio,
-        nombre: socio.nombre || usuario.nombre,
-        apellido: socio.apellido || usuario.apellido,
-        dni: socio.dni,
-        email: usuario.email,
-        estado: socio.estado,
-        rol: usuario.rol
-      }
+      usuario: socioSeguro,
+      socio: socioSeguro
     });
 
   } catch (error) {
@@ -349,9 +356,40 @@ const loginSocio = async (req, res) => {
 const getMe = async (req, res) => {
   try {
     const idUsuario = req.usuario?.id_usuario;
+    const idSocio = req.usuario?.id_socio;
 
-    if (!idUsuario) {
+    if (!idUsuario && !idSocio) {
       return res.status(401).json({ error: 'Usuario no autenticado.' });
+    }
+
+    if (idSocio) {
+      const { data: socio, error: socioErr } = await supabase
+        .from('socio')
+        .select('id_socio, id_gimnasio, dni, telefono, fecha_alta, estado, nombre, apellido, email')
+        .eq('id_socio', idSocio)
+        .maybeSingle();
+
+      if (socioErr || !socio) {
+        return res.status(404).json({ error: 'Socio no encontrado.' });
+      }
+
+      let gimnasio = null;
+      if (socio.id_gimnasio) {
+        const { data: gymData } = await supabase
+          .from('gimnasio')
+          .select('id_gimnasio, nombre, direccion, telefono, estado')
+          .eq('id_gimnasio', socio.id_gimnasio)
+          .maybeSingle();
+        gimnasio = gymData;
+      }
+
+      return res.status(200).json({
+        usuario: {
+          ...socio,
+          rol: 'socio',
+          gimnasio
+        }
+      });
     }
 
     const { data: usuario, error: errorUsuario } = await supabase

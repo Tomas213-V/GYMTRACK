@@ -86,6 +86,7 @@ function SocioDetalleModal({
             dni: s.dni || "",
             telefono: s.telefono || "",
             email: s.email || u.email || "",
+            contrasena: "",
             estado: (s.estado || "activo").toLowerCase(),
             id_plan_membresia: membActiva?.id_plan_membresia || membActiva?.plan_membresia?.id_plan_membresia || "",
             plan: membActiva?.plan_membresia?.nombre || membActiva?.tipo || "Plan Premium"
@@ -158,7 +159,7 @@ function SocioDetalleModal({
     setGuardando(true);
 
     try {
-      await updateSocio(s.id_socio, {
+      const payload = {
         nombre: formData.nombre,
         apellido: formData.apellido,
         dni: formData.dni,
@@ -167,7 +168,13 @@ function SocioDetalleModal({
         estado: formData.estado,
         id_plan_membresia: formData.id_plan_membresia || undefined,
         plan: formData.plan || undefined
-      });
+      };
+
+      if (formData.contrasena && formData.contrasena.trim()) {
+        payload.contrasena = formData.contrasena.trim();
+      }
+
+      await updateSocio(s.id_socio, payload);
 
       setExitoMsg("¡Datos del socio actualizados exitosamente!");
       setTimeout(() => {
@@ -306,7 +313,7 @@ function SocioDetalleModal({
               </div>
 
               <div className="socio-detalle-seccion">
-                <h4 className="socio-detalle-seccion-titulo">Datos de Contacto</h4>
+                <h4 className="socio-detalle-seccion-titulo">Datos de Contacto y Acceso</h4>
                 <div className="socio-detalle-grid">
                   <div className="socio-detalle-item">
                     <span className="socio-detalle-item-label">Teléfono Móvil</span>
@@ -316,13 +323,20 @@ function SocioDetalleModal({
                   </div>
 
                   <div className="socio-detalle-item">
-                    <span className="socio-detalle-item-label">Correo Electrónico</span>
+                    <span className="socio-detalle-item-label">Correo Electrónico (Login)</span>
                     <span className="socio-detalle-item-valor">
                       {s.email && !s.email.includes("@gymtrack.local")
                         ? s.email
                         : (usuarioData.email && !usuarioData.email.includes("@gymtrack.local")
                             ? usuarioData.email
                             : "No especificado")}
+                    </span>
+                  </div>
+
+                  <div className="socio-detalle-item">
+                    <span className="socio-detalle-item-label">Contraseña de Portal</span>
+                    <span className="socio-detalle-item-valor" style={{ color: s.contrasena ? '#8cff00' : '#ffa500' }}>
+                      {s.contrasena ? "✓ Configurada" : "⚠ Sin contraseña asignada"}
                     </span>
                   </div>
                 </div>
@@ -430,13 +444,23 @@ function SocioDetalleModal({
               </div>
 
               <div className="socio-form-fila">
-                <div className="socio-form-grupo" style={{ width: '100%' }}>
-                  <label>Correo Electrónico (Opcional)</label>
+                <div className="socio-form-grupo">
+                  <label>Correo Electrónico</label>
                   <input
                     type="email"
                     placeholder="ejemplo@correo.com"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  />
+                </div>
+
+                <div className="socio-form-grupo">
+                  <label>Modificar Contraseña</label>
+                  <input
+                    type="password"
+                    placeholder="Dejar en blanco para no cambiar"
+                    value={formData.contrasena || ""}
+                    onChange={(e) => setFormData({ ...formData, contrasena: e.target.value })}
                   />
                 </div>
               </div>

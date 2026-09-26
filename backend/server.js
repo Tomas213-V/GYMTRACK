@@ -15,14 +15,11 @@ require("dotenv").config();
 
 // Cliente de Supabase: Instancia configurada para interactuar con la base de datos PostgreSQL en la nube
 const supabase = require("./src/config/supabase");
-// importa ruta
+// importa rutas
 const authRoutes = require("./src/routes/authRoutes");
 const pagoRoutes = require("./src/routes/pagoRoutes");
 const gimnasioRoutes = require("./src/routes/gimnasioRoutes");
 const socioRoutes = require("./src/routes/socioRoutes");
-const pagoRoutes = require('./src/routes/pagoRoutes');
-const gimnasioRoutes = require('./src/routes/gimnasioRoutes');
-const socioRoutes = require('./src/routes/socioRoutes');
 const rutinaRoutes = require('./src/routes/rutinaRoutes');
 const ejercicioRoutes = require('./src/routes/ejercicioRoutes');
 const asistenciaRoutes = require('./src/routes/asistenciaRoutes');
@@ -73,17 +70,12 @@ app.get("/api/health", async (req, res) => {
         });
     }
 });
-// Registrar las rutas de Autenticación (/api/auth/register y /api/auth/login)
-app.use("/api/auth", authRoutes);
-app.use("/api/pagos", pagoRoutes);
-app.use("/api/gimnasios", gimnasioRoutes);
+
+// Registrar las rutas de la API
 app.use("/api/auth", authRoutes);
 app.use("/api/pagos", pagoRoutes);
 app.use("/api/gimnasios", gimnasioRoutes);
 app.use("/api/socios", socioRoutes);
-app.use('/api/pagos', pagoRoutes);
-app.use('/api/gimnasios', gimnasioRoutes);
-app.use('/api/socios', socioRoutes);
 app.use('/api/rutinas', rutinaRoutes);
 app.use('/api/ejercicios', ejercicioRoutes);
 app.use('/api/asistencias', asistenciaRoutes);

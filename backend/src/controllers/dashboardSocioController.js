@@ -39,7 +39,7 @@ const getDashboardSocio = async (req, res) => {
       // a. Datos básicos del socio
       supabase
         .from('socio')
-        .select('id_socio, nombre, apellido, dni, email, telefono, fecha_nacimiento')
+        .select('id_socio, nombre, apellido, dni, email, telefono')
         .eq('id_socio', idSocio)
         .single(),
 
@@ -62,18 +62,27 @@ const getDashboardSocio = async (req, res) => {
       // c. Último pago realizado
       supabase
         .from('pago')
-        .select('id_pago, monto, fecha_pago, metodo_pago, estado')
-        .eq('id_socio', idSocio)
+        .select(`
+          id_pago,
+          monto,
+          fecha_pago,
+          metodo_pago,
+          estado,
+          membresia!inner (
+            id_socio
+          )
+        `)
+        .eq('membresia.id_socio', idSocio)
         .order('fecha_pago', { ascending: false })
         .limit(1)
         .maybeSingle(),
 
       // d. Último registro de progreso (Peso actual)
       supabase
-        .from('progreso_socio')
-        .select('id_progreso, peso, porcentaje_grasa, fecha_registro')
+        .from('progreso')
+        .select('id_progreso, peso, fecha, observaciones')
         .eq('id_socio', idSocio)
-        .order('fecha_registro', { ascending: false })
+        .order('fecha', { ascending: false })
         .limit(1)
         .maybeSingle(),
 
@@ -132,8 +141,8 @@ const getDashboardSocio = async (req, res) => {
       } : null,
       progreso: {
         peso_actual: ultimoProgreso?.peso || null,
-        porcentaje_grasa: ultimoProgreso?.porcentaje_grasa || null,
-        fecha_ultimo_registro: ultimoProgreso?.fecha_registro || null
+        observaciones: ultimoProgreso?.observaciones || null,
+        fecha_ultimo_registro: ultimoProgreso?.fecha || null
       },
       entrenamientos: {
         total_asistencias: totalAsistencias

@@ -65,6 +65,38 @@ export async function login(userData) {
 }
 
 // =========================================================
+// LOGIN SOCIO
+// =========================================================
+
+export async function loginSocio(userData) {
+
+  const response = await fetch(
+    `${API_URL}/auth/login-socio`,
+    {
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json',
+      },
+
+      body: JSON.stringify(userData),
+    }
+  )
+
+  const data = await response.json()
+
+  if (!response.ok) {
+
+    throw new Error(
+      data.error || 'No se pudo iniciar sesión como socio.'
+    )
+
+  }
+
+  return data
+}
+
+// =========================================================
 // COMPROBAR AUTENTICACIÓN
 // =========================================================
 

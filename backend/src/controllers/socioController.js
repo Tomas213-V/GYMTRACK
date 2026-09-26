@@ -1,3 +1,4 @@
+const bcrypt = require('bcrypt');
 const supabase = require('../config/supabase');
 
 /**
@@ -117,6 +118,8 @@ const createSocio = async (req, res) => {
       dni, 
       telefono, 
       email,
+      contrasena,
+      password,
       plan, 
       precio, 
       estado, 
@@ -135,6 +138,13 @@ const createSocio = async (req, res) => {
 
     if (!idGimnasio) {
       return res.status(400).json({ error: 'No se asoció un gimnasio al usuario.' });
+    }
+
+    // Hash de contraseña si se proporcionó
+    const rawPass = (contrasena || password)?.toString().trim();
+    let contrasenaHash = null;
+    if (rawPass) {
+      contrasenaHash = await bcrypt.hash(rawPass, 10);
     }
 
     // Verificar DNI duplicado en el mismo gimnasio
@@ -159,7 +169,8 @@ const createSocio = async (req, res) => {
           apellido: apellido ? apellido.trim() : '',
           dni: dni.toString().trim(),
           telefono: telefono ? telefono.trim() : null,
-          email: email ? email.trim() : null,
+          email: email ? email.trim().toLowerCase() : null,
+          contrasena: contrasenaHash,
           fecha_alta: new Date().toISOString().split('T')[0],
           estado: estado || 'activo'
         }
@@ -250,7 +261,7 @@ const updateSocio = async (req, res) => {
   try {
     const { id } = req.params;
     const idGimnasio = req.usuario?.id_gimnasio;
-    const { nombre, apellido, dni, telefono, email, estado, id_plan_membresia, plan } = req.body;
+    const { nombre, apellido, dni, telefono, email, estado, id_plan_membresia, plan, contrasena, password } = req.body;
 
     // Verificar pertenencia al gimnasio
     let query = supabase
@@ -268,17 +279,27 @@ const updateSocio = async (req, res) => {
       return res.status(404).json({ error: 'Socio no encontrado o sin permisos.' });
     }
 
+    // Hash de nueva contraseña si se envió
+    const rawPass = (contrasena || password)?.toString().trim();
+    let contrasenaHash = undefined;
+    if (rawPass) {
+      contrasenaHash = await bcrypt.hash(rawPass, 10);
+    }
+
     // Actualizar datos de la tabla socio directamente
+    const updateCampos = {
+      ...(nombre && { nombre: nombre.trim() }),
+      ...(apellido !== undefined && { apellido: apellido ? apellido.trim() : '' }),
+      ...(dni && { dni: dni.toString().trim() }),
+      ...(telefono !== undefined && { telefono: telefono ? telefono.trim() : null }),
+      ...(email !== undefined && { email: email ? email.trim().toLowerCase() : null }),
+      ...(estado && { estado: estado.toLowerCase() }),
+      ...(contrasenaHash !== undefined && { contrasena: contrasenaHash })
+    };
+
     const { data: socioActualizado, error: errorUpdate } = await supabase
       .from('socio')
-      .update({
-        ...(nombre && { nombre: nombre.trim() }),
-        ...(apellido !== undefined && { apellido: apellido ? apellido.trim() : '' }),
-        ...(dni && { dni: dni.toString().trim() }),
-        ...(telefono !== undefined && { telefono: telefono ? telefono.trim() : null }),
-        ...(email !== undefined && { email: email ? email.trim() : null }),
-        ...(estado && { estado: estado.toLowerCase() })
-      })
+      .update(updateCampos)
       .eq('id_socio', id)
       .select()
       .single();

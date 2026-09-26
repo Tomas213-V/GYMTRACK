@@ -1,9 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const {
-const express = require('express');
-const router = express.Router();
-const {
   createAsistencia,
   getAsistencias,
   getAsistenciasBySocio,

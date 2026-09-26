@@ -185,12 +185,9 @@ function Login() {
 
           <div className="login-links">
 
-            <a
-              href="#"
-              onClick={(event) => event.preventDefault()}
-            >
+            <Link to="/login-socio">
               ¿Eres socio?
-            </a>
+            </Link>
 
             <a
               href="#"

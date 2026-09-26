@@ -15,6 +15,7 @@ function SocioModal({ onClose, onSuccess, gymId }) {
     dni: '',
     telefono: '',
     email: '',
+    contrasena: '',
     id_plan_membresia: '',
     plan: 'Plan Premium',
     precio: 22000,
@@ -129,13 +130,23 @@ function SocioModal({ onClose, onSuccess, gymId }) {
           </div>
 
           <div className="socio-modal-fila">
-            <div className="socio-modal-grupo" style={{ width: '100%' }}>
-              <label>Correo Electrónico (Opcional)</label>
+            <div className="socio-modal-grupo">
+              <label>Correo Electrónico</label>
               <input
                 type="email"
                 placeholder="Ej: juan@email.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              />
+            </div>
+
+            <div className="socio-modal-grupo">
+              <label>Contraseña de Acceso</label>
+              <input
+                type="password"
+                placeholder="Clave para el socio"
+                value={formData.contrasena}
+                onChange={(e) => setFormData({ ...formData, contrasena: e.target.value })}
               />
             </div>
           </div>

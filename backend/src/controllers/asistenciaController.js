@@ -1,7 +1,5 @@
 const supabase = require('../config/supabase');
 
-const supabase = require('../config/supabase');
-
 /**
  * 1. OBTENER ASISTENCIAS
  * Soporta paginación, búsqueda por nombre/apellido/DNI, rango de fechas y filtro por socio
@@ -78,13 +76,10 @@ const getAsistencias = async (req, res) => {
   }
 };
 
-const createAsistencia = async (req, res) => {
-  return registrarAsistencia(req, res);
-};
-    const { data: nuevaAsistencia, error: insertError } = await supabase
-      .from('asistencia')
-      .insert([
-        {
+/**
+ * 2. REGISTRAR ASISTENCIA
+ * POST /api/asistencias
+ */
 const registrarAsistencia = async (req, res) => {
   try {
     const { id_socio, dni, hora_ingreso, estado } = req.body;
@@ -145,7 +140,8 @@ const registrarAsistencia = async (req, res) => {
           estado: estado || 'presente'
         }
       ])
-      .select();
+      .select()
+      .single();
 
     if (insertError) {
       return res.status(500).json({ error: 'Error al registrar la asistencia: ' + insertError.message });
@@ -174,14 +170,10 @@ const registrarAsistencia = async (req, res) => {
     return res.status(500).json({ error: 'Error interno al registrar la asistencia: ' + error.message });
   }
 };
-        }
-      ])
-      .select()
-      .single();
 
-    if (insertError) {
-      return res.status(500).json({ error: 'Error al registrar la asistencia: ' + insertError.message });
-    }
+const createAsistencia = async (req, res) => {
+  return registrarAsistencia(req, res);
+};
 
 /**
  * 3. OBTENER ESTADÍSTICAS DE ASISTENCIAS
@@ -283,14 +275,11 @@ const getAsistenciasPorSocio = async (req, res) => {
 const getAsistenciasBySocio = async (req, res) => {
   return getAsistenciasPorSocio(req, res);
 };
-      asistencias: asistencias || []
-    });
 
-  } catch (error) {
-    return res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
-  }
-};
-
+/**
+ * 5. ELIMINAR ASISTENCIA
+ * DELETE /api/asistencias/:id
+ */
 const eliminarAsistencia = async (req, res) => {
   try {
     const { id } = req.params;
@@ -316,13 +305,17 @@ const eliminarAsistencia = async (req, res) => {
   }
 };
 
+/**
+ * 6. REGISTRAR SALIDA (CHECKOUT)
+ * PATCH /api/asistencias/:id/checkout
+ */
 const checkoutAsistencia = async (req, res) => {
   try {
     const idGimnasio = req.usuario?.id_gimnasio;
     const { id } = req.params;
     const { estado, hora_salida } = req.body;
 
-    const { data: asistencia, error: findError } = await supabase
+    let query = supabase
       .from('asistencia')
       .select(`
         *,
@@ -330,9 +323,13 @@ const checkoutAsistencia = async (req, res) => {
           id_gimnasio
         )
       `)
-      .eq('id_asistencia', id)
-      .eq('socio.id_gimnasio', idGimnasio)
-      .single();
+      .eq('id_asistencia', id);
+
+    if (idGimnasio) {
+      query = query.eq('socio.id_gimnasio', idGimnasio);
+    }
+
+    const { data: asistencia, error: findError } = await query.maybeSingle();
 
     if (findError || !asistencia) {
       return res.status(404).json({ error: 'La asistencia no existe o no pertenece a este gimnasio.' });
@@ -371,12 +368,6 @@ const checkoutAsistencia = async (req, res) => {
   }
 };
 
-  } catch (error) {
-    return res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
-  }
-};
-
-module.exports = {
 module.exports = {
   createAsistencia,
   getAsistencias,
