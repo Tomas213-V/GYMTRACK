@@ -1,4 +1,3 @@
-
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const supabase = require('../config/supabase');
@@ -7,7 +6,6 @@ const supabase = require('../config/supabase');
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * TAREA: REGISTRO DE GIMNASIO Y DUEÑO
  */
 const registerOwner = async (req, res) => {
   try {
@@ -33,7 +31,7 @@ const registerOwner = async (req, res) => {
       return res.status(400).json({ error: 'El formato del email ingresado no es válido.' });
     }
 
-    // 2. Criterio de Aceptación: No permitir registrar usuarios con un email que ya exista
+    // 2.  No permitir registrar usuarios con un email que ya exista
     const { data: usuarioExistente } = await supabase
       .from('usuario')
       .select('id_usuario')
@@ -48,7 +46,7 @@ const registerOwner = async (req, res) => {
     const saltRounds = 10;
     const contrasenaHash = await bcrypt.hash(contrasena, saltRounds);
 
-    // 4. PRIMERO: Insertar el Usuario (Dueño)
+    // 4. Insertar el Usuario (Dueño)
     const { data: nuevoUsuario, error: errorUser } = await supabase
       .from('usuario')
       .insert([
@@ -69,7 +67,7 @@ const registerOwner = async (req, res) => {
       return res.status(500).json({ error: 'Error al registrar el usuario: ' + errorUser.message });
     }
 
-    // 5. SEGUNDO: Insertar el Gimnasio si se proporcionó nombreGimnasio
+    // 5. Insertar el Gimnasio si se proporcionó nombreGimnasio y vincular al id_usuario
     let nuevoGimnasio = null;
     if (nombreGimnasio && nombreGimnasio.trim()) {
       const { data: gymData, error: errorGym } = await supabase
@@ -80,13 +78,15 @@ const registerOwner = async (req, res) => {
             direccion: direccion ? direccion.trim() : null,
             telefono: telefono ? telefono.trim() : null,
             email: emailGimnasio ? emailGimnasio.trim().toLowerCase() : cleanEmail,
-            fecha_registro: new Date().toISOString().split('T')[0],
+            fecha_registro: new Date().toISOString(),
             estado: 'activo',
             id_usuario: nuevoUsuario.id_usuario
           }
         ])
         .select()
         .single();
+      nuevoGimnasio = gymData;
+    }
 
       if (errorGym) {
         return res.status(500).json({ error: 'Error al registrar el gimnasio: ' + errorGym.message });
@@ -109,7 +109,7 @@ const registerOwner = async (req, res) => {
       { expiresIn }
     );
 
-    // 7. Respuesta exitosa para el frontend (sin exponer el hash)
+    // 7. Respuesta exitosa 
     return res.status(201).json({
       mensaje: nuevoGimnasio
         ? 'Dueño y Gimnasio registrados exitosamente.'
@@ -128,7 +128,6 @@ const registerOwner = async (req, res) => {
 };
 
 /**
- * TAREA: INICIO DE SESIÓN (LOGIN)
  * Valida credenciales, comprueba contraseña con bcrypt y genera token JWT
  */
 const login = async (req, res) => {
@@ -230,8 +229,122 @@ const login = async (req, res) => {
 };
 
 /**
+ * Valida número de socio (id_socio), DNI, estado activo, rol socio y contraseña.
+ */
+const loginSocio = async (req, res) => {
+  try {
+    const { numero_socio, dni, contrasena, password } = req.body;
+    const passwordInput = contrasena || password;
+
+    // 1. Validar campos requeridos
+    if (!numero_socio || !dni || !passwordInput) {
+      return res.status(400).json({
+        error: 'El número de socio, DNI y contraseña son obligatorios.'
+      });
+    }
+
+    // 2. Buscar al socio por id_socio y DNI en la tabla socio
+    const { data: socio, error: socioError } = await supabase
+      .from('socio')
+      .select('id_socio, id_gimnasio, dni, telefono, fecha_alta, estado, nombre, apellido, email')
+      .eq('id_socio', numero_socio)
+      .eq('dni', dni.toString().trim())
+      .maybeSingle();
+
+    if (socioError) {
+      return res.status(500).json({
+        error: 'Error al consultar la base de datos de socios: ' + socioError.message
+      });
+    }
+
+    if (!socio) {
+      return res.status(401).json({
+        error: 'Credenciales inválidas. Verifique su número de socio y DNI.'
+      });
+    }
+
+    // 3. Verificar estado del socio (Debe ser activo)
+    if (socio.estado?.toLowerCase() !== 'activo') {
+      return res.status(403).json({
+        error: 'El socio se encuentra inactivo. Comuníquese con la administración.'
+      });
+    }
+
+    // 4. Buscar las credenciales en la tabla usuario (por email de socio o por id)
+    let query = supabase
+      .from('usuario')
+      .select('id_usuario, nombre, apellido, email, contrasena, rol, estado');
+
+    if (socio.email) {
+      query = query.ilike('email', socio.email.trim());
+    } else {
+      query = query.eq('id_usuario', socio.id_socio);
+    }
+
+    const { data: usuario, error: usuarioError } = await query.maybeSingle();
+
+    if (usuarioError || !usuario) {
+      return res.status(401).json({
+        error: 'No se encontraron credenciales de acceso asociadas a este socio.'
+      });
+    }
+
+    // 5. Verificar que el usuario tenga rol exclusivo de 'socio'
+    if (usuario.rol?.toLowerCase() !== 'socio') {
+      return res.status(403).json({
+        error: 'Acceso denegado. Este formulario de login es exclusivo para socios.'
+      });
+    }
+
+    // 6. Verificar contraseña con bcrypt
+    const passwordValida = await bcrypt.compare(passwordInput, usuario.contrasena);
+
+    if (!passwordValida) {
+      return res.status(401).json({
+        error: 'Credenciales inválidas. Contraseña incorrecta.'
+      });
+    }
+
+    // 7. Generar Token JWT
+    const jwtSecret = process.env.JWT_SECRET || 'gymtrack_jwt_secret_key_2026';
+    const expiresIn = process.env.JWT_EXPIRES_IN || '24h';
+
+    const tokenPayload = {
+      id_usuario: usuario.id_usuario,
+      id_socio: socio.id_socio,
+      id_gimnasio: socio.id_gimnasio,
+      dni: socio.dni,
+      email: usuario.email,
+      rol: usuario.rol
+    };
+
+    const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn });
+
+    // 8. Devolver respuesta exitosa
+    return res.status(200).json({
+      mensaje: 'Inicio de sesión exitoso.',
+      token,
+      socio: {
+        id_socio: socio.id_socio,
+        id_gimnasio: socio.id_gimnasio,
+        nombre: socio.nombre || usuario.nombre,
+        apellido: socio.apellido || usuario.apellido,
+        dni: socio.dni,
+        email: usuario.email,
+        estado: socio.estado,
+        rol: usuario.rol
+      }
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Error interno del servidor al procesar el inicio de sesión del socio: ' + error.message
+    });
+  }
+};
+
+/**
  * CONTROLADOR: OBTENER PERFIL DEL USUARIO AUTENTICADO
- * Permite al frontend validar el token y recuperar los datos del usuario actual
  */
 const getMe = async (req, res) => {
   try {
@@ -270,5 +383,6 @@ const getMe = async (req, res) => {
 module.exports = {
   registerOwner,
   login,
+  loginSocio,
   getMe
 };
