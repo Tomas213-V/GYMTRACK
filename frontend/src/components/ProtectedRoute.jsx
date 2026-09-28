@@ -16,6 +16,12 @@ function ProtectedRoute({ children, permitirSinGimnasio = false }) {
     return <Navigate to="/login" replace />;
   }
 
+  // Si el usuario es un socio, permitimos el acceso directo
+  const rol = localStorage.getItem('rol');
+  if (rol === 'socio') {
+    return children;
+  }
+
   // 2. Comprobamos si el usuario tiene un gimnasio asociado.
   const usuarioGuardado = localStorage.getItem('usuario');
   let tieneGimnasio = false;

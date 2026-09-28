@@ -38,13 +38,13 @@ function NavGlobal() {
           <span className="Caja-nav-global-notificacion-punto"></span>
         </button>
 
-        <div className="Caja-nav-global-icono-usuario" role="button" tabIndex={0}>
+        <Link to="/perfil" className="Caja-nav-global-icono-usuario" role="button" tabIndex={0} style={{ textDecoration: 'none' }}>
           <div className="Caja-nav-global-usuario-avatar">
             <FaUser />
           </div>
           <p>{nombreUsuario}</p>
           <FaChevronDown className="Caja-nav-global-usuario-chevron" />
-        </div>
+        </Link>
       </div>
     </header>
   );

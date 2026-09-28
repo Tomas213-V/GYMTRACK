@@ -22,6 +22,7 @@ import CrearGimnasio from './pages/crear-gimnasio/crear-gimnasio'
 import Socios from './pages/socios/socios'
 import Asistencias from './pages/asistencias/asistencias'
 import Rutinas from './pages/rutinas/rutinas'
+import Perfil from './pages/perfil/perfil'
 import './App.css'
 
 
@@ -130,6 +131,15 @@ function App() {
         element={
           <ProtectedRoute>
             <Rutinas/>
+          </ProtectedRoute>
+        }
+        />
+
+        <Route 
+        path="/perfil" 
+        element={
+          <ProtectedRoute>
+            <Perfil/>
           </ProtectedRoute>
         }
         />

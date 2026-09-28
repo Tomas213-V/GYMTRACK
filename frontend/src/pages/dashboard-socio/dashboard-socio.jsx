@@ -55,10 +55,34 @@ function DashboardSocio() {
           </p>
         </div>
 
-        <button onClick={handleLogout} className="socio-dash-logout-btn">
-          <FaSignOutAlt />
-          <span>Cerrar Sesión</span>
-        </button>
+        <div style={{ display: 'flex', gap: '12px', width: '100%', marginTop: '18px' }}>
+          <button
+            onClick={() => navigate('/perfil')}
+            style={{
+              flex: 1,
+              padding: '12px',
+              borderRadius: '8px',
+              background: 'linear-gradient(135deg, #a3e635, #84cc16)',
+              color: '#0d0d0d',
+              border: 'none',
+              fontWeight: '700',
+              fontSize: '14px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 14px rgba(132, 204, 22, 0.25)'
+            }}
+          >
+            <FaUserCircle />
+            <span>Ver Mi Perfil Completo</span>
+          </button>
+          <button onClick={handleLogout} className="socio-dash-logout-btn" style={{ margin: 0 }}>
+            <FaSignOutAlt />
+            <span>Salir</span>
+          </button>
+        </div>
       </div>
     </div>
   )
