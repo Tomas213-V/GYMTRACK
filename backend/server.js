@@ -19,6 +19,7 @@ const supabase = require("./src/config/supabase");
 const authRoutes = require("./src/routes/authRoutes");
 const pagoRoutes = require("./src/routes/pagoRoutes");
 const ejercicioRoutes = require('./src/routes/ejercicioRoutes');
+const asistenciaRoutes = require('./src/routes/asistenciaRoutes');
 
 // 2. INICIALIZACIÓN DE LA APLICACIÓN
 // Crea una instancia de la aplicación Express
@@ -67,7 +68,7 @@ app.get("/api/health", async (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/pagos", pagoRoutes);
 app.use('/api/ejercicios', ejercicioRoutes);
-
+app.use('/api/asistencia', asistenciaRoutes);
 
 // 5. CONFIGURACIÓN DEL PUERTO Y PUESTA EN MARCHA DEL SERVIDOR
 // Usa el puerto definido en el archivo .env (PORT), o el 3000 por defecto si no está especificado
