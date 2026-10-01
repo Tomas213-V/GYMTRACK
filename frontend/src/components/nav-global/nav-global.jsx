@@ -1,22 +1,33 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { FaBars, FaBell, FaUser, FaChevronDown } from "react-icons/fa";
+import { FaBars, FaBell, FaChevronDown } from "react-icons/fa";
 import "./nav-global.css";
 
 function NavGlobal() {
-  const [nombreUsuario, setNombreUsuario] = useState("Admin");
+  const [nombreUsuario, setNombreUsuario] = useState("Juan Diaz");
+  const [iniciales, setIniciales] = useState("JD");
 
   useEffect(() => {
     try {
-      const guardado = localStorage.getItem("usuario");
+      const guardado = localStorage.getItem("socio") || localStorage.getItem("usuario");
       if (guardado) {
         const u = JSON.parse(guardado);
-        if (u.nombre) {
-          setNombreUsuario(u.nombre);
+        const nombreCompleto = u.nombre 
+          ? (u.apellido ? `${u.nombre} ${u.apellido}` : u.nombre)
+          : (u.email ? u.email.split('@')[0] : "Juan Diaz");
+        
+        setNombreUsuario(nombreCompleto);
+
+        // Generar 2 iniciales (ej: JD para Juan Diaz)
+        const partes = nombreCompleto.trim().split(/\s+/);
+        if (partes.length >= 2) {
+          setIniciales((partes[0][0] + partes[1][0]).toUpperCase());
+        } else if (partes.length === 1 && partes[0].length > 0) {
+          setIniciales(partes[0].slice(0, 2).toUpperCase());
         }
       }
     } catch {
-      // Usar fallback "Admin"
+      // Usar fallback "JD"
     }
   }, []);
 
@@ -39,8 +50,8 @@ function NavGlobal() {
         </button>
 
         <Link to="/perfil" className="Caja-nav-global-icono-usuario" role="button" tabIndex={0} style={{ textDecoration: 'none' }}>
-          <div className="Caja-nav-global-usuario-avatar">
-            <FaUser />
+          <div className="Caja-nav-global-usuario-avatar" style={{ fontWeight: '700', fontSize: '12px', letterSpacing: '0.5px' }}>
+            {iniciales}
           </div>
           <p>{nombreUsuario}</p>
           <FaChevronDown className="Caja-nav-global-usuario-chevron" />

@@ -1,13 +1,27 @@
 import "./sidebar.css"
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { FaMoneyBill, FaHeadset, FaUsers, FaCalendarCheck, FaDumbbell, FaUser } from "react-icons/fa";
+import { 
+    FaMoneyBill, 
+    FaHeadset, 
+    FaUsers, 
+    FaCalendarCheck, 
+    FaDumbbell, 
+    FaUser, 
+    FaCreditCard, 
+    FaSignOutAlt, 
+    FaCalendarAlt 
+} from "react-icons/fa";
 import { FaHouse } from "react-icons/fa6";
 
 function Sidebar() {
     const location = useLocation();
     const navigate = useNavigate();
 
-    const opciones = [
+    const rol = localStorage.getItem('rol');
+    const esSocio = rol === 'socio' || Boolean(localStorage.getItem('socio'));
+
+    // Opciones para Dueño / Administrador de Gimnasio
+    const opcionesDueno = [
         { ruta: "/dashboard", nombre: "Inicio", icono: <FaHouse /> },
         { ruta: "/socios", nombre: "Socios", icono: <FaUsers /> },
         { ruta: "/asistencias", nombre: "Asistencias", icono: <FaCalendarCheck /> },
@@ -17,34 +31,62 @@ function Sidebar() {
         { ruta: "/support", nombre: "Soporte", icono: <FaHeadset /> }
     ];
 
+    // Opciones para Socio del Gimnasio (Fiel a la interfaz y al portal de socios)
+    const opcionesSocio = [
+        { ruta: "/socio/dashboard", nombre: "Inicio", icono: <FaHouse /> },
+        { ruta: "/rutinas", nombre: "Rutinas", icono: <FaDumbbell /> },
+        { ruta: "/ejercicios", nombre: "Ejercicios", icono: <FaCalendarAlt /> },
+        { ruta: "/asistencias", nombre: "Asistencia", icono: <FaCalendarCheck /> },
+        { 
+            ruta: "/socio/membresia", 
+            nombre: "Membresía", 
+            icono: <FaCreditCard />, 
+            alias: ["/membresia", "/mi-membresia"] 
+        },
+        { ruta: "/perfil", nombre: "Perfil", icono: <FaUser /> }
+    ];
+
+    const opciones = esSocio ? opcionesSocio : opcionesDueno;
 
     const handleLogout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('usuario');
-        navigate('/login');
+        localStorage.removeItem('socio');
+        localStorage.removeItem('rol');
+        if (esSocio) {
+            navigate('/login-socio');
+        } else {
+            navigate('/login');
+        }
     };
 
     return (
-        <div className="Caja-sidebar">
+        <aside className="Caja-sidebar">
             <div className="Caja-sidebar-opciones">
                 {opciones.map((opcion, index) => {
-                    const esActivo = location.pathname === opcion.ruta;
+                    const esActivo = location.pathname === opcion.ruta || 
+                        (opcion.alias && opcion.alias.includes(location.pathname));
+
                     return (
                         <Link 
                             to={opcion.ruta} 
                             key={index}
                             className={esActivo ? "Caja-sidebar-link-activo" : ""}
                         >
-                            <i>{opcion.icono}</i>{opcion.nombre}
+                            <i className="Caja-sidebar-icono">{opcion.icono}</i>
+                            <span>{opcion.nombre}</span>
                         </Link>
                     );
                 })}
             </div>
 
             <div className="Caja-sidebar-bottom">
-                <button onClick={handleLogout}>Cerrar sesion</button>
+                <button onClick={handleLogout} className="Caja-sidebar-logout-btn">
+                    <FaSignOutAlt className="Caja-sidebar-logout-icon" />
+                    <span>Cerrar sesión</span>
+                </button>
             </div>
-        </div>
+        </aside>
     );
 }
 
