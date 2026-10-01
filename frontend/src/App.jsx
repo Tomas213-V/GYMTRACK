@@ -10,6 +10,7 @@ import Landing from './pages/landing/landing'
 import Login from './pages/login/login'
 import LoginSocio from './pages/login-socio/login-socio'
 import DashboardSocio from './pages/dashboard-socio/dashboard-socio'
+import AsistenciaSocio from './pages/asistencia-socio/asistencia-socio'
 import Register from './pages/register/register'
 import Dashboard from './pages/dashboard/dashboard'
 import Progress from './pages/progress/progress'
@@ -53,6 +54,15 @@ function App() {
         <Route
           path="/socio/dashboard"
           element={<DashboardSocio />}
+        />
+
+        <Route
+          path="/socio/asistencia"
+          element={
+            <ProtectedRoute>
+              <AsistenciaSocio />
+            </ProtectedRoute>
+          }
         />
 
         <Route

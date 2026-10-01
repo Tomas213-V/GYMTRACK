@@ -1025,6 +1025,15 @@ function Perfil() {
                             <p>Registro de visitas recientes a entrenar</p>
                           </div>
                         </div>
+                        {esSocio && (
+                          <button
+                            className="perfil-btn-primary"
+                            style={{ height: '36px', fontSize: '12px', padding: '0 14px' }}
+                            onClick={() => navigate('/socio/asistencia')}
+                          >
+                            <FaCalendarAlt /> Marcar Asistencia
+                          </button>
+                        )}
                       </div>
 
                       {ultimasAsistencias.length > 0 ? (

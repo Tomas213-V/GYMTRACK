@@ -8,6 +8,25 @@ const getHeaders = () => {
   };
 };
 
+async function parseAsistenciaResponse(response, fallbackMessage) {
+  let data;
+
+  try {
+    data = await response.json();
+  } catch {
+    if (!response.ok) {
+      throw new Error(`${fallbackMessage} (HTTP ${response.status}; respuesta vacía o inválida).`);
+    }
+    throw new Error(`El servidor devolvió una respuesta vacía o inválida (HTTP ${response.status}).`);
+  }
+
+  if (!response.ok) {
+    throw new Error(data.error || fallbackMessage);
+  }
+
+  return data;
+}
+
 /**
  * Obtener listado de asistencias con paginación y filtros
  */
@@ -39,9 +58,7 @@ export async function registrarAsistencia({ id_socio, dni } = {}) {
     body: JSON.stringify({ id_socio, dni })
   });
 
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al registrar la asistencia.');
-  return data;
+  return parseAsistenciaResponse(response, 'Error al registrar la asistencia.');
 }
 
 /**
@@ -65,9 +82,7 @@ export async function fetchHistorialPorSocio(id_socio) {
     headers: getHeaders()
   });
 
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al obtener historial del socio.');
-  return data;
+  return parseAsistenciaResponse(response, 'Error al obtener historial del socio.');
 }
 
 /**
