@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { getDashboardSocio } = require('../controllers/dashboardSocioController');
+const { 
+  getDashboardSocio, 
+  registrarCheckinSocio, 
+  registrarProgresoSocio 
+} = require('../controllers/dashboardSocioController');
 const {
   getMiMembresia,
   getPlanesDisponibles,
@@ -20,6 +24,9 @@ router.use(verifyToken);
 
 // Dashboard general del socio
 router.get('/dashboard', getDashboardSocio);
+router.post('/checkin', registrarCheckinSocio);
+router.post('/progreso', registrarProgresoSocio);
+
 
 // Módulo de Mi Membresía del socio
 router.get('/membresia', getMiMembresia);
