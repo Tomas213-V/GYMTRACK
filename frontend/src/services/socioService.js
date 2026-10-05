@@ -74,3 +74,24 @@ export async function changeEstadoSocio(id, estado) {
   if (!response.ok) throw new Error(data.error || 'Error al cambiar estado del socio.');
   return data;
 }
+
+export async function getPerfilSocio(id = null) {
+  const url = id ? `${API_URL}/socios/perfil?id=${id}` : `${API_URL}/socios/perfil`;
+  const response = await fetch(url, {
+    headers: getHeaders()
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Error al obtener el perfil.');
+  return data;
+}
+
+export async function updatePerfilSocio(datos) {
+  const response = await fetch(`${API_URL}/socios/perfil`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(datos)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Error al actualizar el perfil.');
+  return data;
+}

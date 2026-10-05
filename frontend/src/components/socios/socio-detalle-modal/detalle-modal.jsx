@@ -342,8 +342,16 @@ function SocioDetalleModal({
                 </div>
               </div>
 
-              {/* Barra de Acciones: Editar */}
-              <div className="socio-detalle-acciones-barra">
+              {/* Barra de Acciones: Ver Perfil y Editar */}
+              <div className="socio-detalle-acciones-barra" style={{ display: 'flex', gap: '10px' }}>
+                <a
+                  href={`/perfil?id=${socio.id_socio}`}
+                  className="socio-btn-editar"
+                  style={{ textDecoration: 'none', background: '#22252b', color: '#f3f4f6', borderColor: '#363a45', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <FaUser />
+                  <span>Ver Ficha / Perfil</span>
+                </a>
                 <button
                   type="button"
                   className="socio-btn-editar"

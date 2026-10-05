@@ -75,10 +75,11 @@ const getSocioById = async (req, res) => {
     const { id } = req.params;
     const idGimnasio = req.usuario?.id_gimnasio;
 
-    const { data: socio, error } = await supabase
+    let query = supabase
       .from('socio')
       .select(`
         *,
+        gimnasio (*),
         membresia (
           *,
           plan_membresia (*)
@@ -86,9 +87,13 @@ const getSocioById = async (req, res) => {
         asistencia (*),
         progreso (*)
       `)
-      .eq('id_socio', id)
-      .eq('id_gimnasio', idGimnasio)
-      .maybeSingle();
+      .eq('id_socio', id);
+
+    if (idGimnasio && req.usuario?.rol !== 'socio') {
+      query = query.eq('id_gimnasio', idGimnasio);
+    }
+
+    const { data: socio, error } = await query.maybeSingle();
 
     if (error) {
       return res.status(500).json({ error: 'Error al obtener el socio: ' + error.message });
@@ -96,6 +101,10 @@ const getSocioById = async (req, res) => {
 
     if (!socio) {
       return res.status(404).json({ error: 'Socio no encontrado o no pertenece a tu gimnasio.' });
+    }
+
+    if (socio.contrasena) {
+      delete socio.contrasena;
     }
 
     return res.status(200).json({ socio });
@@ -489,11 +498,394 @@ const deleteSocio = async (req, res) => {
   }
 };
 
+/**
+ * 7. OBTENER PERFIL DEL SOCIO
+ * GET /api/socios/perfil
+ * GET /api/socios/perfil?id=123 (para administradores)
+ */
+const getPerfilSocio = async (req, res) => {
+  try {
+    let targetId = req.query.id || req.params.id;
+
+    // 1. Si no se especifica ID por query, verificar si el token pertenece a un socio
+    if (!targetId && req.usuario?.id_socio) {
+      targetId = req.usuario.id_socio;
+    }
+
+    // 2. Si no hay targetId y es un usuario (dueño/admin), buscar si tiene ficha de socio con el mismo email
+    if (!targetId && req.usuario?.id_usuario) {
+      const { data: sVinculado } = await supabase
+        .from('socio')
+        .select('id_socio')
+        .ilike('email', req.usuario.email || '')
+        .eq('id_gimnasio', req.usuario.id_gimnasio || 0)
+        .maybeSingle();
+
+      if (sVinculado) {
+        targetId = sVinculado.id_socio;
+      }
+    }
+
+    // 3. Si aún no hay targetId y es un dueño/admin, tomar el socio más reciente del gimnasio
+    if (!targetId && req.usuario?.id_gimnasio) {
+      const { data: sReciente } = await supabase
+        .from('socio')
+        .select('id_socio')
+        .eq('id_gimnasio', req.usuario.id_gimnasio)
+        .order('id_socio', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (sReciente) {
+        targetId = sReciente.id_socio;
+      }
+    }
+
+    // 4. Si aún no hay ningún socio registrado en el gimnasio pero es dueño, retornar datos del dueño y su gimnasio
+    if (!targetId && req.usuario?.id_usuario) {
+      const { data: userProfile } = await supabase
+        .from('usuario')
+        .select('id_usuario, nombre, apellido, email, rol, estado, fecha_creacion')
+        .eq('id_usuario', req.usuario.id_usuario)
+        .maybeSingle();
+
+      let gymData = null;
+      if (req.usuario?.id_gimnasio) {
+        const { data: g } = await supabase
+          .from('gimnasio')
+          .select('*')
+          .eq('id_gimnasio', req.usuario.id_gimnasio)
+          .maybeSingle();
+        gymData = g;
+      }
+
+      return res.status(200).json({
+        tipo: 'usuario',
+        socio: {
+          id_socio: null,
+          nombre: userProfile?.nombre || 'Administrador',
+          apellido: userProfile?.apellido || '',
+          dni: '',
+          telefono: '',
+          email: userProfile?.email || '',
+          fecha_alta: userProfile?.fecha_creacion?.split('T')[0] || '',
+          estado: userProfile?.estado || 'activo'
+        },
+        gimnasio: gymData,
+        membresia: null,
+        historialMembresias: [],
+        ultimosPagos: [],
+        ultimasAsistencias: [],
+        estadisticas: {
+          totalAsistencias: 0,
+          totalPagos: 0,
+          estadoMembresia: 'dueño',
+          diasRestantes: null
+        },
+        sociosDisponibles: []
+      });
+    }
+
+    if (!targetId) {
+      return res.status(400).json({ error: 'No se pudo identificar el socio a consultar.' });
+    }
+
+    // Permisos: Si quien consulta tiene rol de socio, sólo puede ver su propio perfil
+    if (req.usuario?.rol === 'socio' && parseInt(req.usuario.id_socio) !== parseInt(targetId)) {
+      return res.status(403).json({ error: 'No tienes permisos para visualizar el perfil de otro socio.' });
+    }
+
+    // Consultar el socio completo en la tabla socio
+    let query = supabase
+      .from('socio')
+      .select(`
+        id_socio,
+        id_gimnasio,
+        dni,
+        telefono,
+        fecha_alta,
+        estado,
+        nombre,
+        apellido,
+        email,
+        gimnasio (
+          id_gimnasio,
+          nombre,
+          direccion,
+          telefono,
+          email
+        ),
+        membresia (
+          id_membresia,
+          fecha_inicio,
+          fecha_vencimiento,
+          estado,
+          precio,
+          id_plan_membresia,
+          plan_membresia (
+            id_plan_membresia,
+            nombre,
+            duracion_dias,
+            precio
+          )
+        ),
+        asistencia (
+          id_asistencia,
+          hora_ingreso,
+          hora_salida,
+          estado
+        )
+      `)
+      .eq('id_socio', targetId);
+
+    // Si es administrador o dueño, validar que el socio pertenezca a su gimnasio
+    if (req.usuario?.id_gimnasio && req.usuario?.rol !== 'socio') {
+      query = query.eq('id_gimnasio', req.usuario.id_gimnasio);
+    }
+
+    const { data: socio, error } = await query.maybeSingle();
+
+    if (error) {
+      return res.status(500).json({ error: 'Error al consultar perfil del socio: ' + error.message });
+    }
+
+    if (!socio) {
+      return res.status(404).json({ error: 'Perfil de socio no encontrado o no pertenece a tu gimnasio.' });
+    }
+
+    // Normalizar membresías: puede venir como objeto o array
+    const membresiasLista = Array.isArray(socio.membresia)
+      ? socio.membresia
+      : (socio.membresia ? [socio.membresia] : []);
+
+    // Consultar los últimos pagos vinculados a las membresías del socio
+    let ultimosPagos = [];
+    if (membresiasLista.length > 0) {
+      const membIds = membresiasLista.map((m) => m.id_membresia).filter(Boolean);
+      if (membIds.length > 0) {
+        const { data: pagosData } = await supabase
+          .from('pago')
+          .select('id_pago, monto, fecha_pago, metodo_pago, estado, id_membresia')
+          .in('id_membresia', membIds)
+          .order('fecha_pago', { ascending: false })
+          .limit(5);
+
+        ultimosPagos = pagosData || [];
+      }
+    }
+
+    // Identificar membresía activa o la más reciente
+    const membresiaActiva = membresiasLista.find((m) => m.estado === 'activo')
+      || membresiasLista[0]
+      || null;
+
+    // Normalizar asistencias y ordenar por hora_ingreso
+    const asistenciasLista = Array.isArray(socio.asistencia)
+      ? socio.asistencia
+      : (socio.asistencia ? [socio.asistencia] : []);
+
+    const asistenciasOrdenadas = asistenciasLista.sort((a, b) => {
+      const dateA = a.hora_ingreso ? new Date(a.hora_ingreso) : new Date(0);
+      const dateB = b.hora_ingreso ? new Date(b.hora_ingreso) : new Date(0);
+      return dateB - dateA;
+    });
+
+    const totalAsistencias = asistenciasOrdenadas.length;
+    const ultimasAsistencias = asistenciasOrdenadas.slice(0, 5);
+
+    // Calcular días restantes de membresía si existe
+    let diasRestantes = null;
+    if (membresiaActiva && membresiaActiva.fecha_vencimiento) {
+      const diffTime = new Date(membresiaActiva.fecha_vencimiento) - new Date();
+      diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+
+    // Si quien consulta es dueño/admin, incluir lista de socios del gimnasio
+    let sociosDelGimnasio = [];
+    if (req.usuario?.rol !== 'socio' && req.usuario?.id_gimnasio) {
+      const { data: sociosList } = await supabase
+        .from('socio')
+        .select('id_socio, nombre, apellido, dni, estado')
+        .eq('id_gimnasio', req.usuario.id_gimnasio)
+        .order('id_socio', { ascending: true });
+      sociosDelGimnasio = sociosList || [];
+    }
+
+    return res.status(200).json({
+      tipo: 'socio',
+      socio: {
+        id_socio: socio.id_socio,
+        id_gimnasio: socio.id_gimnasio,
+        dni: socio.dni,
+        telefono: socio.telefono,
+        fecha_alta: socio.fecha_alta,
+        estado: socio.estado,
+        nombre: socio.nombre,
+        apellido: socio.apellido,
+        email: socio.email
+      },
+      gimnasio: socio.gimnasio || null,
+      membresia: membresiaActiva,
+      historialMembresias: membresiasLista,
+      ultimosPagos,
+      ultimasAsistencias,
+      estadisticas: {
+        totalAsistencias,
+        totalPagos: ultimosPagos.length,
+        estadoMembresia: membresiaActiva ? membresiaActiva.estado : 'sin_membresia',
+        diasRestantes
+      },
+      sociosDisponibles: sociosDelGimnasio
+    });
+
+  } catch (error) {
+    return res.status(500).json({ error: 'Error interno del servidor al consultar perfil: ' + error.message });
+  }
+};
+
+/**
+ * 8. ACTUALIZAR PERFIL DEL SOCIO
+ * PUT /api/socios/perfil
+ */
+const updatePerfilSocio = async (req, res) => {
+  try {
+    let targetId = req.body.id_socio || req.query.id;
+
+    // Si no viene en el body o query, tomar id_socio del token
+    if (!targetId && req.usuario?.id_socio) {
+      targetId = req.usuario.id_socio;
+    }
+
+    // Si es socio autenticado, verificar que solo modifique su perfil
+    if (req.usuario?.rol === 'socio') {
+      if (!targetId || parseInt(req.usuario.id_socio) !== parseInt(targetId)) {
+        return res.status(403).json({ error: 'No tienes autorización para modificar otro perfil.' });
+      }
+    }
+
+    if (!targetId) {
+      return res.status(400).json({ error: 'No se especificó el ID del socio a actualizar.' });
+    }
+
+    const {
+      nombre,
+      apellido,
+      telefono,
+      email,
+      dni,
+      contrasena_actual,
+      nueva_contrasena,
+      contrasena,
+      password
+    } = req.body;
+
+    // 1. Buscar socio actual en la base de datos
+    const { data: socioActual, error: errFetch } = await supabase
+      .from('socio')
+      .select('*')
+      .eq('id_socio', targetId)
+      .maybeSingle();
+
+    if (errFetch || !socioActual) {
+      return res.status(404).json({ error: 'Socio no encontrado.' });
+    }
+
+    // Si es administrador/dueño, validar pertenencia al gimnasio
+    if (req.usuario?.id_gimnasio && req.usuario?.rol !== 'socio') {
+      if (socioActual.id_gimnasio !== req.usuario.id_gimnasio) {
+        return res.status(403).json({ error: 'El socio no pertenece a tu gimnasio.' });
+      }
+    }
+
+    // 2. Gestión de cambio de contraseña
+    const newPass = nueva_contrasena || contrasena || password;
+    let nuevoHash = undefined;
+
+    if (newPass && newPass.toString().trim()) {
+      const passLimpia = newPass.toString().trim();
+      if (passLimpia.length < 6) {
+        return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres.' });
+      }
+
+      // Si quien actualiza es el socio, requerir confirmación con contraseña actual
+      if (req.usuario?.rol === 'socio') {
+        if (!contrasena_actual) {
+          return res.status(400).json({ error: 'Debes proporcionar tu contraseña actual para autorizar el cambio.' });
+        }
+
+        let passValida = false;
+        if (socioActual.contrasena) {
+          try {
+            passValida = await bcrypt.compare(contrasena_actual, socioActual.contrasena);
+          } catch {
+            passValida = false;
+          }
+          if (!passValida && contrasena_actual === socioActual.contrasena) {
+            passValida = true;
+          }
+        }
+
+        if (!passValida) {
+          return res.status(400).json({ error: 'La contraseña actual ingresada es incorrecta.' });
+        }
+      }
+
+      nuevoHash = await bcrypt.hash(passLimpia, 10);
+    }
+
+    // 3. Validación de DNI único dentro del mismo gimnasio (si cambia)
+    if (dni && dni.toString().trim() !== socioActual.dni) {
+      const { data: dniExistente } = await supabase
+        .from('socio')
+        .select('id_socio')
+        .eq('dni', dni.toString().trim())
+        .eq('id_gimnasio', socioActual.id_gimnasio)
+        .neq('id_socio', targetId)
+        .maybeSingle();
+
+      if (dniExistente) {
+        return res.status(400).json({ error: 'El DNI ingresado ya está asignado a otro socio en este gimnasio.' });
+      }
+    }
+
+    // 4. Preparar payload de actualización
+    const updateCampos = {
+      ...(nombre && { nombre: nombre.trim() }),
+      ...(apellido !== undefined && { apellido: apellido ? apellido.trim() : '' }),
+      ...(telefono !== undefined && { telefono: telefono ? telefono.trim() : null }),
+      ...(email !== undefined && { email: email ? email.trim().toLowerCase() : null }),
+      ...(dni && { dni: dni.toString().trim() }),
+      ...(nuevoHash !== undefined && { contrasena: nuevoHash })
+    };
+
+    const { data: socioActualizado, error: errUpdate } = await supabase
+      .from('socio')
+      .update(updateCampos)
+      .eq('id_socio', targetId)
+      .select('id_socio, id_gimnasio, dni, telefono, fecha_alta, estado, nombre, apellido, email')
+      .single();
+
+    if (errUpdate) {
+      return res.status(500).json({ error: 'Error al actualizar el perfil: ' + errUpdate.message });
+    }
+
+    return res.status(200).json({
+      mensaje: 'Perfil actualizado exitosamente.',
+      socio: socioActualizado
+    });
+
+  } catch (error) {
+    return res.status(500).json({ error: 'Error interno del servidor al actualizar perfil: ' + error.message });
+  }
+};
+
 module.exports = {
   getSocios,
   getSocioById,
   createSocio,
   updateSocio,
   changeEstadoSocio,
-  deleteSocio
+  deleteSocio,
+  getPerfilSocio,
+  updatePerfilSocio
 };

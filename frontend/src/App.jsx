@@ -1,15 +1,11 @@
 import { useState } from 'react'
-//import heroImg from './assets/hero.png'
-//import reactLogo from './assets/react.svg'
-//import viteLogo from './assets/vite.svg'
-//import {Toaster,toast} from "sonner"
-
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 
 import Landing from './pages/landing/landing'
 import Login from './pages/login/login'
 import LoginSocio from './pages/login-socio/login-socio'
 import DashboardSocio from './pages/dashboard-socio/dashboard-socio'
+import SocioMembresia from './pages/socio-membresia/socio-membresia'
 import Register from './pages/register/register'
 import Dashboard from './pages/dashboard/dashboard'
 import Progress from './pages/progress/progress'
@@ -22,19 +18,15 @@ import CrearGimnasio from './pages/crear-gimnasio/crear-gimnasio'
 import Socios from './pages/socios/socios'
 import Asistencias from './pages/asistencias/asistencias'
 import Rutinas from './pages/rutinas/rutinas'
+import Perfil from './pages/perfil/perfil'
 import './App.css'
 
-
-
 function App() {
-  
   const [count, setCount] = useState(0)
 
   return (
-    
     <>
-     <Routes>
-
+      <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/ejercicios" element={<Ejercicios />} />
         <Route path="/ejerciciosLanding" element={<Ejercicios />} />
@@ -52,6 +44,24 @@ function App() {
         <Route
           path="/socio/dashboard"
           element={<DashboardSocio />}
+        />
+
+        {/* Sección de Membresías del Socio */}
+        <Route
+          path="/socio/membresia"
+          element={
+            <ProtectedRoute>
+              <SocioMembresia />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/membresia"
+          element={
+            <ProtectedRoute>
+              <SocioMembresia />
+            </ProtectedRoute>
+          }
         />
 
         <Route
@@ -99,44 +109,50 @@ function App() {
         />
         
         <Route 
-        path="/pagos" 
-        element={
-          <ProtectedRoute>
-            <Pagos/>
-          </ProtectedRoute>
-        }
+          path="/pagos" 
+          element={
+            <ProtectedRoute>
+              <Pagos/>
+            </ProtectedRoute>
+          }
         />
 
         <Route 
-        path="/socios" 
-        element={
-          <ProtectedRoute>
-            <Socios/>
-          </ProtectedRoute>
-        }
+          path="/socios" 
+          element={
+            <ProtectedRoute>
+              <Socios/>
+            </ProtectedRoute>
+          }
         />
 
         <Route 
-        path="/asistencias" 
-        element={
-          <ProtectedRoute>
-            <Asistencias/>
-          </ProtectedRoute>
-        }
+          path="/asistencias" 
+          element={
+            <ProtectedRoute>
+              <Asistencias/>
+            </ProtectedRoute>
+          }
         />
 
         <Route 
-        path="/rutinas" 
-        element={
-          <ProtectedRoute>
-            <Rutinas/>
-          </ProtectedRoute>
-        }
+          path="/rutinas" 
+          element={
+            <ProtectedRoute>
+              <Rutinas/>
+            </ProtectedRoute>
+          }
         />
 
-     </Routes>
-
-
+        <Route 
+          path="/perfil" 
+          element={
+            <ProtectedRoute>
+              <Perfil/>
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
     </>
   )
 }

@@ -1,62 +1,103 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Quicksand:wght@400;500;600;700&display=swap');
 
-@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@300..700&display=swap');
-.Caja-sidebar{
-    border-right: 1px solid #ffffff28;
-    width: 220px;
+.Caja-sidebar {
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    width: 240px;
     height: 100%;
     min-height: calc(100vh - 70px);
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    padding: 0 15px 0 0;
+    padding: 0 12px;
+    background-color: #0b0f12;
+    user-select: none;
 }
-.Caja-sidebar-opciones{
+
+.Caja-sidebar-opciones {
     display: flex;
     flex-direction: column;
-    gap: 30px;
-    letter-spacing: 3px;
-    padding: 25px 0 0 0;
+    gap: 8px;
+    padding: 24px 0 0 0;
 }
-.Caja-sidebar-opciones a{
-    color: #ffffff91;
+
+.Caja-sidebar-opciones a {
+    color: #94a3b8;
     text-decoration: none;
-    font-size: 16px;
-    font-family: "Quicksand", sans-serif;
+    font-size: 15px;
+    font-family: 'Inter', sans-serif;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
     font-weight: 500;
-    padding: 10px 16px 10px 25px;
-    margin: 0 8px;
-    border-radius: 8px;
+    padding: 12px 16px;
+    border-radius: 10px;
     transition: all 0.2s ease;
+    border: 1px solid transparent;
 }
-.Caja-sidebar-opciones a:hover{
-    color: #00ff11;
-    background: rgba(255, 255, 255, 0.03);
+
+.Caja-sidebar-opciones a .Caja-sidebar-icono {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    color: inherit;
+    transition: transform 0.2s ease;
 }
-.Caja-sidebar-opciones a.Caja-sidebar-link-activo{
-    color: #00ff11;
-    background: rgba(0, 255, 17, 0.08);
+
+.Caja-sidebar-opciones a:hover {
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.05);
+    border-color: rgba(34, 197, 94, 0.2);
+}
+
+.Caja-sidebar-opciones a:hover .Caja-sidebar-icono {
+    transform: translateX(2px);
+}
+
+/* Estado activo resaltado (Idéntico a la imagen provista con Membresía seleccionada) */
+.Caja-sidebar-opciones a.Caja-sidebar-link-activo {
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.12);
+    border: 1px solid #22c55e;
     font-weight: 600;
+    box-shadow: 0 0 15px rgba(34, 197, 94, 0.12);
 }
-.Caja-sidebar-bottom{
+
+.Caja-sidebar-opciones a.Caja-sidebar-link-activo .Caja-sidebar-icono {
+    color: #22c55e;
+}
+
+.Caja-sidebar-bottom {
     margin-top: auto;
     display: flex;
     align-items: flex-end;
-    justify-content: center;
-    padding: 0 0 25px 0;
+    padding: 24px 8px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.Caja-sidebar-logout-btn {
+    background: none;
+    color: #94a3b8;
+    border: none;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
     width: 100%;
 }
-.Caja-sidebar-bottom button{
-    background: none;
-    color: #ffffff;
-    border: none;
-    font-size: 20px;
-    font-family: "Oswald", sans-serif;
-    cursor: pointer;
-    transition: color 0.2s ease;
+
+.Caja-sidebar-logout-btn:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
 }
-.Caja-sidebar-bottom button:hover{
-    color: #00ff11ee;
+
+.Caja-sidebar-logout-icon {
+    font-size: 16px;
 }
