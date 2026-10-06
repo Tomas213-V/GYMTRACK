@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 
 import Landing from './pages/landing/landing'
@@ -140,7 +140,11 @@ function App() {
           path="/asistencias" 
           element={
             <ProtectedRoute>
-              <Asistencias/>
+              {localStorage.getItem('rol') === 'socio' || Boolean(localStorage.getItem('socio')) ? (
+                <AsistenciaSocio />
+              ) : (
+                <Asistencias />
+              )}
             </ProtectedRoute>
           }
         />

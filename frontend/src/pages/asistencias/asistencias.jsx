@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Navigate } from 'react-router-dom';
 import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar/sidebar';
 import {
@@ -29,6 +30,13 @@ import {
 import './asistencias.css';
 
 export default function Asistencias() {
+  const rol = localStorage.getItem('rol');
+  const esSocio = rol === 'socio' || Boolean(localStorage.getItem('socio'));
+
+  if (esSocio) {
+    return <Navigate to="/socio/asistencia" replace />;
+  }
+
   // Estados para datos
   const [asistencias, setAsistencias] = useState([]);
   const [totalAsistencias, setTotalAsistencias] = useState(0);

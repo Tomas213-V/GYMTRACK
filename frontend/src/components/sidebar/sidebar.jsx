@@ -36,7 +36,7 @@ function Sidebar() {
         { ruta: "/socio/dashboard", nombre: "Inicio", icono: <FaHouse /> },
         { ruta: "/rutinas", nombre: "Rutinas", icono: <FaDumbbell /> },
         { ruta: "/ejercicios", nombre: "Ejercicios", icono: <FaCalendarAlt /> },
-        { ruta: "/asistencias", nombre: "Asistencia", icono: <FaCalendarCheck /> },
+        { ruta: "/socio/asistencia", nombre: "Asistencia", icono: <FaCalendarCheck />, alias: ["/asistencias"] },
         { 
             ruta: "/socio/membresia", 
             nombre: "Membresía", 
