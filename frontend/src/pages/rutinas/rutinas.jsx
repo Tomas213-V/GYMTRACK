@@ -10,7 +10,8 @@ import {
   addEjercicioToRutina,
   updateEjercicioEnRutina,
   removeEjercicioFromRutina,
-  fetchCatalogoEjercicios
+  fetchCatalogoEjercicios,
+  createEjercicioPersonalizado
 } from '../../services/rutinaService';
 import { fetchSocios } from '../../services/socioService';
 
@@ -30,12 +31,21 @@ import {
   FaStickyNote,
   FaListUl,
   FaArrowLeft,
-  FaCheck
+  FaCheck,
+  FaStar,
+  FaBuilding
 } from 'react-icons/fa';
 
 import './rutinas.css';
 
 export default function Rutinas() {
+  // Identificar rol del usuario autenticado
+  const rol = localStorage.getItem('rol');
+  const socioLocal = JSON.parse(localStorage.getItem('socio') || 'null');
+  const usuarioLocal = JSON.parse(localStorage.getItem('usuario') || 'null');
+  const esSocio = rol === 'socio' || Boolean(socioLocal) || usuarioLocal?.rol === 'socio';
+  const socioIdActual = socioLocal?.id_socio || usuarioLocal?.id_socio || (esSocio ? 1 : '');
+
   // Listado y selección
   const [rutinas, setRutinas] = useState([]);
   const [selectedRutina, setSelectedRutina] = useState(null);
@@ -44,29 +54,28 @@ export default function Rutinas() {
   // Catálogos
   const [sociosList, setSociosList] = useState([]);
   const [catalogoEjercicios, setCatalogoEjercicios] = useState([]);
+  const [loadingCatalogo, setLoadingCatalogo] = useState(false);
 
-  // Filtros
+  // Filtros generales
   const [searchTerm, setSearchTerm] = useState('');
-  const [filtroSocioId, setFiltroSocioId] = useState('');
+  const [filtroSocioId, setFiltroSocioId] = useState(esSocio && socioIdActual ? String(socioIdActual) : '');
   const [filtroEstado, setFiltroEstado] = useState('todos');
 
   // Menús desplegables superiores
   const [showSocioFilterMenu, setShowSocioFilterMenu] = useState(false);
   const [showEstadoFilterMenu, setShowEstadoFilterMenu] = useState(false);
-
-  // Menú contextual en tarjeta izquierda
   const [activeCardMenuId, setActiveCardMenuId] = useState(null);
 
   // Paginación de tarjetas
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
-  // Modales
+  // Modal de Rutina (Crear / Editar)
   const [showRutinaModal, setShowRutinaModal] = useState(false);
   const [editingRutina, setEditingRutina] = useState(null);
   const [rutinaFormData, setRutinaFormData] = useState({
     nombre: '',
-    id_socio: '',
+    id_socio: socioIdActual || '',
     tipo: 'Full Body',
     dificultad: 'Intermedia',
     duracion: '60 min',
@@ -75,16 +84,32 @@ export default function Rutinas() {
     estado: 'asignada'
   });
 
+  // Ejercicios seleccionados para la rutina que se está creando/editando en el modal
+  const [modalEjerciciosSeleccionados, setModalEjerciciosSeleccionados] = useState([]);
+  const [modalFiltroOrigen, setModalFiltroOrigen] = useState('todos'); // 'todos' | 'gimnasio' | 'propio'
+  const [modalSearchEjercicio, setModalSearchEjercicio] = useState('');
+
+  // Modal para agregar o editar un ejercicio individual en la rutina seleccionada
   const [showEjercicioModal, setShowEjercicioModal] = useState(false);
   const [editingEjercicio, setEditingEjercicio] = useState(null);
   const [ejercicioFormData, setEjercicioFormData] = useState({
     id_ejercicio: '',
     series: 4,
-    repeticiones: '10 - 12',
-    peso: 60,
+    repeticiones: 12,
+    peso: 0,
     descanso: 60,
     orden: 1
   });
+
+  // Submodal para crear un nuevo ejercicio personalizado (Mi ejercicio)
+  const [showCustomEjModal, setShowCustomEjModal] = useState(false);
+  const [customEjFormData, setCustomEjFormData] = useState({
+    nombre: '',
+    grupo_muscular: 'Pecho',
+    dificultad: 'Intermedia',
+    descripcion: ''
+  });
+  const [guardandoCustomEj, setGuardandoCustomEj] = useState(false);
 
   const socioRef = useRef(null);
   const estadoRef = useRef(null);
@@ -107,78 +132,51 @@ export default function Rutinas() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Cargar lista de socios y catálogo de ejercicios
+  // Cargar catálogo de ejercicios disponibles para el socio / gimnasio
+  const cargarCatalogo = async (origen = 'todos') => {
+    setLoadingCatalogo(true);
+    try {
+      const data = await fetchCatalogoEjercicios({
+        id_socio: socioIdActual,
+        origen: origen
+      });
+      setCatalogoEjercicios(data || []);
+    } catch (err) {
+      console.error('Error cargando catálogo de ejercicios:', err);
+    } finally {
+      setLoadingCatalogo(false);
+    }
+  };
+
+  // Inicialización de catálogos y socios
   useEffect(() => {
     const initData = async () => {
       try {
-        const [socRes, ejRes] = await Promise.all([
-          fetchSocios({ limit: 'all' }),
-          fetchCatalogoEjercicios()
-        ]);
-        if (socRes && socRes.socios) setSociosList(socRes.socios);
-        if (ejRes) setCatalogoEjercicios(ejRes);
+        if (!esSocio) {
+          const socRes = await fetchSocios({ limit: 'all' });
+          if (socRes && socRes.socios) setSociosList(socRes.socios);
+        }
+        await cargarCatalogo('todos');
       } catch (err) {
-        console.error('Error cargando catálogos:', err);
+        console.error('Error cargando datos iniciales:', err);
       }
     };
     initData();
-  }, []);
+  }, [esSocio, socioIdActual]);
 
   // Cargar Rutinas
   const loadRutinas = async (selectFirst = true) => {
     setLoading(true);
     try {
+      const effectiveSocioId = esSocio ? (socioIdActual || '') : filtroSocioId;
       const data = await fetchRutinas({
         search: searchTerm,
-        id_socio: filtroSocioId,
+        id_socio: effectiveSocioId,
         estado: filtroEstado
       });
 
-      // Si la base de datos está vacía, proveer rutinas iniciales predeterminadas fieles a la captura
-      if ((!data || data.length === 0) && !searchTerm && !filtroSocioId) {
-        // Intentar crear las rutinas iniciales de demostración en segundo plano si hay socios
-        const demoRutina = {
-          nombre: 'Rutina Fuerza - Lunes',
-          descripcion: JSON.stringify({
-            tipo: 'Full Body',
-            dificultad: 'Intermedia',
-            duracion: '60 min',
-            dias: 'Lunes, Miércoles, Viernes',
-            notas: 'Mantener buena técnica en todos los ejercicios. Descansos de 60-90 segundos entre series.'
-          }),
-          id_socio: sociosList.length > 0 ? sociosList[0].id_socio : null,
-          estado: 'asignada'
-        };
-        try {
-          const created = await createRutina(demoRutina);
-          if (created && created.id_rutina) {
-            // Asociar ejercicios iniciales si hay ejercicios en el catálogo
-            if (catalogoEjercicios.length > 0) {
-              await addEjercicioToRutina(created.id_rutina, {
-                id_ejercicio: catalogoEjercicios[0].id_ejercicio,
-                series: 4,
-                repeticiones: '10 - 12',
-                peso: 60,
-                descanso: 60,
-                orden: 1
-              });
-            }
-            const reloaded = await fetchRutinas();
-            setRutinas(reloaded || []);
-            if (reloaded && reloaded.length > 0 && selectFirst) {
-              setSelectedRutina(reloaded[0]);
-            }
-            setLoading(false);
-            return;
-          }
-        } catch {
-          // Fallback a arreglo vacío
-        }
-      }
-
       setRutinas(data || []);
       if (data && data.length > 0) {
-        // Mantener seleccionada la rutina actual si aún existe, sino la primera
         const currentSelectedId = selectedRutina?.id_rutina;
         const exists = data.find((r) => r.id_rutina === currentSelectedId);
         if (exists) {
@@ -200,7 +198,7 @@ export default function Rutinas() {
     loadRutinas();
   }, [searchTerm, filtroSocioId, filtroEstado]);
 
-  // Decodificar metadatos desde descripcion JSON o valores por defecto
+  // Decodificar metadatos desde descripción JSON o valores por defecto
   const parseDescripcion = (desc) => {
     if (!desc) {
       return {
@@ -231,12 +229,16 @@ export default function Rutinas() {
     }
   };
 
+  // --------------------------------------------------------------------------
+  // CREACIÓN Y EDICIÓN DE RUTINAS CON EJERCICIOS PERSONALIZADOS
+  // --------------------------------------------------------------------------
+
   // Abrir modal de nueva rutina
   const handleOpenNuevaRutina = () => {
     setEditingRutina(null);
     setRutinaFormData({
-      nombre: '',
-      id_socio: sociosList.length > 0 ? sociosList[0].id_socio : '',
+      nombre: esSocio ? 'Mi Rutina Personalizada' : '',
+      id_socio: socioIdActual || (sociosList.length > 0 ? sociosList[0].id_socio : ''),
       tipo: 'Full Body',
       dificultad: 'Intermedia',
       duracion: '60 min',
@@ -244,7 +246,13 @@ export default function Rutinas() {
       notas: 'Mantener buena técnica en todos los ejercicios. Descansos de 60-90 segundos entre series.',
       estado: 'asignada'
     });
+
+    // Iniciar sin ejercicios preseleccionados o con catálogo fresco
+    setModalEjerciciosSeleccionados([]);
+    setModalFiltroOrigen('todos');
+    setModalSearchEjercicio('');
     setShowRutinaModal(true);
+    cargarCatalogo('todos');
   };
 
   // Abrir modal de edición de rutina
@@ -254,7 +262,7 @@ export default function Rutinas() {
     const meta = parseDescripcion(rutina.descripcion);
     setRutinaFormData({
       nombre: rutina.nombre || '',
-      id_socio: rutina.id_socio || (sociosList.length > 0 ? sociosList[0].id_socio : ''),
+      id_socio: rutina.id_socio || socioIdActual || '',
       tipo: meta.tipo,
       dificultad: meta.dificultad,
       duracion: meta.duracion,
@@ -262,10 +270,65 @@ export default function Rutinas() {
       notas: meta.notas,
       estado: rutina.estado || 'asignada'
     });
+
+    // Copiar ejercicios existentes de la rutina
+    const existentes = (rutina.rutina_ejercicio || []).map((item) => ({
+      id_ejercicio: item.id_ejercicio,
+      nombre: item.ejercicio?.nombre || 'Ejercicio',
+      grupo_muscular: item.ejercicio?.grupo_muscular || 'General',
+      origen: item.origen || (item.ejercicio?.id_socio ? 'Mi ejercicio' : 'Gimnasio'),
+      es_propio: Boolean(item.es_propio || item.ejercicio?.id_socio),
+      series: item.series || 4,
+      repeticiones: item.repeticiones || 12,
+      peso: item.peso || 0,
+      descanso: item.descanso || 60,
+      orden: item.orden || 1
+    }));
+
+    setModalEjerciciosSeleccionados(existentes);
+    setModalFiltroOrigen('todos');
+    setModalSearchEjercicio('');
     setShowRutinaModal(true);
+    cargarCatalogo('todos');
   };
 
-  // Guardar Rutina (Crear o Actualizar)
+  // Alternar selección de un ejercicio en el modal de rutina
+  const handleToggleEjercicioEnModal = (ej) => {
+    const yaExiste = modalEjerciciosSeleccionados.find((item) => item.id_ejercicio === ej.id_ejercicio);
+    if (yaExiste) {
+      setModalEjerciciosSeleccionados(
+        modalEjerciciosSeleccionados.filter((item) => item.id_ejercicio !== ej.id_ejercicio)
+      );
+    } else {
+      const nuevoItem = {
+        id_ejercicio: ej.id_ejercicio,
+        nombre: ej.nombre,
+        grupo_muscular: ej.grupo_muscular || 'General',
+        origen: ej.origen || (ej.id_socio ? 'Mi ejercicio' : 'Gimnasio'),
+        es_propio: Boolean(ej.es_propio || ej.id_socio),
+        series: 4,
+        repeticiones: 12,
+        peso: 0,
+        descanso: 60,
+        orden: modalEjerciciosSeleccionados.length + 1
+      };
+      setModalEjerciciosSeleccionados([...modalEjerciciosSeleccionados, nuevoItem]);
+    }
+  };
+
+  // Actualizar parámetro de un ejercicio seleccionado dentro del modal de rutina
+  const handleUpdateParamEjercicioModal = (idEj, campo, valor) => {
+    setModalEjerciciosSeleccionados(
+      modalEjerciciosSeleccionados.map((item) => {
+        if (item.id_ejercicio === idEj) {
+          return { ...item, [campo]: valor };
+        }
+        return item;
+      })
+    );
+  };
+
+  // Guardar Rutina con sus ejercicios asociados
   const handleSaveRutina = async (e) => {
     e.preventDefault();
     if (!rutinaFormData.nombre.trim()) {
@@ -273,9 +336,11 @@ export default function Rutinas() {
       return;
     }
 
+    const targetSocio = rutinaFormData.id_socio ? Number(rutinaFormData.id_socio) : (socioIdActual ? Number(socioIdActual) : null);
+
     const payload = {
       nombre: rutinaFormData.nombre.trim(),
-      id_socio: rutinaFormData.id_socio ? Number(rutinaFormData.id_socio) : null,
+      id_socio: targetSocio,
       estado: rutinaFormData.estado || 'asignada',
       descripcion: JSON.stringify({
         tipo: rutinaFormData.tipo,
@@ -287,13 +352,40 @@ export default function Rutinas() {
     };
 
     try {
+      let rutinaGuardada;
       if (editingRutina) {
-        await updateRutina(editingRutina.id_rutina, payload);
+        rutinaGuardada = await updateRutina(editingRutina.id_rutina, payload);
       } else {
-        await createRutina(payload);
+        rutinaGuardada = await createRutina(payload);
+
+        // Si se seleccionaron ejercicios durante la creación, asociarlos uno a uno
+        if (rutinaGuardada?.id_rutina && modalEjerciciosSeleccionados.length > 0) {
+          for (let i = 0; i < modalEjerciciosSeleccionados.length; i++) {
+            const ej = modalEjerciciosSeleccionados[i];
+            try {
+              await addEjercicioToRutina(rutinaGuardada.id_rutina, {
+                id_ejercicio: ej.id_ejercicio,
+                series: Number(ej.series || 4),
+                repeticiones: Number(ej.repeticiones || 12),
+                peso: Number(ej.peso || 0),
+                descanso: Number(ej.descanso || 60),
+                orden: i + 1
+              });
+            } catch (asocErr) {
+              console.warn('Error asociando ejercicio:', asocErr.message);
+            }
+          }
+        }
       }
+
       setShowRutinaModal(false);
-      loadRutinas();
+      await loadRutinas(true);
+
+      // Si se acaba de crear, buscar y seleccionar la rutina recién creada
+      if (rutinaGuardada?.id_rutina) {
+        const fullRutina = await fetchRutinaById(rutinaGuardada.id_rutina);
+        if (fullRutina) setSelectedRutina(fullRutina);
+      }
     } catch (err) {
       alert(err.message || 'Error al guardar la rutina.');
     }
@@ -311,7 +403,80 @@ export default function Rutinas() {
     }
   };
 
-  // Abrir modal para agregar ejercicio a la rutina
+  // --------------------------------------------------------------------------
+  // CREACIÓN DE EJERCICIOS PERSONALIZADOS (MI EJERCICIO)
+  // --------------------------------------------------------------------------
+
+  const handleOpenCrearEjercicioPersonalizado = () => {
+    setCustomEjFormData({
+      nombre: '',
+      grupo_muscular: 'Pecho',
+      dificultad: 'Intermedia',
+      descripcion: ''
+    });
+    setShowCustomEjModal(true);
+  };
+
+  const handleSaveCustomEjercicio = async (e) => {
+    e.preventDefault();
+    if (!customEjFormData.nombre.trim()) {
+      alert('El nombre del ejercicio es obligatorio.');
+      return;
+    }
+
+    setGuardandoCustomEj(true);
+    try {
+      const nuevoEjercicio = await createEjercicioPersonalizado({
+        nombre: customEjFormData.nombre.trim(),
+        grupo_muscular: customEjFormData.grupo_muscular,
+        dificultad: customEjFormData.dificultad,
+        descripcion: customEjFormData.descripcion ? customEjFormData.descripcion.trim() : null,
+        id_socio: socioIdActual ? Number(socioIdActual) : undefined
+      });
+
+      setShowCustomEjModal(false);
+
+      // Recargar catálogo para incluir el nuevo ejercicio
+      await cargarCatalogo('todos');
+
+      // Si el modal de rutina está abierto, seleccionarlo automáticamente
+      if (showRutinaModal && nuevoEjercicio?.id_ejercicio) {
+        const itemParaModal = {
+          id_ejercicio: nuevoEjercicio.id_ejercicio,
+          nombre: nuevoEjercicio.nombre,
+          grupo_muscular: nuevoEjercicio.grupo_muscular || 'General',
+          origen: 'Mi ejercicio',
+          es_propio: true,
+          series: 4,
+          repeticiones: 12,
+          peso: 0,
+          descanso: 60,
+          orden: modalEjerciciosSeleccionados.length + 1
+        };
+        setModalEjerciciosSeleccionados((prev) => [...prev, itemParaModal]);
+      }
+
+      // Si el modal de agregar ejercicio a la rutina activa está abierto, preseleccionarlo
+      if (showEjercicioModal && nuevoEjercicio?.id_ejercicio) {
+        setEjercicioFormData((prev) => ({
+          ...prev,
+          id_ejercicio: nuevoEjercicio.id_ejercicio
+        }));
+      }
+
+      alert('¡Ejercicio personalizado creado con éxito!');
+    } catch (err) {
+      alert(err.message || 'Error al crear el ejercicio personalizado.');
+    } finally {
+      setGuardandoCustomEj(false);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // GESTIÓN DE EJERCICIOS EN LA RUTINA ACTIVA (DETALLE DERECHO)
+  // --------------------------------------------------------------------------
+
+  // Abrir modal para agregar ejercicio a la rutina activa
   const handleOpenAddEjercicio = () => {
     if (!selectedRutina) return;
     setEditingEjercicio(null);
@@ -320,21 +485,21 @@ export default function Rutinas() {
     setEjercicioFormData({
       id_ejercicio: defaultEjId,
       series: 4,
-      repeticiones: '10 - 12',
-      peso: 60,
+      repeticiones: 12,
+      peso: 20,
       descanso: 60,
       orden: nextOrder
     });
     setShowEjercicioModal(true);
   };
 
-  // Abrir modal para editar ejercicio en la rutina
+  // Abrir modal para editar parámetros de un ejercicio en la rutina
   const handleOpenEditEjercicio = (item) => {
     setEditingEjercicio(item);
     setEjercicioFormData({
       id_ejercicio: item.id_ejercicio,
       series: item.series || 4,
-      repeticiones: item.repeticiones || '10 - 12',
+      repeticiones: Number(item.repeticiones) || 12,
       peso: item.peso || 0,
       descanso: item.descanso || 60,
       orden: item.orden || 1
@@ -342,7 +507,7 @@ export default function Rutinas() {
     setShowEjercicioModal(true);
   };
 
-  // Guardar ejercicio en la rutina
+  // Guardar ejercicio en la rutina activa
   const handleSaveEjercicio = async (e) => {
     e.preventDefault();
     if (!selectedRutina) return;
@@ -351,7 +516,7 @@ export default function Rutinas() {
       if (editingEjercicio) {
         await updateEjercicioEnRutina(selectedRutina.id_rutina, editingEjercicio.id_rutina_ejercicio, {
           series: Number(ejercicioFormData.series),
-          repeticiones: ejercicioFormData.repeticiones,
+          repeticiones: Number(ejercicioFormData.repeticiones),
           peso: Number(ejercicioFormData.peso),
           descanso: Number(ejercicioFormData.descanso),
           orden: Number(ejercicioFormData.orden)
@@ -360,7 +525,7 @@ export default function Rutinas() {
         await addEjercicioToRutina(selectedRutina.id_rutina, {
           id_ejercicio: Number(ejercicioFormData.id_ejercicio),
           series: Number(ejercicioFormData.series),
-          repeticiones: ejercicioFormData.repeticiones,
+          repeticiones: Number(ejercicioFormData.repeticiones),
           peso: Number(ejercicioFormData.peso),
           descanso: Number(ejercicioFormData.descanso),
           orden: Number(ejercicioFormData.orden)
@@ -368,7 +533,6 @@ export default function Rutinas() {
       }
 
       setShowEjercicioModal(false);
-      // Recargar la rutina para reflejar los cambios
       const updated = await fetchRutinaById(selectedRutina.id_rutina);
       setSelectedRutina(updated);
       loadRutinas(false);
@@ -377,7 +541,7 @@ export default function Rutinas() {
     }
   };
 
-  // Eliminar ejercicio de la rutina
+  // Eliminar ejercicio de la rutina activa
   const handleDeleteEjercicio = async (idRutinaEjercicio) => {
     if (!window.confirm('¿Seguro que deseás quitar este ejercicio de la rutina?')) return;
     try {
@@ -389,6 +553,19 @@ export default function Rutinas() {
       alert(err.message || 'Error al desvincular ejercicio.');
     }
   };
+
+  // Filtrado de ejercicios para el selector en el modal
+  const catalogoFiltradoModal = catalogoEjercicios.filter((ej) => {
+    if (modalFiltroOrigen === 'gimnasio' && ej.es_propio) return false;
+    if (modalFiltroOrigen === 'propio' && !ej.es_propio) return false;
+    if (modalSearchEjercicio.trim()) {
+      const q = modalSearchEjercicio.toLowerCase();
+      const matchName = ej.nombre?.toLowerCase().includes(q);
+      const matchGroup = ej.grupo_muscular?.toLowerCase().includes(q);
+      if (!matchName && !matchGroup) return false;
+    }
+    return true;
+  });
 
   // Metadatos de la rutina seleccionada
   const selectedMeta = selectedRutina ? parseDescripcion(selectedRutina.descripcion) : null;
@@ -415,14 +592,29 @@ export default function Rutinas() {
                   <FaDumbbell />
                 </div>
                 <div className="rut-title-texts">
-                  <h1>Rutinas</h1>
-                  <p>Gestioná las rutinas de entrenamiento de tus socios</p>
+                  <h1>{esSocio ? 'Mis Rutinas de Entrenamiento' : 'Gestión de Rutinas'}</h1>
+                  <p>
+                    {esSocio
+                      ? 'Creá y personalizá tus rutinas con ejercicios del gimnasio o creados por vos'
+                      : 'Gestioná las rutinas y asignación de ejercicios para todos tus socios'}
+                  </p>
                 </div>
               </div>
 
-              <button type="button" className="rut-btn-primary" onClick={handleOpenNuevaRutina}>
-                <FaPlus /> Nueva rutina
-              </button>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="rut-btn-create-custom-ej"
+                  onClick={handleOpenCrearEjercicioPersonalizado}
+                  title="Crear un ejercicio propio para usar en tus rutinas"
+                >
+                  <FaPlus /> Crear mi ejercicio
+                </button>
+
+                <button type="button" className="rut-btn-primary" onClick={handleOpenNuevaRutina}>
+                  <FaPlus /> {esSocio ? 'Crear mi rutina' : 'Nueva rutina'}
+                </button>
+              </div>
             </div>
 
             {/* Barra de Filtros */}
@@ -433,56 +625,63 @@ export default function Rutinas() {
                 <input
                   type="text"
                   className="rut-filter-input"
-                  placeholder="Buscar rutina por nombre o socio..."
+                  placeholder="Buscar rutina por nombre..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
 
-              {/* Selector de Socio */}
-              <div className="rut-filter-box" ref={socioRef}>
-                <button
-                  type="button"
-                  className="rut-filter-dropdown-btn"
-                  onClick={() => setShowSocioFilterMenu(!showSocioFilterMenu)}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <FaUser className="rut-filter-icon" />
-                    {filtroSocioId
-                      ? sociosList.find((s) => s.id_socio === Number(filtroSocioId))?.nombre || 'Socio seleccionado'
-                      : 'Todos los socios'}
-                  </span>
-                  <FaListUl className="rut-filter-icon" style={{ fontSize: '11px' }} />
-                </button>
+              {/* Selector de Socio (sólo para administradores/dueños) */}
+              {!esSocio ? (
+                <div className="rut-filter-box" ref={socioRef}>
+                  <button
+                    type="button"
+                    className="rut-filter-dropdown-btn"
+                    onClick={() => setShowSocioFilterMenu(!showSocioFilterMenu)}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <FaUser className="rut-filter-icon" />
+                      {filtroSocioId
+                        ? sociosList.find((s) => s.id_socio === Number(filtroSocioId))?.nombre || 'Socio seleccionado'
+                        : 'Todos los socios'}
+                    </span>
+                    <FaListUl className="rut-filter-icon" style={{ fontSize: '11px' }} />
+                  </button>
 
-                {showSocioFilterMenu && (
-                  <div className="rut-dropdown-menu">
-                    <div
-                      className={`rut-dropdown-item ${!filtroSocioId ? 'active' : ''}`}
-                      onClick={() => {
-                        setFiltroSocioId('');
-                        setShowSocioFilterMenu(false);
-                      }}
-                    >
-                      Todos los socios
-                    </div>
-                    {sociosList.map((s) => (
+                  {showSocioFilterMenu && (
+                    <div className="rut-dropdown-menu">
                       <div
-                        key={s.id_socio}
-                        className={`rut-dropdown-item ${filtroSocioId === s.id_socio.toString() ? 'active' : ''}`}
+                        className={`rut-dropdown-item ${!filtroSocioId ? 'active' : ''}`}
                         onClick={() => {
-                          setFiltroSocioId(s.id_socio.toString());
+                          setFiltroSocioId('');
                           setShowSocioFilterMenu(false);
                         }}
                       >
-                        {s.nombre} {s.apellido}
+                        Todos los socios
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      {sociosList.map((s) => (
+                        <div
+                          key={s.id_socio}
+                          className={`rut-dropdown-item ${filtroSocioId === s.id_socio.toString() ? 'active' : ''}`}
+                          onClick={() => {
+                            setFiltroSocioId(s.id_socio.toString());
+                            setShowSocioFilterMenu(false);
+                          }}
+                        >
+                          {s.nombre} {s.apellido}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rut-filter-box" style={{ opacity: 0.85, cursor: 'default' }}>
+                  <FaUser className="rut-filter-icon" style={{ color: '#a3e635' }} />
+                  <span>Socio: {socioLocal?.nombre || 'Mi Perfil'}</span>
+                </div>
+              )}
 
-              {/* Selector de Estado / Tipo */}
+              {/* Selector de Estado */}
               <div className="rut-filter-box" ref={estadoRef}>
                 <button
                   type="button"
@@ -535,7 +734,7 @@ export default function Rutinas() {
           <div className="rut-master-detail-grid">
             {/* COLUMNA IZQUIERDA: LISTADO DE RUTINAS */}
             <div className="rut-card-list-panel">
-              <h2>Listado de rutinas</h2>
+              <h2>{esSocio ? 'Mis Rutinas' : 'Listado de rutinas'}</h2>
 
               <div className="rut-routine-cards-stack" ref={menuRef}>
                 {loading ? (
@@ -550,7 +749,7 @@ export default function Rutinas() {
                       style={{ margin: '14px auto 0 auto' }}
                       onClick={handleOpenNuevaRutina}
                     >
-                      Crear primera rutina
+                      {esSocio ? 'Crear mi primera rutina' : 'Crear primera rutina'}
                     </button>
                   </div>
                 ) : (
@@ -572,7 +771,7 @@ export default function Rutinas() {
                         <div className="rut-card-info">
                           <h4 className="rut-card-title">{r.nombre}</h4>
                           <p className="rut-card-socio">
-                            {r.socio ? `${r.socio.nombre} ${r.socio.apellido}` : 'Sin socio asignado'}
+                            {r.socio ? `${r.socio.nombre} ${r.socio.apellido}` : (esSocio ? 'Mi Rutina' : 'Sin socio asignado')}
                           </p>
 
                           <div className="rut-card-pills-row">
@@ -679,7 +878,7 @@ export default function Rutinas() {
                           <span>
                             {selectedRutina.socio
                               ? `${selectedRutina.socio.nombre} ${selectedRutina.socio.apellido}`
-                              : 'Sin socio asignado'}
+                              : (esSocio ? 'Mi Rutina' : 'Sin socio asignado')}
                           </span>
                         </div>
                         <div className="rut-detail-meta-item">
@@ -738,13 +937,23 @@ export default function Rutinas() {
                   <div className="rut-detail-exercises-card">
                     <div className="rut-exercises-card-header">
                       <div className="rut-exercises-card-left">
-                        <h3>Ejercicios de la rutina</h3>
+                        <h3>Ejercicios incluidos</h3>
                         <span className="rut-badge-exercise-count">{ejerciciosDeRutina.length} ejercicios</span>
                       </div>
 
-                      <button type="button" className="rut-btn-primary" onClick={handleOpenAddEjercicio}>
-                        <FaPlus /> Agregar ejercicio
-                      </button>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          type="button"
+                          className="rut-btn-create-custom-ej"
+                          onClick={handleOpenCrearEjercicioPersonalizado}
+                        >
+                          <FaPlus /> Crear mi ejercicio
+                        </button>
+
+                        <button type="button" className="rut-btn-primary" onClick={handleOpenAddEjercicio}>
+                          <FaPlus /> Agregar ejercicio
+                        </button>
+                      </div>
                     </div>
 
                     <div className="rut-table-responsive">
@@ -753,8 +962,9 @@ export default function Rutinas() {
                           <tr>
                             <th>Orden</th>
                             <th>Ejercicio</th>
+                            <th>Origen</th>
                             <th>Series</th>
-                            <th>Repeticiones</th>
+                            <th>Reps</th>
                             <th>Peso</th>
                             <th style={{ textAlign: 'right' }}>Acciones</th>
                           </tr>
@@ -762,13 +972,15 @@ export default function Rutinas() {
                         <tbody>
                           {ejerciciosDeRutina.length === 0 ? (
                             <tr>
-                              <td colSpan="6" style={{ textAlign: 'center', padding: '30px 10px', color: '#64748b' }}>
+                              <td colSpan="7" style={{ textAlign: 'center', padding: '30px 10px', color: '#64748b' }}>
                                 Aún no hay ejercicios asignados a esta rutina.
                               </td>
                             </tr>
                           ) : (
                             ejerciciosDeRutina.map((item, idx) => {
                               const ejObj = item.ejercicio || {};
+                              const esPropio = Boolean(item.es_propio || ejObj.id_socio);
+
                               return (
                                 <tr key={item.id_rutina_ejercicio || idx}>
                                   <td>
@@ -785,15 +997,21 @@ export default function Rutinas() {
                                       </div>
                                     </div>
                                   </td>
+                                  <td>
+                                    <span className={`rut-origin-badge ${esPropio ? 'propio' : 'gimnasio'}`}>
+                                      {esPropio ? <FaUser style={{ fontSize: '9px' }} /> : <FaBuilding style={{ fontSize: '9px' }} />}
+                                      {esPropio ? 'Mi ejercicio' : 'Gimnasio'}
+                                    </span>
+                                  </td>
                                   <td>{item.series || 4}</td>
-                                  <td>{item.repeticiones || '10 - 12'}</td>
+                                  <td>{item.repeticiones || 12}</td>
                                   <td>{item.peso ? `${item.peso} kg` : '-'}</td>
                                   <td style={{ textAlign: 'right' }}>
                                     <button
                                       type="button"
                                       className="rut-btn-icon-action"
                                       onClick={() => handleOpenEditEjercicio(item)}
-                                      title="Editar ejercicio"
+                                      title="Editar parámetros"
                                     >
                                       <FaEdit />
                                     </button>
@@ -801,7 +1019,7 @@ export default function Rutinas() {
                                       type="button"
                                       className="rut-btn-icon-action delete"
                                       onClick={() => handleDeleteEjercicio(item.id_rutina_ejercicio)}
-                                      title="Quitar ejercicio"
+                                      title="Quitar ejercicio de la rutina"
                                     >
                                       <FaTrashAlt />
                                     </button>
@@ -846,46 +1064,52 @@ export default function Rutinas() {
         </main>
       </div>
 
-      {/* 3. MODAL: CREAR / EDITAR RUTINA */}
+      {/* 3. MODAL: CREAR / EDITAR RUTINA (CON SELECTOR DE EJERCICIOS DEL GIMNASIO Y PROPIOS) */}
       {showRutinaModal && (
         <div className="rut-modal-overlay" onClick={() => setShowRutinaModal(false)}>
-          <div className="rut-modal-card" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="rut-modal-card"
+            style={{ maxWidth: '680px', width: '92%' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="rut-modal-header">
-              <h3>{editingRutina ? 'Editar Rutina' : 'Crear Nueva Rutina'}</h3>
+              <h3>{editingRutina ? 'Editar Rutina' : (esSocio ? 'Crear Mi Rutina' : 'Crear Nueva Rutina')}</h3>
               <button type="button" className="rut-modal-close-btn" onClick={() => setShowRutinaModal(false)}>
                 <FaTimes />
               </button>
             </div>
 
             <form onSubmit={handleSaveRutina}>
-              <div className="rut-modal-body">
+              <div className="rut-modal-body" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
                 <div className="rut-form-field">
                   <label>Nombre de la Rutina *</label>
                   <input
                     type="text"
                     className="rut-form-input"
-                    placeholder="Ej: Rutina Fuerza - Lunes"
+                    placeholder="Ej: Rutina de Pecho"
                     value={rutinaFormData.nombre}
                     onChange={(e) => setRutinaFormData({ ...rutinaFormData, nombre: e.target.value })}
                     required
                   />
                 </div>
 
-                <div className="rut-form-field">
-                  <label>Socio Asignado</label>
-                  <select
-                    className="rut-form-select"
-                    value={rutinaFormData.id_socio}
-                    onChange={(e) => setRutinaFormData({ ...rutinaFormData, id_socio: e.target.value })}
-                  >
-                    <option value="">-- Sin socio asignado --</option>
-                    {sociosList.map((s) => (
-                      <option key={s.id_socio} value={s.id_socio}>
-                        {s.nombre} {s.apellido} ({s.dni})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {!esSocio && (
+                  <div className="rut-form-field">
+                    <label>Socio Asignado</label>
+                    <select
+                      className="rut-form-select"
+                      value={rutinaFormData.id_socio}
+                      onChange={(e) => setRutinaFormData({ ...rutinaFormData, id_socio: e.target.value })}
+                    >
+                      <option value="">-- Sin socio asignado --</option>
+                      {sociosList.map((s) => (
+                        <option key={s.id_socio} value={s.id_socio}>
+                          {s.nombre} {s.apellido} ({s.dni})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="rut-form-grid-2">
                   <div className="rut-form-field">
@@ -896,13 +1120,13 @@ export default function Rutinas() {
                       onChange={(e) => setRutinaFormData({ ...rutinaFormData, tipo: e.target.value })}
                     >
                       <option value="Full Body">Full Body</option>
-                      <option value="Pecho - Espalda">Pecho - Espalda</option>
+                      <option value="Pecho - Tríceps">Pecho - Tríceps</option>
+                      <option value="Espalda - Bíceps">Espalda - Bíceps</option>
                       <option value="Piernas">Piernas</option>
-                      <option value="Brazos">Brazos</option>
                       <option value="Hombros">Hombros</option>
-                      <option value="Definición">Definición</option>
-                      <option value="Hipertrofia">Hipertrofia</option>
                       <option value="Fuerza">Fuerza</option>
+                      <option value="Hipertrofia">Hipertrofia</option>
+                      <option value="Definición">Definición</option>
                     </select>
                   </div>
 
@@ -920,34 +1144,167 @@ export default function Rutinas() {
                   </div>
                 </div>
 
-                <div className="rut-form-grid-2">
-                  <div className="rut-form-field">
-                    <label>Duración Estimada</label>
+                {/* SECCIÓN INTERACTIVA DE EJERCICIOS (GIMNASIO + PROPIOS) */}
+                <div className="rut-exercises-selector-section">
+                  <div className="rut-exercises-selector-header">
+                    <h4>
+                      <FaDumbbell style={{ color: '#a3e635' }} />
+                      Ejercicios Disponibles ({modalEjerciciosSeleccionados.length} seleccionados)
+                    </h4>
+
+                    <button
+                      type="button"
+                      className="rut-btn-create-custom-ej"
+                      onClick={handleOpenCrearEjercicioPersonalizado}
+                    >
+                      <FaPlus /> + Crear ejercicio personalizado
+                    </button>
+                  </div>
+
+                  {/* Pestañas de origen de ejercicio */}
+                  <div className="rut-origin-tabs">
+                    <button
+                      type="button"
+                      className={`rut-origin-tab-btn ${modalFiltroOrigen === 'todos' ? 'active' : ''}`}
+                      onClick={() => setModalFiltroOrigen('todos')}
+                    >
+                      Todos
+                    </button>
+                    <button
+                      type="button"
+                      className={`rut-origin-tab-btn gimnasio-tab ${modalFiltroOrigen === 'gimnasio' ? 'active' : ''}`}
+                      onClick={() => setModalFiltroOrigen('gimnasio')}
+                    >
+                      Gimnasio
+                    </button>
+                    <button
+                      type="button"
+                      className={`rut-origin-tab-btn propio-tab ${modalFiltroOrigen === 'propio' ? 'active' : ''}`}
+                      onClick={() => setModalFiltroOrigen('propio')}
+                    >
+                      Mis ejercicios
+                    </button>
+                  </div>
+
+                  {/* Buscador de ejercicio */}
+                  <div className="rut-filter-box" style={{ height: '36px', marginBottom: '10px' }}>
+                    <FaSearch className="rut-filter-icon" />
                     <input
                       type="text"
-                      className="rut-form-input"
-                      placeholder="Ej: 60 min"
-                      value={rutinaFormData.duracion}
-                      onChange={(e) => setRutinaFormData({ ...rutinaFormData, duracion: e.target.value })}
+                      className="rut-filter-input"
+                      placeholder="Filtrar por nombre o grupo muscular..."
+                      value={modalSearchEjercicio}
+                      onChange={(e) => setModalSearchEjercicio(e.target.value)}
                     />
                   </div>
 
-                  <div className="rut-form-field">
-                    <label>Días de Entrenamiento</label>
-                    <input
-                      type="text"
-                      className="rut-form-input"
-                      placeholder="Ej: Lunes, Miércoles, Viernes"
-                      value={rutinaFormData.dias}
-                      onChange={(e) => setRutinaFormData({ ...rutinaFormData, dias: e.target.value })}
-                    />
+                  {/* Lista de ejercicios con check y badge */}
+                  <div className="rut-available-exercises-list">
+                    {catalogoFiltradoModal.length === 0 ? (
+                      <p style={{ textAlign: 'center', color: '#64748b', fontSize: '13px', padding: '16px 0' }}>
+                        No se encontraron ejercicios en esta categoría.
+                      </p>
+                    ) : (
+                      catalogoFiltradoModal.map((ej) => {
+                        const isChecked = modalEjerciciosSeleccionados.some(
+                          (item) => item.id_ejercicio === ej.id_ejercicio
+                        );
+
+                        return (
+                          <div
+                            key={ej.id_ejercicio}
+                            className={`rut-available-ej-item ${isChecked ? 'selected' : ''}`}
+                            onClick={() => handleToggleEjercicioEnModal(ej)}
+                          >
+                            <div className="rut-available-ej-left">
+                              <div className="rut-ej-checkbox">
+                                {isChecked && <FaCheck />}
+                              </div>
+                              <div className="rut-available-ej-info">
+                                <h5>{ej.nombre}</h5>
+                                <span>{ej.grupo_muscular || 'General'}</span>
+                              </div>
+                            </div>
+
+                            <span className={`rut-origin-badge ${ej.es_propio ? 'propio' : 'gimnasio'}`}>
+                              {ej.es_propio ? <FaUser style={{ fontSize: '9px' }} /> : <FaBuilding style={{ fontSize: '9px' }} />}
+                              {ej.es_propio ? 'Mi ejercicio' : 'Gimnasio'}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
+
+                  {/* Lista de parámetros de los ejercicios seleccionados */}
+                  {modalEjerciciosSeleccionados.length > 0 && (
+                    <div className="rut-selected-ej-stack">
+                      <p style={{ margin: '0 0 6px 0', fontSize: '12px', fontWeight: 600, color: '#a3e635' }}>
+                        Detalle de series y repeticiones:
+                      </p>
+                      {modalEjerciciosSeleccionados.map((item, idx) => (
+                        <div key={item.id_ejercicio} className="rut-selected-ej-item">
+                          <div className="rut-selected-ej-meta">
+                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#94a3b8' }}>#{idx + 1}</span>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff' }}>{item.nombre}</span>
+                            <span className={`rut-origin-badge ${item.es_propio ? 'propio' : 'gimnasio'}`}>
+                              {item.es_propio ? 'Mi ejercicio' : 'Gimnasio'}
+                            </span>
+                          </div>
+
+                          <div className="rut-selected-ej-inputs">
+                            <label style={{ fontSize: '11px', color: '#94a3b8' }}>Series:</label>
+                            <input
+                              type="number"
+                              min="1"
+                              className="rut-selected-ej-input-sm"
+                              value={item.series}
+                              onChange={(e) =>
+                                handleUpdateParamEjercicioModal(item.id_ejercicio, 'series', Number(e.target.value))
+                              }
+                            />
+
+                            <label style={{ fontSize: '11px', color: '#94a3b8' }}>Reps:</label>
+                            <input
+                              type="number"
+                              min="1"
+                              className="rut-selected-ej-input-sm"
+                              value={item.repeticiones}
+                              onChange={(e) =>
+                                handleUpdateParamEjercicioModal(item.id_ejercicio, 'repeticiones', Number(e.target.value))
+                              }
+                            />
+
+                            <label style={{ fontSize: '11px', color: '#94a3b8' }}>Kg:</label>
+                            <input
+                              type="number"
+                              min="0"
+                              className="rut-selected-ej-input-sm"
+                              value={item.peso}
+                              onChange={(e) =>
+                                handleUpdateParamEjercicioModal(item.id_ejercicio, 'peso', Number(e.target.value))
+                              }
+                            />
+
+                            <button
+                              type="button"
+                              className="rut-btn-remove-selected-ej"
+                              onClick={() => handleToggleEjercicioEnModal(item)}
+                              title="Quitar"
+                            >
+                              <FaTimes />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <div className="rut-form-field">
+                <div className="rut-form-field" style={{ marginTop: '14px' }}>
                   <label>Notas y Recomendaciones</label>
                   <textarea
-                    rows="3"
+                    rows="2"
                     className="rut-form-textarea"
                     placeholder="Instrucciones técnicas o pausas entre series..."
                     value={rutinaFormData.notas}
@@ -961,7 +1318,7 @@ export default function Rutinas() {
                   Cancelar
                 </button>
                 <button type="submit" className="rut-btn-primary">
-                  <FaCheck /> {editingRutina ? 'Guardar Cambios' : 'Crear Rutina'}
+                  <FaCheck /> {editingRutina ? 'Guardar Cambios' : 'Guardar rutina'}
                 </button>
               </div>
             </form>
@@ -969,7 +1326,7 @@ export default function Rutinas() {
         </div>
       )}
 
-      {/* 4. MODAL: AGREGAR / EDITAR EJERCICIO EN RUTINA */}
+      {/* 4. MODAL: AGREGAR / EDITAR EJERCICIO INDIVIDUAL EN LA RUTINA */}
       {showEjercicioModal && (
         <div className="rut-modal-overlay" onClick={() => setShowEjercicioModal(false)}>
           <div className="rut-modal-card" onClick={(e) => e.stopPropagation()}>
@@ -984,19 +1341,49 @@ export default function Rutinas() {
               <div className="rut-modal-body">
                 {!editingEjercicio && (
                   <div className="rut-form-field">
-                    <label>Seleccionar Ejercicio *</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label>Seleccionar Ejercicio *</label>
+                      <button
+                        type="button"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#bef264',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          fontWeight: 600
+                        }}
+                        onClick={handleOpenCrearEjercicioPersonalizado}
+                      >
+                        + Crear mi ejercicio
+                      </button>
+                    </div>
+
                     <select
                       className="rut-form-select"
                       value={ejercicioFormData.id_ejercicio}
                       onChange={(e) => setEjercicioFormData({ ...ejercicioFormData, id_ejercicio: e.target.value })}
                       required
                     >
-                      <option value="">-- Elegir ejercicio del catálogo --</option>
-                      {catalogoEjercicios.map((ej) => (
-                        <option key={ej.id_ejercicio} value={ej.id_ejercicio}>
-                          {ej.nombre} ({ej.grupo_muscular || 'General'})
-                        </option>
-                      ))}
+                      <option value="">-- Elegir ejercicio disponible --</option>
+                      <optgroup label="Ejercicios del Gimnasio">
+                        {catalogoEjercicios
+                          .filter((ej) => !ej.es_propio)
+                          .map((ej) => (
+                            <option key={ej.id_ejercicio} value={ej.id_ejercicio}>
+                              {ej.nombre} ({ej.grupo_muscular || 'General'}) - Gimnasio
+                            </option>
+                          ))}
+                      </optgroup>
+                      <optgroup label="Mis Ejercicios Personalizados">
+                        {catalogoEjercicios
+                          .filter((ej) => ej.es_propio)
+                          .map((ej) => (
+                            <option key={ej.id_ejercicio} value={ej.id_ejercicio}>
+                              ⭐ {ej.nombre} ({ej.grupo_muscular || 'General'}) - Mi ejercicio
+                            </option>
+                          ))}
+                      </optgroup>
                     </select>
                   </div>
                 )}
@@ -1017,9 +1404,9 @@ export default function Rutinas() {
                   <div className="rut-form-field">
                     <label>Repeticiones</label>
                     <input
-                      type="text"
+                      type="number"
+                      min="1"
                       className="rut-form-input"
-                      placeholder="Ej: 10 - 12 o 15"
                       value={ejercicioFormData.repeticiones}
                       onChange={(e) => setEjercicioFormData({ ...ejercicioFormData, repeticiones: e.target.value })}
                       required
@@ -1072,6 +1459,92 @@ export default function Rutinas() {
                 </button>
                 <button type="submit" className="rut-btn-primary">
                   <FaCheck /> {editingEjercicio ? 'Actualizar Ejercicio' : 'Agregar Ejercicio'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 5. SUBMODAL: CREAR EJERCICIO PERSONALIZADO (MI EJERCICIO) */}
+      {showCustomEjModal && (
+        <div className="rut-modal-overlay" style={{ zIndex: 10000 }} onClick={() => setShowCustomEjModal(false)}>
+          <div className="rut-modal-card" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="rut-modal-header">
+              <h3>
+                <FaUser style={{ color: '#a3e635', marginRight: '6px' }} />
+                Crear Ejercicio Personalizado
+              </h3>
+              <button type="button" className="rut-modal-close-btn" onClick={() => setShowCustomEjModal(false)}>
+                <FaTimes />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCustomEjercicio}>
+              <div className="rut-modal-body">
+                <div className="rut-form-field">
+                  <label>Nombre del Ejercicio *</label>
+                  <input
+                    type="text"
+                    className="rut-form-input"
+                    placeholder="Ej: Curl martillo personalizado"
+                    value={customEjFormData.nombre}
+                    onChange={(e) => setCustomEjFormData({ ...customEjFormData, nombre: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="rut-form-grid-2">
+                  <div className="rut-form-field">
+                    <label>Grupo Muscular</label>
+                    <select
+                      className="rut-form-select"
+                      value={customEjFormData.grupo_muscular}
+                      onChange={(e) => setCustomEjFormData({ ...customEjFormData, grupo_muscular: e.target.value })}
+                    >
+                      <option value="Pecho">Pecho</option>
+                      <option value="Espalda">Espalda</option>
+                      <option value="Piernas">Piernas</option>
+                      <option value="Brazos">Brazos</option>
+                      <option value="Hombros">Hombros</option>
+                      <option value="Abdomen">Abdomen</option>
+                      <option value="Cardio">Cardio</option>
+                      <option value="Cuerpo Completo">Cuerpo Completo</option>
+                    </select>
+                  </div>
+
+                  <div className="rut-form-field">
+                    <label>Dificultad</label>
+                    <select
+                      className="rut-form-select"
+                      value={customEjFormData.dificultad}
+                      onChange={(e) => setCustomEjFormData({ ...customEjFormData, dificultad: e.target.value })}
+                    >
+                      <option value="Principiante">Principiante</option>
+                      <option value="Intermedia">Intermedia</option>
+                      <option value="Avanzada">Avanzada</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="rut-form-field">
+                  <label>Descripción / Técnica (Opcional)</label>
+                  <textarea
+                    rows="3"
+                    className="rut-form-textarea"
+                    placeholder="Detalles sobre agarre, postura o variante..."
+                    value={customEjFormData.descripcion}
+                    onChange={(e) => setCustomEjFormData({ ...customEjFormData, descripcion: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="rut-modal-footer">
+                <button type="button" className="rut-btn-cancel" onClick={() => setShowCustomEjModal(false)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="rut-btn-primary" disabled={guardandoCustomEj}>
+                  <FaCheck /> {guardandoCustomEj ? 'Guardando...' : 'Crear mi ejercicio'}
                 </button>
               </div>
             </form>

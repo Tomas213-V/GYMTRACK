@@ -34,8 +34,7 @@ function Sidebar() {
     // Opciones para Socio del Gimnasio (Fiel a la interfaz y al portal de socios)
     const opcionesSocio = [
         { ruta: "/socio/dashboard", nombre: "Inicio", icono: <FaHouse /> },
-        { ruta: "/rutinas", nombre: "Rutinas", icono: <FaDumbbell /> },
-        { ruta: "/ejercicios", nombre: "Ejercicios", icono: <FaCalendarAlt /> },
+        { ruta: "/ejercicios", nombre: "Ejercicios", icono: <FaDumbbell />, alias: ["/socio/ejercicios"] },
         { ruta: "/socio/asistencia", nombre: "Asistencia", icono: <FaCalendarCheck />, alias: ["/asistencias"] },
         { 
             ruta: "/socio/membresia", 

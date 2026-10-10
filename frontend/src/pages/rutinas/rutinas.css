@@ -906,3 +906,264 @@
   background-color: #25282f;
   color: #ffffff;
 }
+
+/* ==============================================================================
+   BADGES DE ORIGEN (GIMNASIO vs MI EJERCICIO)
+   ============================================================================== */
+.rut-origin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.rut-origin-badge.gimnasio {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+.rut-origin-badge.propio {
+  background: rgba(163, 230, 53, 0.18);
+  color: #bef264;
+  border: 1px solid rgba(163, 230, 53, 0.45);
+  box-shadow: 0 0 10px rgba(163, 230, 53, 0.15);
+}
+
+/* ==============================================================================
+   SELECTOR Y GESTOR DE EJERCICIOS EN MODAL DE RUTINA
+   ============================================================================== */
+.rut-exercises-selector-section {
+  background: #111316;
+  border: 1px solid var(--rut-card-border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-top: 14px;
+}
+
+.rut-exercises-selector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rut-exercises-selector-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rut-btn-create-custom-ej {
+  background: rgba(163, 230, 53, 0.12);
+  color: #bef264;
+  border: 1px dashed rgba(163, 230, 53, 0.5);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.rut-btn-create-custom-ej:hover {
+  background: rgba(163, 230, 53, 0.22);
+  border-color: #bef264;
+  transform: translateY(-1px);
+}
+
+/* Pestañas de origen de ejercicios (Todos / Gimnasio / Mis ejercicios) */
+.rut-origin-tabs {
+  display: flex;
+  background: #0d0f12;
+  border: 1px solid var(--rut-card-border);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.rut-origin-tab-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--rut-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.rut-origin-tab-btn.active {
+  background: var(--rut-card-bg);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.rut-origin-tab-btn.active.propio-tab {
+  color: #bef264;
+}
+
+.rut-origin-tab-btn.active.gimnasio-tab {
+  color: #60a5fa;
+}
+
+/* Lista de ejercicios para marcar / agregar */
+.rut-available-exercises-list {
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.rut-available-exercises-list::-webkit-scrollbar {
+  width: 5px;
+}
+.rut-available-exercises-list::-webkit-scrollbar-thumb {
+  background: #2a2d33;
+  border-radius: 4px;
+}
+
+.rut-available-ej-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  background: #16181b;
+  border: 1px solid #22252b;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  gap: 12px;
+}
+
+.rut-available-ej-item:hover {
+  background: #1d2025;
+  border-color: #333842;
+}
+
+.rut-available-ej-item.selected {
+  background: rgba(163, 230, 53, 0.08);
+  border-color: rgba(163, 230, 53, 0.4);
+}
+
+.rut-available-ej-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.rut-ej-checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid #475569;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #0d0d0d;
+  background: transparent;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.rut-available-ej-item.selected .rut-ej-checkbox {
+  background: #a3e635;
+  border-color: #a3e635;
+}
+
+.rut-available-ej-info h5 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.rut-available-ej-info span {
+  font-size: 11px;
+  color: var(--rut-text-secondary);
+}
+
+/* Lista de ejercicios ya seleccionados para la rutina en el modal */
+.rut-selected-ej-stack {
+  margin-top: 14px;
+  border-top: 1px solid var(--rut-card-border);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rut-selected-ej-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #14171b;
+  border: 1px solid #23272f;
+  border-radius: 8px;
+  padding: 8px 12px;
+  gap: 10px;
+}
+
+.rut-selected-ej-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.rut-selected-ej-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rut-selected-ej-input-sm {
+  width: 58px;
+  background: #0d0f12;
+  border: 1px solid var(--rut-card-border);
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 12px;
+  padding: 4px 6px;
+  text-align: center;
+}
+
+.rut-btn-remove-selected-ej {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 4px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+
+.rut-btn-remove-selected-ej:hover {
+  color: #f87171;
+}
+

@@ -94,7 +94,7 @@ export async function addEjercicioToRutina(rutinaId, ejercicioData) {
   });
 
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al agregar el ejercicio.');
+  if (!response.ok) throw new Error(data.error || 'Error al agregar el ejercicio a la rutina.');
   return data;
 }
 
@@ -128,14 +128,69 @@ export async function removeEjercicioFromRutina(rutinaId, ejercicioId) {
 }
 
 /**
- * Obtener el catálogo de ejercicios disponibles para asociar
+ * Obtener ejercicios disponibles para el socio (del gimnasio + personalizados propios)
+ * Permite filtrar por origen: 'todos' | 'gimnasio' | 'propio'
  */
-export async function fetchCatalogoEjercicios() {
-  const response = await fetch(`${API_URL}/ejercicios?limit=100`, {
+export async function fetchEjerciciosDisponibles({ id_socio = '', origen = 'todos', grupo_muscular = '', search = '' } = {}) {
+  const params = new URLSearchParams();
+  if (id_socio) params.append('id_socio', id_socio);
+  if (origen && origen !== 'todos') params.append('origen', origen);
+  if (grupo_muscular && grupo_muscular !== 'todos') params.append('grupo_muscular', grupo_muscular);
+  if (search) params.append('search', search);
+  params.append('limit', '100');
+
+  const response = await fetch(`${API_URL}/ejercicios/disponibles?${params.toString()}`, {
     headers: getHeaders()
   });
 
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al obtener el catálogo de ejercicios.');
-  return data.datos || [];
+  if (!response.ok) throw new Error(data.error || 'Error al obtener ejercicios disponibles.');
+  return Array.isArray(data) ? data : data.datos || [];
+}
+
+/**
+ * Obtener catálogo general de ejercicios
+ */
+export async function fetchCatalogoEjercicios({ id_socio = '', origen = 'todos', search = '', grupo_muscular = '' } = {}) {
+  try {
+    return await fetchEjerciciosDisponibles({ id_socio, origen, search, grupo_muscular });
+  } catch {
+    const params = new URLSearchParams({ limit: '100' });
+    if (search) params.append('search', search);
+    if (grupo_muscular && grupo_muscular !== 'todos') params.append('grupo_muscular', grupo_muscular);
+    const response = await fetch(`${API_URL}/ejercicios?${params.toString()}`, {
+      headers: getHeaders()
+    });
+    const data = await response.json();
+    return Array.isArray(data) ? data : data.datos || [];
+  }
+}
+
+/**
+ * Crear un ejercicio personalizado propio para el socio
+ */
+export async function createEjercicioPersonalizado(ejercicioData) {
+  const response = await fetch(`${API_URL}/ejercicios/personalizado`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(ejercicioData)
+  });
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Error al crear el ejercicio personalizado.');
+  return data.ejercicio || data;
+}
+
+/**
+ * Eliminar un ejercicio personalizado
+ */
+export async function deleteEjercicioPersonalizado(id) {
+  const response = await fetch(`${API_URL}/ejercicios/${id}`, {
+    method: 'DELETE',
+    headers: getHeaders()
+  });
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Error al eliminar el ejercicio.');
+  return data;
 }

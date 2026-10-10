@@ -11,8 +11,8 @@ import Register from './pages/register/register'
 import Dashboard from './pages/dashboard/dashboard'
 import Progress from './pages/progress/progress'
 import Precio from './pages/precio/precio'
-import ProtectedRoute from './components/ProtectedRoute'
 import Ejercicios from './pages/ejercicios/ejercicios'
+import SocioEjercicios from './pages/socio-ejercicios/socio-ejercicios'
 import Soporte from './pages/support/support'
 import Pagos from './pages/pagos/pagos'
 import CrearGimnasio from './pages/crear-gimnasio/crear-gimnasio'
@@ -29,7 +29,26 @@ function App() {
     <>
       <Routes>
         <Route path="/" element={<Landing />} />
-        <Route path="/ejercicios" element={<Ejercicios />} />
+        <Route
+          path="/socio/ejercicios"
+          element={
+            <ProtectedRoute>
+              <SocioEjercicios />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ejercicios"
+          element={
+            localStorage.getItem('rol') === 'socio' || Boolean(localStorage.getItem('socio')) ? (
+              <ProtectedRoute>
+                <SocioEjercicios />
+              </ProtectedRoute>
+            ) : (
+              <Ejercicios />
+            )
+          }
+        />
         <Route path="/ejerciciosLanding" element={<Ejercicios />} />
 
         <Route
