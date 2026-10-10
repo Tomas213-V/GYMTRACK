@@ -19,9 +19,10 @@ import CrearGimnasio from './pages/crear-gimnasio/crear-gimnasio'
 import Socios from './pages/socios/socios'
 import Asistencias from './pages/asistencias/asistencias'
 import Rutinas from './pages/rutinas/rutinas'
+import SocioRutinas from './pages/socio-rutinas/socio-rutinas'
 import Perfil from './pages/perfil/perfil'
 import './App.css'
-
+import ProtectedRoute from './components/ProtectedRoute'
 function App() {
   const [count, setCount] = useState(0)
 
@@ -168,11 +169,24 @@ function App() {
           }
         />
 
+        <Route
+          path="/socio/rutinas"
+          element={
+            <ProtectedRoute>
+              <SocioRutinas />
+            </ProtectedRoute>
+          }
+        />
+
         <Route 
           path="/rutinas" 
           element={
             <ProtectedRoute>
-              <Rutinas/>
+              {localStorage.getItem('rol') === 'socio' || Boolean(localStorage.getItem('socio')) ? (
+                <SocioRutinas />
+              ) : (
+                <Rutinas />
+              )}
             </ProtectedRoute>
           }
         />

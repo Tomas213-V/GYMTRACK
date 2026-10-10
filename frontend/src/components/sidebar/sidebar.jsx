@@ -9,7 +9,8 @@ import {
     FaUser, 
     FaCreditCard, 
     FaSignOutAlt, 
-    FaCalendarAlt 
+    FaCalendarAlt,
+    FaRunning 
 } from "react-icons/fa";
 import { FaHouse } from "react-icons/fa6";
 
@@ -34,7 +35,8 @@ function Sidebar() {
     // Opciones para Socio del Gimnasio (Fiel a la interfaz y al portal de socios)
     const opcionesSocio = [
         { ruta: "/socio/dashboard", nombre: "Inicio", icono: <FaHouse /> },
-        { ruta: "/ejercicios", nombre: "Ejercicios", icono: <FaDumbbell />, alias: ["/socio/ejercicios"] },
+        { ruta: "/socio/rutinas", nombre: "Rutinas", icono: <FaDumbbell />, alias: ["/rutinas"] },
+        { ruta: "/ejercicios", nombre: "Ejercicios", icono: <FaRunning />, alias: ["/socio/ejercicios"] },
         { ruta: "/socio/asistencia", nombre: "Asistencia", icono: <FaCalendarCheck />, alias: ["/asistencias"] },
         { 
             ruta: "/socio/membresia", 

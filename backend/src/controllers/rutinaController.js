@@ -118,6 +118,13 @@ exports.getAllRutinas = async (req, res) => {
       };
     });
 
+    // Ordenar para que la rutina activa aparezca en primer lugar
+    rutinasFormateadas.sort((a, b) => {
+      if (a.estado === 'activa' && b.estado !== 'activa') return -1;
+      if (b.estado === 'activa' && a.estado !== 'activa') return 1;
+      return (b.id_rutina || 0) - (a.id_rutina || 0);
+    });
+
     return res.status(200).json(rutinasFormateadas);
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -576,6 +583,409 @@ exports.removeEjercicioFromRutina = async (req, res) => {
     }
 
     return res.status(200).json({ message: 'Ejercicio desvinculado con éxito de la rutina.' });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// 10. Catálogo de Rutinas Ofrecidas por el Gimnasio (Programas Oficiales)
+exports.getRutinasOfrecidasGym = async (req, res) => {
+  try {
+    const usuario = resolverUsuario(req);
+    const gymId = usuario?.id_gimnasio || null;
+
+    // Consultamos los ejercicios disponibles en el gimnasio para asociarlos
+    let ejQuery = supabase
+      .from('ejercicio')
+      .select('id_ejercicio, nombre, grupo_muscular, dificultad, descripcion')
+      .is('id_socio', null);
+
+    if (gymId) {
+      ejQuery = ejQuery.or(`id_gimnasio.eq.${gymId},id_gimnasio.is.null`);
+    }
+
+    const { data: dbEjercicios } = await ejQuery.limit(100);
+    const listaEj = dbEjercicios || [];
+
+    // Helper para buscar ejercicio en DB por coincidencia de nombre o músculo
+    const encontrarEj = (nombreParcial, musculo) => {
+      const exact = listaEj.find((e) => e.nombre?.toLowerCase().includes(nombreParcial.toLowerCase()));
+      if (exact) return exact;
+      if (musculo) {
+        const porMusculo = listaEj.find((e) => e.grupo_muscular?.toLowerCase() === musculo.toLowerCase());
+        if (porMusculo) return porMusculo;
+      }
+      return listaEj[0] || null;
+    };
+
+    // Plantillas de rutinas diseñadas por el staff del gimnasio
+    const programasGym = [
+      {
+        id_plantilla: 'gym-fullbody-intro',
+        nombre: 'Full Body: Acondicionamiento & Fuerza Integral',
+        tipo: 'Full Body',
+        dificultad: 'Principiante',
+        duracion: '50 min',
+        dias: 'Lunes, Miércoles, Viernes',
+        objetivo: 'Acondicionamiento físico, ganancia de fuerza inicial y adaptación neuromuscular.',
+        notas: 'Ideal para quienes inician o retoman el gimnasio. Realizar calentamiento previo de 5 a 10 min.',
+        nivel_badge: 'Principiante',
+        frecuencia: '3 días por semana',
+        ejercicios_plantilla: [
+          { query: 'Sentadilla', musculo: 'Piernas', series: 3, repeticiones: 12, peso: 20, descanso: 60 },
+          { query: 'banca plano', musculo: 'Pecho', series: 3, repeticiones: 10, peso: 30, descanso: 75 },
+          { query: 'Jalón al pecho', musculo: 'Espalda', series: 3, repeticiones: 12, peso: 35, descanso: 60 },
+          { query: 'Press militar', musculo: 'Hombros', series: 3, repeticiones: 10, peso: 12, descanso: 60 },
+          { query: 'Curl de bíceps', musculo: 'Brazos', series: 3, repeticiones: 12, peso: 15, descanso: 45 },
+          { query: 'Plancha', musculo: 'Abdomen', series: 3, repeticiones: 30, peso: 0, descanso: 45 }
+        ]
+      },
+      {
+        id_plantilla: 'gym-torso-pierna',
+        nombre: 'Torso / Pierna: Hipertrofia & Rendimiento',
+        tipo: 'Torso - Pierna',
+        dificultad: 'Intermedia',
+        duracion: '65 min',
+        dias: 'Lunes, Martes, Jueves, Viernes',
+        objetivo: 'Maximizar el crecimiento muscular con balance perfecto entre volumen y recuperación.',
+        notas: 'Separar los días de torso y pierna para permitir la recuperación muscular adecuada.',
+        nivel_badge: 'Intermedio',
+        frecuencia: '4 días por semana',
+        ejercicios_plantilla: [
+          { query: 'banca plano', musculo: 'Pecho', series: 4, repeticiones: 8, peso: 50, descanso: 90 },
+          { query: 'Remo con barra', musculo: 'Espalda', series: 4, repeticiones: 10, peso: 45, descanso: 75 },
+          { query: 'Press inclinado', musculo: 'Pecho', series: 3, repeticiones: 12, peso: 20, descanso: 60 },
+          { query: 'Dominadas', musculo: 'Espalda', series: 3, repeticiones: 8, peso: 0, descanso: 90 },
+          { query: 'Sentadilla', musculo: 'Piernas', series: 4, repeticiones: 10, peso: 60, descanso: 90 },
+          { query: 'Prensa de piernas', musculo: 'Piernas', series: 4, repeticiones: 12, peso: 100, descanso: 75 },
+          { query: 'Extensiones de cuádriceps', musculo: 'Piernas', series: 3, repeticiones: 15, peso: 40, descanso: 60 },
+          { query: 'Curl femoral', musculo: 'Piernas', series: 3, repeticiones: 12, peso: 35, descanso: 60 }
+        ]
+      },
+      {
+        id_plantilla: 'gym-ppl-elite',
+        nombre: 'Push / Pull / Legs (PPL): Élite Muscular',
+        tipo: 'Push - Pull - Legs',
+        dificultad: 'Avanzada',
+        duracion: '70 min',
+        dias: 'Lunes a Viernes',
+        objetivo: 'Enfoque biomecánico en empujes, jalones y piernas para atletas comprometidos.',
+        notas: 'Controlar la fase excéntrica del movimiento (2-3 segundos) para máximo reclutamiento.',
+        nivel_badge: 'Avanzado',
+        frecuencia: '5 días por semana',
+        ejercicios_plantilla: [
+          { query: 'banca plano', musculo: 'Pecho', series: 4, repeticiones: 8, peso: 65, descanso: 90 },
+          { query: 'Press militar', musculo: 'Hombros', series: 4, repeticiones: 10, peso: 22, descanso: 75 },
+          { query: 'Aperturas en polea', musculo: 'Pecho', series: 3, repeticiones: 15, peso: 15, descanso: 60 },
+          { query: 'Extensiones de tríceps', musculo: 'Brazos', series: 4, repeticiones: 12, peso: 25, descanso: 45 },
+          { query: 'Dominadas', musculo: 'Espalda', series: 4, repeticiones: 8, peso: 0, descanso: 90 },
+          { query: 'Remo con barra', musculo: 'Espalda', series: 4, repeticiones: 10, peso: 55, descanso: 75 },
+          { query: 'Curl de bíceps', musculo: 'Brazos', series: 4, repeticiones: 12, peso: 20, descanso: 60 },
+          { query: 'Sentadilla', musculo: 'Piernas', series: 4, repeticiones: 8, peso: 75, descanso: 120 }
+        ]
+      },
+      {
+        id_plantilla: 'gym-fatburn-hiit',
+        nombre: 'Quema de Grasa & HIIT Funcional',
+        tipo: 'Funcional & HIIT',
+        dificultad: 'Intermedia',
+        duracion: '45 min',
+        dias: 'Lunes, Miércoles, Viernes',
+        objetivo: 'Acelerar el metabolismo basal, elevar pulsaciones y tonificar cuerpo completo.',
+        notas: 'Descansos cortos y dinámicos para optimizar el consumo de oxígeno post-entrenamiento (EPOC).',
+        nivel_badge: 'Dinámico',
+        frecuencia: '3 días por semana',
+        ejercicios_plantilla: [
+          { query: 'Sentadilla', musculo: 'Piernas', series: 4, repeticiones: 15, peso: 20, descanso: 45 },
+          { query: 'banca plano', musculo: 'Pecho', series: 4, repeticiones: 12, peso: 25, descanso: 45 },
+          { query: 'Jalón al pecho', musculo: 'Espalda', series: 4, repeticiones: 12, peso: 30, descanso: 45 },
+          { query: 'Elevaciones laterales', musculo: 'Hombros', series: 3, repeticiones: 15, peso: 8, descanso: 30 },
+          { query: 'Plancha', musculo: 'Abdomen', series: 4, repeticiones: 40, peso: 0, descanso: 30 }
+        ]
+      },
+      {
+        id_plantilla: 'gym-strength-5x5',
+        nombre: 'Fuerza Bruta 5×5 Powerlifting',
+        tipo: 'Fuerza Pura',
+        dificultad: 'Avanzada',
+        duracion: '60 min',
+        dias: 'Lunes, Miércoles, Viernes',
+        objetivo: 'Desarrollo de fuerza máxima en movimientos multiarticulares con progresión lineal.',
+        notas: '5 series de 5 repeticiones efectivas con 80-85% del 1RM. Descansos largos de 2 a 3 minutos.',
+        nivel_badge: 'Fuerza',
+        frecuencia: '3 días por semana',
+        ejercicios_plantilla: [
+          { query: 'Sentadilla', musculo: 'Piernas', series: 5, repeticiones: 5, peso: 80, descanso: 120 },
+          { query: 'banca plano', musculo: 'Pecho', series: 5, repeticiones: 5, peso: 70, descanso: 120 },
+          { query: 'Remo con barra', musculo: 'Espalda', series: 5, repeticiones: 5, peso: 60, descanso: 120 },
+          { query: 'Press militar', musculo: 'Hombros', series: 5, repeticiones: 5, peso: 40, descanso: 90 }
+        ]
+      },
+      {
+        id_plantilla: 'gym-gluteos-piernas',
+        nombre: 'Glúteos & Tren Inferior Esculpido',
+        tipo: 'Piernas & Glúteos',
+        dificultad: 'Intermedia',
+        duracion: '55 min',
+        dias: 'Martes, Jueves, Sábado',
+        objetivo: 'Focalización en desarrollo de glúteos, isquiosurales, cuádriceps y abdomen firme.',
+        notas: 'Concentrarse en la contracción en el punto máximo y tensión mecánica constante.',
+        nivel_badge: 'Especializado',
+        frecuencia: '3 días por semana',
+        ejercicios_plantilla: [
+          { query: 'Sentadilla', musculo: 'Piernas', series: 4, repeticiones: 10, peso: 40, descanso: 90 },
+          { query: 'Prensa de piernas', musculo: 'Piernas', series: 4, repeticiones: 12, peso: 80, descanso: 75 },
+          { query: 'Extensiones de cuádriceps', musculo: 'Piernas', series: 3, repeticiones: 15, peso: 30, descanso: 60 },
+          { query: 'Curl femoral', musculo: 'Piernas', series: 4, repeticiones: 12, peso: 25, descanso: 60 },
+          { query: 'Plancha', musculo: 'Abdomen', series: 3, repeticiones: 45, peso: 0, descanso: 45 }
+        ]
+      }
+    ];
+
+    // Construir la respuesta asociando ejercicios reales de la base de datos
+    const programasCompletos = programasGym.map((prog) => {
+      const ejerciciosAsociados = prog.ejercicios_plantilla.map((item, idx) => {
+        const ejDb = encontrarEj(item.query, item.musculo);
+        return {
+          id_ejercicio: ejDb ? ejDb.id_ejercicio : idx + 1,
+          nombre: ejDb ? ejDb.nombre : `${item.query} oficial`,
+          grupo_muscular: ejDb ? ejDb.grupo_muscular : item.musculo,
+          dificultad: ejDb ? ejDb.dificultad : prog.dificultad,
+          descripcion: ejDb ? ejDb.descripcion : 'Ejercicio oficial recomendado por el gimnasio',
+          series: item.series,
+          repeticiones: item.repeticiones,
+          peso: item.peso,
+          descanso: item.descanso,
+          orden: idx + 1
+        };
+      });
+
+      return {
+        id_plantilla: prog.id_plantilla,
+        nombre: prog.nombre,
+        tipo: prog.tipo,
+        dificultad: prog.dificultad,
+        duracion: prog.duracion,
+        dias: prog.dias,
+        objetivo: prog.objetivo,
+        notas: prog.notas,
+        nivel_badge: prog.nivel_badge,
+        frecuencia: prog.frecuencia,
+        es_ofrecida_gym: true,
+        total_ejercicios: ejerciciosAsociados.length,
+        ejercicios: ejerciciosAsociados
+      };
+    });
+
+    return res.status(200).json(programasCompletos);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// 11. Adoptar / Comenzar una Rutina del Gimnasio
+exports.adoptarRutinaGym = async (req, res) => {
+  try {
+    const usuario = resolverUsuario(req);
+    const { plantilla, id_plantilla, id_socio, nombre_personalizado } = req.body;
+
+    let targetSocioId = id_socio ? Number(id_socio) : (usuario?.id_socio || null);
+    if (!targetSocioId) {
+      return res.status(400).json({ error: 'Se requiere el ID del socio para adoptar la rutina.' });
+    }
+
+    // Si viene el objeto plantilla directamente o hay que buscarlo
+    let plan = plantilla;
+    if (!plan && id_plantilla) {
+      // Re-invocamos lógica interna para buscar la plantilla
+      const gymId = usuario?.id_gimnasio || null;
+      const { data: dbEj } = await supabase.from('ejercicio').select('*').is('id_socio', null).limit(100);
+      const listaEj = dbEj || [];
+      const encontrarEj = (q, m) => {
+        const found = listaEj.find((e) => e.nombre?.toLowerCase().includes(q.toLowerCase()));
+        return found || listaEj[0];
+      };
+
+      // Si no tenemos plantilla completa enviada, creamos una básica
+      plan = {
+        nombre: nombre_personalizado || 'Rutina Adoptada del Gimnasio',
+        tipo: 'Full Body',
+        dificultad: 'Intermedia',
+        duracion: '60 min',
+        dias: 'Lunes, Miércoles, Viernes',
+        objetivo: 'Plan de entrenamiento sugerido por el gimnasio',
+        notas: 'Adoptada del catálogo de rutinas del gimnasio.',
+        ejercicios: []
+      };
+    }
+
+    if (!plan) {
+      return res.status(400).json({ error: 'No se suministraron los datos de la rutina a adoptar.' });
+    }
+
+    // Obtener gimnasio del socio
+    const { data: socioDb } = await supabase
+      .from('socio')
+      .select('id_gimnasio')
+      .eq('id_socio', targetSocioId)
+      .maybeSingle();
+
+    const gymId = socioDb?.id_gimnasio || usuario?.id_gimnasio || null;
+
+    // Desactivar cualquier otra rutina activa previa del socio para que esta sea la principal
+    await supabase
+      .from('rutina')
+      .update({ estado: 'asignada' })
+      .eq('id_socio', targetSocioId)
+      .eq('estado', 'activa');
+
+    // Insertar la nueva rutina para el socio
+    const metaDescripcion = JSON.stringify({
+      tipo: plan.tipo || 'Full Body',
+      dificultad: plan.dificultad || 'Intermedia',
+      duracion: plan.duracion || '60 min',
+      dias: plan.dias || 'Lunes, Miércoles, Viernes',
+      notas: plan.notas || 'Plan adoptado del gimnasio.',
+      objetivo: plan.objetivo || '',
+      origen_oficial_gym: true
+    });
+
+    const { data: rutinaCreada, error: errInsert } = await supabase
+      .from('rutina')
+      .insert([
+        {
+          nombre: (nombre_personalizado || plan.nombre || 'Mi Rutina del Gimnasio').trim(),
+          descripcion: metaDescripcion,
+          id_socio: targetSocioId,
+          id_gimnasio: gymId,
+          fecha_inicio: new Date().toISOString().split('T')[0],
+          estado: 'activa'
+        }
+      ])
+      .select()
+      .single();
+
+    if (errInsert || !rutinaCreada) {
+      throw new Error(errInsert?.message || 'Error al crear la rutina para el socio.');
+    }
+
+    // Insertar ejercicios asociados en rutina_ejercicio
+    const ejerciciosParaInsertar = plan.ejercicios || [];
+    const asociados = [];
+
+    for (let i = 0; i < ejerciciosParaInsertar.length; i++) {
+      const item = ejerciciosParaInsertar[i];
+      if (item.id_ejercicio) {
+        try {
+          const { data: reData } = await supabase
+            .from('rutina_ejercicio')
+            .insert([
+              {
+                id_rutina: rutinaCreada.id_rutina,
+                id_ejercicio: Number(item.id_ejercicio),
+                series: Number(item.series || 4),
+                repeticiones: Number(item.repeticiones || 10),
+                peso: Number(item.peso || 0),
+                descanso: Number(item.descanso || 60),
+                orden: i + 1
+              }
+            ])
+            .select(`
+              id_rutina_ejercicio,
+              id_ejercicio,
+              series,
+              repeticiones,
+              peso,
+              descanso,
+              orden,
+              ejercicio (
+                id_ejercicio,
+                nombre,
+                grupo_muscular,
+                dificultad
+              )
+            `)
+            .single();
+
+          if (reData) asociados.push(reData);
+        } catch (e) {
+          console.warn('Error asociando ejercicio a rutina adoptada:', e.message);
+        }
+      }
+    }
+
+    rutinaCreada.rutina_ejercicio = asociados;
+
+    return res.status(201).json({
+      mensaje: '¡Rutina adoptada con éxito! Ya está configurada como tu rutina activa.',
+      rutina: rutinaCreada
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// 12. Activar Rutina (Establecer como la rutina principal del socio)
+exports.activarRutina = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const usuario = resolverUsuario(req);
+
+    // Obtener la rutina a activar
+    const { data: rutina, error: errRutina } = await supabase
+      .from('rutina')
+      .select('id_rutina, id_socio')
+      .eq('id_rutina', id)
+      .maybeSingle();
+
+    if (errRutina || !rutina) {
+      return res.status(404).json({ error: 'La rutina especificada no existe.' });
+    }
+
+    const socioId = rutina.id_socio;
+
+    // Desactivar cualquier otra rutina activa del socio
+    await supabase
+      .from('rutina')
+      .update({ estado: 'asignada' })
+      .eq('id_socio', socioId)
+      .eq('estado', 'activa');
+
+    // Activar la rutina deseada
+    const { data: activada, error: errActivar } = await supabase
+      .from('rutina')
+      .update({ estado: 'activa' })
+      .eq('id_rutina', id)
+      .select(`
+        id_rutina,
+        nombre,
+        descripcion,
+        estado,
+        id_socio,
+        rutina_ejercicio (
+          id_rutina_ejercicio,
+          id_ejercicio,
+          series,
+          repeticiones,
+          peso,
+          descanso,
+          orden,
+          ejercicio (
+            id_ejercicio,
+            nombre,
+            grupo_muscular,
+            dificultad
+          )
+        )
+      `)
+      .single();
+
+    if (errActivar) throw errActivar;
+
+    return res.status(200).json({
+      mensaje: '¡Rutina activada correctamente! Se mostrará en tu panel principal de entrenamiento.',
+      rutina: activada
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

@@ -194,3 +194,46 @@ export async function deleteEjercicioPersonalizado(id) {
   if (!response.ok) throw new Error(data.error || 'Error al eliminar el ejercicio.');
   return data;
 }
+
+/**
+ * Obtener las rutinas oficiales que ofrece el gimnasio a los socios
+ */
+export async function fetchRutinasOfrecidasGym() {
+  const response = await fetch(`${API_URL}/rutinas/gym/ofrecidas`, {
+    headers: getHeaders()
+  });
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Error al obtener programas del gimnasio.');
+  return data;
+}
+
+/**
+ * Adoptar / Comenzar una rutina ofrecida por el gimnasio
+ */
+export async function adoptarRutinaGym({ plantilla, id_plantilla, id_socio, nombre_personalizado }) {
+  const response = await fetch(`${API_URL}/rutinas/adoptar`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ plantilla, id_plantilla, id_socio, nombre_personalizado })
+  });
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || data.message || 'Error al adoptar la rutina.');
+  return data.rutina || data;
+}
+
+/**
+ * Establecer una rutina como la rutina activa principal del socio
+ */
+export async function activarRutina(id) {
+  const response = await fetch(`${API_URL}/rutinas/${id}/activar`, {
+    method: 'PUT',
+    headers: getHeaders()
+  });
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || data.message || 'Error al activar la rutina.');
+  return data.rutina || data;
+}
+
