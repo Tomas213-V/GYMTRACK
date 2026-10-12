@@ -1,18 +1,24 @@
-
-.Caja-titulo{
+.Caja-titulo {
     position: relative;
-    z-index: 1000;
+    z-index: 100;
     display: flex;
     justify-content: center;
     align-items: center;
     flex-direction: column;
     font-family: "Oswald", sans-serif;
+    padding: 0 16px;
+    box-sizing: border-box;
 }
-.Caja-titulo b{
-    font-size: 90px;
+
+.Caja-titulo b {
+    font-size: clamp(38px, 7vw, 90px);
     color: #ffffff;
+    text-align: center;
+    line-height: 1.1;
+    margin: 0;
 }
-.Caja-titulo span{
+
+.Caja-titulo span {
     color: #00ff0d;
     text-shadow: 0 0 35px #00ff0d;
 }

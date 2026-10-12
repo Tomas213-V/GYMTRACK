@@ -37,6 +37,12 @@
   transition: all 0.2s ease;
 }
 
+@media (min-width: 1025px) {
+  .Caja-nav-global-menu-btn {
+    display: none;
+  }
+}
+
 .Caja-nav-global-menu-btn:hover {
   color: #00ff11;
   background: rgba(255, 255, 255, 0.04);

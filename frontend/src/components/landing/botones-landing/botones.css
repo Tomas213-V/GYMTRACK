@@ -1,38 +1,61 @@
-.Caja-botones{
+.Caja-botones {
     position: relative;
     z-index: 100;
     display: flex;
     justify-content: center;
-    margin: 2% 0 0 0;
+    margin: 24px 0 0 0;
     gap: 20px;
     align-items: center;
+    padding: 0 16px;
+    flex-wrap: wrap;
+    box-sizing: border-box;
 }
-.Caja-botones a:nth-child(1){
+
+.Caja-botones a:nth-child(1) {
     color: #000000;
     background: #00ff37;
     box-shadow: 0 0 35px #00ff3796, 0 0 15px #00ff37;
 }
-.Caja-botones a:nth-child(2){
+
+.Caja-botones a:nth-child(2) {
     color: #ffffff;
     background: #000000;
-   
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
-.Caja-botones a{
+
+.Caja-botones a {
     font-family: "Oswald", sans-serif;
     text-decoration: none;
     color: #ffffff;
-    font-size: 20px;
+    font-size: 19px;
     font-weight: 500;
     width: 200px;
-    padding: 10px  0 10px 0;
+    max-width: 100%;
+    padding: 12px 0;
     text-align: center;
-    border-radius: 5px;
-    transition: 0.4s;
+    border-radius: 6px;
+    transition: 0.3s;
+    letter-spacing: 0.5px;
 }
-.Caja-botones a:nth-child(1):hover{
-   scale: 1.05;
-   
+
+.Caja-botones a:nth-child(1):hover {
+    transform: scale(1.04);
 }
-.Caja-botones a:nth-child(2):hover{
-    scale: 1.05;
+
+.Caja-botones a:nth-child(2):hover {
+    transform: scale(1.04);
+    border-color: #00ff37;
+}
+
+@media (max-width: 480px) {
+    .Caja-botones {
+        flex-direction: column;
+        width: 100%;
+        gap: 14px;
+    }
+
+    .Caja-botones a {
+        width: 100%;
+        max-width: 280px;
+    }
 }

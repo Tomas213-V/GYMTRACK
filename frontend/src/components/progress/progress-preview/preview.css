@@ -1,76 +1,98 @@
 .progress-preview {
-    padding: 50px 8% 100px;
+    padding: 30px 6% 60px;
     color: white;
+    box-sizing: border-box;
 }
 
 .preview-introduccion {
     max-width: 800px;
-    margin: 0 auto 80px;
+    margin: 0 auto 50px;
     text-align: center;
+    padding: 0 16px;
+    box-sizing: border-box;
 }
 
 .preview-introduccion h2 {
     color: #ffffff;
     font-family: "Oswald", sans-serif;
-    font-size: 38px;
-    margin-bottom: 20px;
+    font-size: clamp(28px, 5vw, 38px);
+    margin-bottom: 16px;
+    line-height: 1.2;
 }
 
 .preview-introduccion p {
     color: #bfc5bf;
     font-family: "Inter", sans-serif;
-    font-size: 17px;
+    font-size: 16px;
     line-height: 1.7;
+    margin: 0;
 }
-
 
 .preview-contenido {
     max-width: 1100px;
-    margin: 0 auto 100px;
-
+    margin: 0 auto 70px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 70px;
+    gap: 60px;
+    box-sizing: border-box;
 }
-
 
 .preview-invertido {
     flex-direction: row-reverse;
 }
 
-
 .preview-imagen {
     width: 50%;
     display: flex;
     justify-content: center;
+    box-sizing: border-box;
 }
-
 
 .preview-imagen img {
     width: 100%;
     max-width: 500px;
+    height: auto;
     border-radius: 15px;
-    box-shadow: 0 0 25px #4dff3d33;
+    box-shadow: 0 0 25px rgba(77, 255, 61, 0.2);
+    display: block;
 }
-
 
 .preview-descripcion {
-    width: 40%;
+    width: 45%;
+    box-sizing: border-box;
 }
-
 
 .preview-descripcion h3 {
     color: #4dff3d;
     font-family: "Oswald", sans-serif;
-    font-size: 30px;
-    margin-bottom: 15px;
+    font-size: clamp(24px, 4vw, 30px);
+    margin-bottom: 12px;
+    line-height: 1.2;
 }
-
 
 .preview-descripcion p {
     color: #c9cec9;
     font-family: "Inter", sans-serif;
-    font-size: 17px;
+    font-size: 16px;
     line-height: 1.7;
+    margin: 0;
+}
+
+@media (max-width: 860px) {
+    .preview-contenido,
+    .preview-invertido {
+        flex-direction: column !important;
+        gap: 30px;
+        margin-bottom: 50px;
+        text-align: center;
+    }
+
+    .preview-imagen {
+        width: 100%;
+    }
+
+    .preview-descripcion {
+        width: 100%;
+    }
 }

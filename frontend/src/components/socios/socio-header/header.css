@@ -3,10 +3,12 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .socios-header h1 {
-  font-size: 1.8rem;
+  font-size: clamp(1.4rem, 4vw, 1.8rem);
   color: #ffffff;
   margin: 0;
 }
@@ -18,7 +20,7 @@
 }
 
 .btn-nuevo-socio {
-  background-color: #2ecc71; /* Verde neón GymTrack */
+  background-color: #2ecc71;
   color: #000;
   border: none;
   padding: 10px 20px;
@@ -26,8 +28,21 @@
   font-weight: bold;
   cursor: pointer;
   transition: background 0.2s;
+  white-space: nowrap;
 }
 
 .btn-nuevo-socio:hover {
   background-color: #27ae60;
+}
+
+@media (max-width: 600px) {
+  .socios-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .btn-nuevo-socio {
+    width: 100%;
+    text-align: center;
+  }
 }

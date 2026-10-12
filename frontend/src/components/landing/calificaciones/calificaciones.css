@@ -1,17 +1,24 @@
-.Caja-calificaciones{
+.Caja-calificaciones {
     position: relative;
     z-index: 100;
     display: flex;
     justify-content: center;
-    margin: 2% 0 0 0;
-    gap: 5px;
+    align-items: center;
+    margin: 20px 0 0 0;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 0 16px;
+    box-sizing: border-box;
+    text-align: center;
 }
-.Caja-calificaciones i{
+
+.Caja-calificaciones i {
     color: #49c929;
 }
-.Caja-calificaiones-descripcion{
+
+.Caja-calificaiones-descripcion {
     font-family: "Archivo", sans-serif;
- font-weight: 200;
- font-size: 16px;
- color: #ffffff52;
+    font-weight: 300;
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.7);
 }

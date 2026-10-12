@@ -1,22 +1,24 @@
 .support-titulo {
     text-align: center;
-    padding: 80px 20px 60px;
+    padding: 50px 20px 30px;
+    box-sizing: border-box;
 }
 
 .support-titulo h1 {
     color: #4dff3d;
     font-family: "Oswald", sans-serif;
-    font-size: 55px;
-    margin-bottom: 20px;
-    text-shadow: 0 0 15px #4dff3d;
+    font-size: clamp(32px, 6vw, 55px);
+    margin-bottom: 16px;
+    text-shadow: 0 0 15px rgba(77, 255, 61, 0.6);
+    line-height: 1.15;
 }
 
 .support-titulo p {
     max-width: 700px;
     margin: auto;
-
     color: #d5d9d5;
     font-family: "Inter", sans-serif;
-    font-size: 18px;
+    font-size: clamp(15px, 2.5vw, 18px);
     line-height: 1.6;
+    padding: 0 16px;
 }

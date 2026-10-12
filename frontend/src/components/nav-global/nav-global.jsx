@@ -34,7 +34,11 @@ function NavGlobal() {
   return (
     <header className="Caja-nav-global">
       <div className="Caja-nav-global-logo">
-        <button className="Caja-nav-global-menu-btn" aria-label="Abrir menú">
+        <button 
+          className="Caja-nav-global-menu-btn" 
+          aria-label="Abrir menú"
+          onClick={() => window.dispatchEvent(new CustomEvent('gymtrack:toggle-sidebar'))}
+        >
           <FaBars />
         </button>
 

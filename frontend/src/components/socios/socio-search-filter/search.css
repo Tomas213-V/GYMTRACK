@@ -11,7 +11,7 @@
   background-color: #1c1c1e;
   border: 1px solid #2c2c2e;
   border-radius: 8px;
-  padding: 8px 14px;
+  padding: 10px 14px;
 }
 
 .search-bar input {
@@ -21,13 +21,26 @@
   color: #fff;
   width: 100%;
   margin-left: 8px;
+  font-size: 14px;
 }
 
 .filter-tabs {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   border-bottom: 1px solid #2c2c2e;
   padding-bottom: 8px;
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+}
+
+.filter-tabs::-webkit-scrollbar {
+  height: 3px;
+}
+
+.filter-tabs::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
 }
 
 .tab-btn {
@@ -37,8 +50,11 @@
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
-  padding: 6px 12px;
+  padding: 6px 14px;
   border-radius: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
 }
 
 .tab-btn.active {

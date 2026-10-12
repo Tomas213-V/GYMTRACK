@@ -1,53 +1,68 @@
-.Caja-indicaciones{
+.Caja-indicaciones {
     position: relative;
     z-index: 100;
-  display: flex;
-    justify-content: center;
-
-     gap: 35px;
-    padding: 2% 0 2% 0;
-
-}
-
-.Caja-indicacion{
     display: flex;
-     width: 370px;
-    gap: 25px;
-
+    justify-content: center;
+    gap: 30px;
+    padding: 24px 16px;
+    flex-wrap: wrap;
+    box-sizing: border-box;
+    max-width: 1200px;
+    margin: 0 auto;
 }
-.Caja-indicacion-numero{
-    font-size: 18px;
+
+.Caja-indicacion {
+    display: flex;
+    width: 350px;
+    max-width: 100%;
+    gap: 18px;
+    align-items: flex-start;
+}
+
+.Caja-indicacion-numero {
+    font-size: 16px;
     color: #4dff3d;
     text-shadow: 0 0 5px #4dff3d;
     display: flex;
-    align-items: start;
+    align-items: center;
     justify-content: center;
- 
+    flex-shrink: 0;
 }
-.Caja-indicacion-numero p{
-        background: #1a1a1a;
-       padding: 10px 17px 10px 17px;
+
+.Caja-indicacion-numero p {
+    background: #1a1a1a;
+    padding: 8px 14px;
     border-radius: 50px;
     text-align: center;
+    margin: 0;
+    font-weight: 700;
 }
-.Caja-indicacion-icono{
 
-   
+.Caja-indicacion-icono {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
 }
-.Caja-indicacion-icono i{
-     font-size: 32px;
+
+.Caja-indicacion-icono i {
+    font-size: 28px;
     color: #4dff3d;
     text-shadow: 0 0 5px #4dff3d;
     filter: drop-shadow(0 0 3px #4dff3d);
 }
-.Caja-indicacion-titulo-descripcion b{
-    font-size: 20px;
-     color: #ffffff;
-     font-weight: 600;
-   
+
+.Caja-indicacion-titulo-descripcion b {
+    font-size: 18px;
+    color: #ffffff;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 4px;
 }
-.Caja-indicacion-titulo-descripcion p{
+
+.Caja-indicacion-titulo-descripcion p {
     font-size: 14px;
-    color: #ffffff8a;
+    color: rgba(255, 255, 255, 0.7);
     font-family: "Nunito Sans", sans-serif;
+    margin: 0;
+    line-height: 1.5;
 }

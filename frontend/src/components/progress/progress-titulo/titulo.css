@@ -1,24 +1,29 @@
 .progress-titulo {
     text-align: center;
-    padding: 80px 20px 50px;
+    padding: 50px 20px 30px;
+    box-sizing: border-box;
 }
 
 .titulo-progress h1 {
     color: #4dff3d;
     font-family: "Oswald", sans-serif;
-    font-size: 55px;
-    margin-bottom: 20px;
-    text-shadow: 0 0 15px #4dff3d;
+    font-size: clamp(32px, 6vw, 55px);
+    margin-bottom: 16px;
+    text-shadow: 0 0 15px rgba(77, 255, 61, 0.6);
+    line-height: 1.15;
 }
 
 .sub-titulo-progress {
     max-width: 750px;
     margin: auto;
+    padding: 0 16px;
+    box-sizing: border-box;
 }
 
 .sub-titulo-progress p {
     color: #e5e9e5;
     font-family: "Inter", sans-serif;
-    font-size: 19px;
+    font-size: clamp(15px, 2.5vw, 19px);
     line-height: 1.6;
+    margin: 0;
 }

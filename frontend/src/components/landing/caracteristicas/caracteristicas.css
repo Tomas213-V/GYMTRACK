@@ -1,24 +1,35 @@
-.Caja-caracteristicas{
+.Caja-caracteristicas {
     position: relative;
     display: flex;
     justify-content: center;
     z-index: 100;
-    gap: 40px;
-    margin: 2% 0 0 0;
+    gap: 30px;
+    margin: 24px 0 0 0;
+    flex-wrap: wrap;
+    padding: 0 16px;
+    box-sizing: border-box;
 }
-.Caja-caracteristicas p{
-   
- font-family: "Archivo", sans-serif;
- font-weight: 100;
-    font-size: 18px;
-    color: #ffffff73;
-    padding: 0 0 0 0px;
+
+.Caja-caracteristicas p {
+    font-family: "Archivo", sans-serif;
+    font-weight: 300;
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 0;
+    display: flex;
+    align-items: center;
 }
+
 .Caja-caracteristicas i {
     color: #00ff15;
     filter: drop-shadow(0 0 5px #00ff15);
-    margin: 0 10px 0 0;
+    margin: 0 8px 0 0;
 }
-.Caja-caracteristicas a {
- 
+
+@media (max-width: 600px) {
+    .Caja-caracteristicas {
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+    }
 }

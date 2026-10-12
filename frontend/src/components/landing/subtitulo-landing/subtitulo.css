@@ -1,15 +1,20 @@
-.Caja-subtitulo{
- position: relative;
- z-index: 100;
- display: flex;
- justify-content: center;
- font-family: "Archivo", sans-serif;
- font-weight: 200;
- font-size: 18px;
- color: #ffffff52;
- margin: 15px 0 0 0;
+.Caja-subtitulo {
+    position: relative;
+    z-index: 100;
+    display: flex;
+    justify-content: center;
+    font-family: "Archivo", sans-serif;
+    font-weight: 200;
+    font-size: clamp(15px, 2.5vw, 18px);
+    color: #ffffff90;
+    margin: 15px 0 0 0;
+    padding: 0 16px;
+    box-sizing: border-box;
 }
-.Caja-subtitulo p{
-    width: 40%;
+
+.Caja-subtitulo p {
+    width: min(92%, 620px);
     text-align: center;
+    margin: 0;
+    line-height: 1.6;
 }

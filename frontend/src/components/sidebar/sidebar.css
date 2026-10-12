@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Quicksand:wght@400;500;600;700&display=swap');
 
+/* Sidebar en Desktop */
 .Caja-sidebar {
     border-right: 1px solid rgba(255, 255, 255, 0.08);
     width: 240px;
@@ -11,6 +12,12 @@
     padding: 0 12px;
     background-color: #0b0f12;
     user-select: none;
+    flex-shrink: 0;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
+}
+
+.Caja-sidebar-mobile-header {
+    display: none;
 }
 
 .Caja-sidebar-opciones {
@@ -54,7 +61,7 @@
     transform: translateX(2px);
 }
 
-/* Estado activo resaltado (Idéntico a la imagen provista con Membresía seleccionada) */
+/* Estado activo resaltado */
 .Caja-sidebar-opciones a.Caja-sidebar-link-activo {
     color: #22c55e;
     background: rgba(34, 197, 94, 0.12);
@@ -100,4 +107,91 @@
 
 .Caja-sidebar-logout-icon {
     font-size: 16px;
+}
+
+/* ==============================================================================
+   DRAWER OVERLAY Y ADAPTABILIDAD RESPONSIVA (TABLETS, NETBOOKS, TELÉFONOS)
+   ============================================================================== */
+.Caja-sidebar-overlay {
+    display: none;
+}
+
+@media (max-width: 1024px) {
+    /* Overlay oscuro de fondo */
+    .Caja-sidebar-overlay {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(5px);
+        z-index: 998;
+        animation: fadeInOverlay 0.25s ease;
+    }
+
+    @keyframes fadeInOverlay {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    /* Transformación a Off-Canvas Drawer */
+    .Caja-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 280px;
+        height: 100vh;
+        z-index: 999;
+        transform: translateX(-100%);
+        box-shadow: none;
+        overflow-y: auto;
+        padding: 0 16px;
+    }
+
+    .Caja-sidebar.abierto-movil {
+        transform: translateX(0);
+        box-shadow: 10px 0 30px rgba(0, 0, 0, 0.8);
+    }
+
+    /* Header del Drawer en Móvil */
+    .Caja-sidebar-mobile-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 8px 12px 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        margin-bottom: 8px;
+    }
+
+    .Caja-sidebar-mobile-logo b {
+        font-size: 22px;
+        font-family: 'Oswald', sans-serif;
+        letter-spacing: 3px;
+        color: #ffffff;
+    }
+
+    .Caja-sidebar-mobile-logo span {
+        color: #00ff11;
+    }
+
+    .Caja-sidebar-close-btn {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 18px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px;
+        border-radius: 6px;
+        transition: color 0.2s;
+    }
+
+    .Caja-sidebar-close-btn:hover {
+        color: #ffffff;
+    }
 }

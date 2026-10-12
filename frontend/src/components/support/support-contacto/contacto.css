@@ -1,63 +1,51 @@
 .support-contacto {
-    padding: 40px 20px 120px;
+    padding: 30px 16px 80px;
+    box-sizing: border-box;
 }
-
 
 .contacto-contenido {
     max-width: 850px;
     margin: auto;
-
     text-align: center;
-
-    padding: 60px 30px;
-
+    padding: 40px 24px;
     background: #101510;
-
     border: 1px solid #263126;
-    border-radius: 15px;
-
-    box-shadow: 0 0 30px #00000055;
+    border-radius: 16px;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+    box-sizing: border-box;
 }
-
 
 .contacto-contenido h2 {
     color: #4dff3d;
     font-family: "Oswald", sans-serif;
-    font-size: 35px;
-    margin-bottom: 15px;
+    font-size: clamp(26px, 5vw, 35px);
+    margin: 0 0 14px 0;
 }
-
 
 .contacto-contenido p {
     max-width: 600px;
-    margin: 0 auto 30px;
-
+    margin: 0 auto 24px;
     color: #c9cec9;
     font-family: "Inter", sans-serif;
     font-size: 16px;
     line-height: 1.6;
 }
 
-
 .contacto-contenido button {
     background: #4dff3d;
     color: #000000;
-
     border: none;
-    border-radius: 6px;
-
-    padding: 12px 25px;
-
+    border-radius: 8px;
+    padding: 12px 28px;
     font-family: "Oswald", sans-serif;
     font-size: 18px;
-
     cursor: pointer;
-
-    box-shadow: 0 0 15px #4dff3d;
+    box-shadow: 0 0 15px rgba(77, 255, 61, 0.5);
+    transition: all 0.25s ease;
+    font-weight: 600;
 }
-
 
 .contacto-contenido button:hover {
     transform: translateY(-2px);
-    box-shadow: 0 0 25px #4dff3d;
+    box-shadow: 0 0 25px rgba(77, 255, 61, 0.8);
 }
