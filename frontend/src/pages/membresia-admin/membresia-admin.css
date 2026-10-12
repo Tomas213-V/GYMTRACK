@@ -1,0 +1,1278 @@
+/* ==============================================================================
+   GYMTRACK - GESTIÓN DE MEMBRESÍAS (ADMIN / DUEÑO)
+   ============================================================================== */
+
+.membresia-admin-layout {
+  background-color: #0b0f12;
+  color: #f1f5f9;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  font-family: 'Nunito Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.membresia-admin-body {
+  display: flex;
+  flex: 1;
+  min-height: calc(100vh - 70px);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.membresia-admin-content {
+  flex: 1;
+  padding: 32px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  overflow-y: auto;
+  box-sizing: border-box;
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ==============================================================================
+   TOAST NOTIFICATION
+   ============================================================================== */
+.membresia-toast {
+  position: fixed;
+  top: 24px;
+  right: 28px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-radius: 12px;
+  font-size: 14.5px;
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  animation: slideInDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-exito {
+  background: #0f2316;
+  border: 1px solid #22c55e;
+  color: #4ade80;
+}
+
+.toast-error {
+  background: #2b1115;
+  border: 1px solid #ef4444;
+  color: #f87171;
+}
+
+.toast-close {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px;
+  margin-left: 8px;
+  display: flex;
+  align-items: center;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.toast-close:hover {
+  opacity: 1;
+}
+
+/* ==============================================================================
+   HEADER PRINCIPAL
+   ============================================================================== */
+.membresia-admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #1a232b;
+  padding-bottom: 24px;
+}
+
+.header-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.header-badge-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  width: fit-content;
+}
+
+.header-title {
+  font-size: 32px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.header-subtitle {
+  font-size: 14.5px;
+  color: #94a3b8;
+  margin: 0;
+  max-width: 650px;
+}
+
+.btn-accion-principal {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 22px;
+  font-size: 14px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 16px rgba(34, 197, 94, 0.3);
+}
+
+.btn-accion-principal:hover {
+  background: linear-gradient(135deg, #2ae06c 0%, #1bb753 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 22px rgba(34, 197, 94, 0.45);
+}
+
+/* ==============================================================================
+   MÉTRICAS GRID
+   ============================================================================== */
+.metricas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.metrica-card {
+  background: #12181e;
+  border: 1px solid #1c2630;
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.metrica-card:hover {
+  border-color: #2b3947;
+  transform: translateY(-2px);
+}
+
+.metrica-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.box-verde {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.box-azul {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.box-verde-claro {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.box-amarillo {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.box-dorado {
+  background: rgba(234, 179, 8, 0.15);
+  color: #eab308;
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.metrica-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metrica-label {
+  font-size: 12px;
+  color: #8c98a5;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.metrica-valor {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.metrica-valor small {
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+/* ==============================================================================
+   TABS DE NAVEGACIÓN
+   ============================================================================== */
+.membresia-tabs-bar {
+  display: flex;
+  gap: 12px;
+  border-bottom: 2px solid #1a232b;
+  padding-bottom: 0;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #8c98a5;
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.2s ease;
+  position: relative;
+  margin-bottom: -2px;
+}
+
+.tab-btn:hover {
+  color: #ffffff;
+}
+
+.tab-btn.tab-activa {
+  color: #22c55e;
+  border-bottom-color: #22c55e;
+}
+
+.tab-icon {
+  font-size: 16px;
+}
+
+/* ==============================================================================
+   TOOLBAR & FILTROS
+   ============================================================================== */
+.tab-seccion {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.seccion-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.toolbar-label {
+  font-size: 13.5px;
+  color: #8c98a5;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pill-filters {
+  display: flex;
+  background: #12181e;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid #1c2630;
+  gap: 4px;
+}
+
+.pill-btn {
+  background: transparent;
+  border: none;
+  color: #8c98a5;
+  padding: 7px 14px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pill-btn:hover {
+  color: #ffffff;
+}
+
+.pill-btn.pill-activo {
+  background: #1e2833;
+  color: #22c55e;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.toolbar-search-box {
+  background: #12181e;
+  border: 1px solid #1c2630;
+  border-radius: 10px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 320px;
+  flex: 1;
+  max-width: 480px;
+}
+
+.toolbar-search-box:focus-within {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
+}
+
+.toolbar-search-box input {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-size: 14px;
+  width: 100%;
+  outline: none;
+}
+
+.toolbar-search-box input::placeholder {
+  color: #64748b;
+}
+
+.search-icon {
+  color: #64748b;
+  font-size: 15px;
+}
+
+.clear-search-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+}
+
+.clear-search-btn:hover {
+  color: #cbd5e1;
+}
+
+.btn-recargar {
+  background: #12181e;
+  border: 1px solid #1c2630;
+  color: #8c98a5;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-recargar:hover {
+  border-color: #2b3947;
+  color: #22c55e;
+}
+
+/* ==============================================================================
+   GRID DE PLANES DE MEMBRESÍA
+   ============================================================================== */
+.planes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 22px;
+}
+
+.plan-card-item {
+  background: #12181e;
+  border: 1px solid #1c2630;
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.plan-card-item:hover {
+  border-color: #2b3a4a;
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+}
+
+.plan-card-item.plan-inactivo {
+  opacity: 0.65;
+  border-style: dashed;
+}
+
+.plan-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.plan-title-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.plan-crown-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.plan-nombre {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+}
+
+.plan-duracion-badge {
+  font-size: 12px;
+  color: #8c98a5;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.plan-precio-container {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 12px 0 4px;
+  border-bottom: 1px solid #1a232b;
+}
+
+.plan-precio-valor {
+  font-size: 32px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.5px;
+}
+
+.plan-precio-sub {
+  font-size: 13.5px;
+  color: #8c98a5;
+}
+
+.plan-stats-strip {
+  display: flex;
+  gap: 10px;
+}
+
+.stat-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: #94a3b8;
+  background: #182028;
+  padding: 6px 12px;
+  border-radius: 8px;
+}
+
+.pill-icon {
+  color: #22c55e;
+}
+
+.plan-card-footer {
+  display: flex;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.btn-plan-action {
+  border: none;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-editar {
+  background: #1c2630;
+  color: #f1f5f9;
+  flex: 1;
+}
+
+.btn-editar:hover {
+  background: #253342;
+  color: #ffffff;
+}
+
+.btn-pausar {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.btn-pausar:hover {
+  background: rgba(245, 158, 11, 0.25);
+}
+
+.btn-activar {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.btn-activar:hover {
+  background: rgba(34, 197, 94, 0.25);
+}
+
+.btn-eliminar {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  padding: 9px 12px;
+}
+
+.btn-eliminar:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+/* ==============================================================================
+   TABLA DE MEMBRESÍAS DE SOCIOS
+   ============================================================================== */
+.membresias-tabla-card {
+  background: #12181e;
+  border: 1px solid #1c2630;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.tabla-scroll {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.tabla-membresias {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13.5px;
+}
+
+.tabla-membresias thead {
+  background: #182028;
+  border-bottom: 1px solid #222d38;
+}
+
+.tabla-membresias th {
+  padding: 14px 18px;
+  font-weight: 700;
+  color: #8c98a5;
+  text-transform: uppercase;
+  font-size: 11.5px;
+  letter-spacing: 0.5px;
+}
+
+.tabla-membresias td {
+  padding: 14px 18px;
+  border-bottom: 1px solid #182028;
+  color: #f1f5f9;
+  vertical-align: middle;
+}
+
+.fila-membresia:hover {
+  background: #161e26;
+}
+
+.fila-cancelada {
+  opacity: 0.6;
+}
+
+.socio-col-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.socio-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1e293b, #334155);
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 14px;
+  flex-shrink: 0;
+  border: 1.5px solid #38bdf8;
+}
+
+.socio-col-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.socio-col-nombre {
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.socio-col-dni {
+  font-size: 12px;
+  color: #8c98a5;
+}
+
+.plan-col-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(34, 197, 94, 0.1);
+  color: #4ade80;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 12.5px;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.tag-crown {
+  font-size: 11px;
+}
+
+.precio-col-val {
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.fecha-col-val {
+  color: #cbd5e1;
+}
+
+/* Badges de días restantes */
+.dias-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dias-ok {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+}
+
+.dias-urgente {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.dias-vencido {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.dias-cancelado {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+}
+
+/* Badges de Estado */
+.estado-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.estado-activo,
+.estado-activa {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.estado-inactivo,
+.estado-cancelada {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.estado-vencida {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Fila de Acciones en Tabla */
+.acciones-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn-tabla-action {
+  background: #182028;
+  border: 1px solid #222d38;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #8c98a5;
+  transition: all 0.2s ease;
+  font-size: 13px;
+}
+
+.btn-tabla-editar:hover {
+  background: #1e2833;
+  color: #38bdf8;
+  border-color: #38bdf8;
+}
+
+.btn-tabla-cancelar:hover {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border-color: #f59e0b;
+}
+
+.btn-tabla-eliminar:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border-color: #ef4444;
+}
+
+/* ==============================================================================
+   EMPTY STATES & SPINNER
+   ============================================================================== */
+.empty-state-box {
+  background: #12181e;
+  border: 1.5px dashed #1c2630;
+  border-radius: 16px;
+  padding: 60px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+}
+
+.empty-icon {
+  font-size: 42px;
+  color: #475569;
+}
+
+.empty-state-box h3 {
+  font-size: 19px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+}
+
+.empty-state-box p {
+  font-size: 14px;
+  color: #8c98a5;
+  max-width: 450px;
+  margin: 0 0 12px 0;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+  gap: 16px;
+  color: #8c98a5;
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #1c2630;
+  border-top-color: #22c55e;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ==============================================================================
+   MODALES (ESTILO GYMTRACK)
+   ============================================================================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-container {
+  background: #12181e;
+  border: 1px solid #222d38;
+  border-radius: 18px;
+  width: 100%;
+  max-width: 540px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: zoomIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-md {
+  max-width: 600px;
+}
+
+.modal-sm {
+  max-width: 440px;
+}
+
+@keyframes zoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal-header {
+  padding: 22px 24px;
+  border-bottom: 1px solid #1c2630;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+}
+
+.modal-header-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.modal-header-icon.icon-azul {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+}
+
+.modal-header h2 {
+  font-size: 19px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+}
+
+.modal-header p {
+  font-size: 13px;
+  color: #8c98a5;
+  margin: 2px 0 0 0;
+}
+
+.modal-btn-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: transparent;
+  border: none;
+  color: #8c98a5;
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  transition: color 0.2s;
+}
+
+.modal-btn-close:hover {
+  color: #ffffff;
+}
+
+.modal-form {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.form-group input,
+.form-group select {
+  background: #0d1217;
+  border: 1px solid #1c2630;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #ffffff;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
+}
+
+.form-group .input-disabled {
+  background: #182028;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.input-with-prefix {
+  display: flex;
+  align-items: center;
+  background: #0d1217;
+  border: 1px solid #1c2630;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.input-with-prefix:focus-within {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
+}
+
+.input-prefix {
+  padding: 0 12px;
+  color: #8c98a5;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.input-with-prefix input {
+  border: none;
+  background: transparent;
+  width: 100%;
+  padding-left: 0;
+}
+
+.input-with-prefix input:focus {
+  box-shadow: none;
+}
+
+/* Atajos de duración en Modal */
+.duracion-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #0f151b;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #1a232b;
+}
+
+.shortcuts-label {
+  font-size: 12px;
+  color: #8c98a5;
+  font-weight: 600;
+}
+
+.shortcuts-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.shortcut-btn {
+  background: #182028;
+  border: 1px solid #222d38;
+  color: #cbd5e1;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.shortcut-btn:hover {
+  background: #222d38;
+  color: #ffffff;
+}
+
+.shortcut-btn.active {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+  border-color: #22c55e;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #1c2630;
+}
+
+.btn-secundario {
+  background: #182028;
+  border: 1px solid #222d38;
+  color: #cbd5e1;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secundario:hover {
+  background: #222d38;
+  color: #ffffff;
+}
+
+.btn-primario {
+  background: #22c55e;
+  border: none;
+  color: #ffffff;
+  padding: 10px 22px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primario:hover {
+  background: #16a34a;
+}
+
+.btn-primario:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Modal Confirmación Genérico */
+.modal-confirmacion-body {
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+}
+
+.confirm-icon-box {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+}
+
+.confirm-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1.5px solid rgba(239, 68, 68, 0.35);
+}
+
+.confirm-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1.5px solid rgba(245, 158, 11, 0.35);
+}
+
+.confirm-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+}
+
+.confirm-message {
+  font-size: 14px;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.confirm-actions button {
+  flex: 1;
+}
+
+.btn-confirm-action {
+  padding: 11px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+/* ==============================================================================
+   RESPONSIVE DESIGN
+   ============================================================================== */
+@media (max-width: 900px) {
+  .membresia-admin-content {
+    padding: 20px 16px;
+  }
+
+  .membresia-admin-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .toolbar-search-box {
+    max-width: 100%;
+  }
+
+  .form-row-2 {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import NavGlobal from '../../components/nav-global/nav-global';
-import Sidebar from '../../components/sidebar/sidebar';
+import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
 import {
   fetchRutinas,
   fetchRutinaById,
@@ -670,7 +670,7 @@ export default function SocioRutinas() {
       <NavGlobal />
 
       <div className="sr-body-container">
-        <Sidebar />
+        <SidebarSocio />
 
         <main className="sr-main-area">
           {/* TOAST / ALERTA DE NOTIFICACIÓN */}

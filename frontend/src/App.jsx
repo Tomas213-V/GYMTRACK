@@ -21,6 +21,7 @@ import Asistencias from './pages/asistencias/asistencias'
 import Rutinas from './pages/rutinas/rutinas'
 import SocioRutinas from './pages/socio-rutinas/socio-rutinas'
 import Perfil from './pages/perfil/perfil'
+import MembresiaAdmin from './pages/membresia-admin/membresia-admin'
 import './App.css'
 import ProtectedRoute from './components/ProtectedRoute'
 function App() {
@@ -67,7 +68,7 @@ function App() {
           element={<DashboardSocio />}
         />
 
-        {/* Sección de Membresías del Socio */}
+        {/* Sección de Membresías */}
         <Route
           path="/socio/membresia"
           element={
@@ -80,7 +81,35 @@ function App() {
           path="/membresia"
           element={
             <ProtectedRoute>
-              <SocioMembresia />
+              {localStorage.getItem('rol') === 'socio' || Boolean(localStorage.getItem('socio')) ? (
+                <SocioMembresia />
+              ) : (
+                <MembresiaAdmin />
+              )}
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/membresia-admin"
+          element={
+            <ProtectedRoute>
+              <MembresiaAdmin />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/membresias"
+          element={
+            <ProtectedRoute>
+              <MembresiaAdmin />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/membresias-admin"
+          element={
+            <ProtectedRoute>
+              <MembresiaAdmin />
             </ProtectedRoute>
           }
         />

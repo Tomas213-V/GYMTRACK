@@ -20,9 +20,6 @@ function Sidebar() {
     const navigate = useNavigate();
     const [abiertoMovil, setAbiertoMovil] = useState(false);
 
-    const rol = localStorage.getItem('rol');
-    const esSocio = rol === 'socio' || Boolean(localStorage.getItem('socio'));
-
     // Escuchar evento personalizado disparado desde NavGlobal para alternar el menú en móviles
     useEffect(() => {
         const toggleHandler = () => {
@@ -40,10 +37,11 @@ function Sidebar() {
         setAbiertoMovil(false);
     }, [location.pathname]);
 
-    // Opciones para Dueño / Administrador de Gimnasio
-    const opcionesDueno = [
+    // Opciones exclusivas para Dueño / Administrador de Gimnasio
+    const opciones = [
         { ruta: "/dashboard", nombre: "Inicio", icono: <FaHouse /> },
         { ruta: "/socios", nombre: "Socios", icono: <FaUsers /> },
+        { ruta: "/membresia-admin", nombre: "Membresías", icono: <FaCreditCard />, alias: ["/membresias-admin", "/membresias"] },
         { ruta: "/asistencias", nombre: "Asistencias", icono: <FaCalendarCheck /> },
         { ruta: "/rutinas", nombre: "Rutinas", icono: <FaDumbbell /> },
         { ruta: "/pagos", nombre: "Pagos", icono: <FaMoneyBill /> },
@@ -51,33 +49,12 @@ function Sidebar() {
         { ruta: "/support", nombre: "Soporte", icono: <FaHeadset /> }
     ];
 
-    // Opciones para Socio del Gimnasio
-    const opcionesSocio = [
-        { ruta: "/socio/dashboard", nombre: "Inicio", icono: <FaHouse /> },
-        { ruta: "/socio/rutinas", nombre: "Rutinas", icono: <FaDumbbell />, alias: ["/rutinas"] },
-        { ruta: "/socio/ejercicios", nombre: "Ejercicios", icono: <FaRunning />, alias: ["/ejercicios"] },
-        { ruta: "/socio/asistencia", nombre: "Asistencia", icono: <FaCalendarCheck />, alias: ["/asistencias"] },
-        { 
-            ruta: "/socio/membresia", 
-            nombre: "Membresía", 
-            icono: <FaCreditCard />, 
-            alias: ["/membresia", "/mi-membresia"] 
-        },
-        { ruta: "/perfil", nombre: "Perfil", icono: <FaUser /> }
-    ];
-
-    const opciones = esSocio ? opcionesSocio : opcionesDueno;
-
     const handleLogout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('usuario');
         localStorage.removeItem('socio');
         localStorage.removeItem('rol');
-        if (esSocio) {
-            navigate('/login-socio');
-        } else {
-            navigate('/login');
-        }
+        navigate('/login');
     };
 
     return (

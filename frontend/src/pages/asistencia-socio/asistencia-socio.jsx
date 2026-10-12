@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import NavGlobal from '../../components/nav-global/nav-global';
-import Sidebar from '../../components/sidebar/sidebar';
+import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
 import { 
   fetchHistorialPorSocio, 
   registrarAsistencia 
@@ -412,7 +412,7 @@ export default function AsistenciaSocio() {
 
       <div className="asistencia-socio-body">
         {/* 2. Barra Lateral */}
-        <Sidebar />
+        <SidebarSocio />
 
         {/* 3. Contenido Principal */}
         <main className="asistencia-socio-main">

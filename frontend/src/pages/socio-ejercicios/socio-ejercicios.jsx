@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
-import Sidebar from '../../components/sidebar/sidebar';
+import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
 import {
   getEjerciciosSocio,
   crearEjercicioSocio,
@@ -146,7 +146,7 @@ export default function SocioEjercicios() {
       <NavGlobal />
 
       <div className="se-body">
-        <Sidebar />
+        <SidebarSocio />
 
         <main className="se-main-content">
           {/* HEADER */}

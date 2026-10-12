@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
-import Sidebar from '../../components/sidebar/sidebar';
+import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
 import {
   getMiMembresia,
   getPlanesDisponibles,
@@ -326,7 +326,7 @@ export default function SocioMembresia() {
       <NavGlobal />
 
       <div className="socio-membresia-body">
-        <Sidebar />
+        <SidebarSocio />
 
         <main className="socio-membresia-main">
           {/* Banner de Notificación */}

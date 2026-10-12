@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import NavGlobal from '../../components/nav-global/nav-global';
-import Sidebar from '../../components/sidebar/sidebar';
+import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
 import { 
   fetchDashboardSocio, 
   realizarCheckinSocio, 
@@ -384,7 +384,7 @@ export default function DashboardSocio() {
 
       <div className="socio-pc-body">
         {/* Barra Lateral Adaptada a Socio */}
-        <Sidebar />
+        <SidebarSocio />
 
         {/* Contenido Principal Desktop */}
         <main className="socio-pc-main">
