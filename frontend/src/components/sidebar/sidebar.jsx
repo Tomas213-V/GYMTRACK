@@ -55,7 +55,7 @@ function Sidebar() {
     const opcionesSocio = [
         { ruta: "/socio/dashboard", nombre: "Inicio", icono: <FaHouse /> },
         { ruta: "/socio/rutinas", nombre: "Rutinas", icono: <FaDumbbell />, alias: ["/rutinas"] },
-        { ruta: "/ejercicios", nombre: "Ejercicios", icono: <FaRunning />, alias: ["/socio/ejercicios"] },
+        { ruta: "/socio/ejercicios", nombre: "Ejercicios", icono: <FaRunning />, alias: ["/ejercicios"] },
         { ruta: "/socio/asistencia", nombre: "Asistencia", icono: <FaCalendarCheck />, alias: ["/asistencias"] },
         { 
             ruta: "/socio/membresia", 
