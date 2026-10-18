@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar/sidebar';
@@ -32,10 +32,6 @@ import './asistencias.css';
 export default function Asistencias() {
   const rol = localStorage.getItem('rol');
   const esSocio = rol === 'socio' || Boolean(localStorage.getItem('socio'));
-
-  if (esSocio) {
-    return <Navigate to="/socio/asistencia" replace />;
-  }
 
   // Estados para datos
   const [asistencias, setAsistencias] = useState([]);
@@ -239,9 +235,9 @@ export default function Asistencias() {
   // Rango de fechas predefinidos
   const aplicarRangoFecha = (tipo) => {
     const hoy = new Date();
-    let desde = '';
-    let hasta = '';
-    let label = 'Todos';
+    let desde;
+    let hasta;
+    let label;
 
     if (tipo === 'mes_actual') {
       const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
@@ -339,6 +335,10 @@ export default function Asistencias() {
   // Rango de elementos mostrados
   const primerItem = totalAsistencias === 0 ? 0 : (currentPage - 1) * limitPerPage + 1;
   const ultimoItem = Math.min(currentPage * limitPerPage, totalAsistencias);
+
+  if (esSocio) {
+    return <Navigate to="/asistencia-socio" replace />;
+  }
 
   return (
     <div className="asistencias-layout">

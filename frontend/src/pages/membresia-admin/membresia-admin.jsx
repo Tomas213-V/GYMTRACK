@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar/sidebar';
 import {
@@ -32,7 +32,6 @@ import {
   FaTimes,
   FaExclamationTriangle,
   FaSyncAlt,
-  FaEye,
   FaFilter,
   FaUserPlus
 } from 'react-icons/fa';

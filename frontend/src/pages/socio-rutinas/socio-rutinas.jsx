@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
 import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
 import {
@@ -27,7 +26,6 @@ import {
   FaCheck,
   FaTimes,
   FaPlay,
-  FaFire,
   FaStar,
   FaBuilding,
   FaUser,
@@ -36,20 +34,17 @@ import {
   FaInfoCircle,
   FaSyncAlt,
   FaBolt,
-  FaChevronRight,
   FaLayerGroup,
   FaCrown,
   FaCheckCircle,
   FaListUl,
   FaStopwatch,
-  FaArrowLeft,
   FaTrophy
 } from 'react-icons/fa';
 
 import './socio-rutinas.css';
 
 export default function SocioRutinas() {
-  const navigate = useNavigate();
 
   // Datos del socio desde sesión
   const socioLocal = useMemo(() => {
@@ -252,11 +247,10 @@ export default function SocioRutinas() {
       interval = setInterval(() => {
         setWorkoutTimerSeconds((sec) => sec + 1);
       }, 1000);
-    } else {
-      setWorkoutTimerSeconds(0);
-      setEjerciciosCompletados({});
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [workoutModalOpen]);
 
   // Temporizador de descanso

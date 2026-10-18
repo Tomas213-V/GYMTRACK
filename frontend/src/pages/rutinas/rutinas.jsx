@@ -54,7 +54,7 @@ export default function Rutinas() {
   // Catálogos
   const [sociosList, setSociosList] = useState([]);
   const [catalogoEjercicios, setCatalogoEjercicios] = useState([]);
-  const [loadingCatalogo, setLoadingCatalogo] = useState(false);
+  const [_loadingCatalogo, setLoadingCatalogo] = useState(false);
 
   // Filtros generales
   const [searchTerm, setSearchTerm] = useState('');

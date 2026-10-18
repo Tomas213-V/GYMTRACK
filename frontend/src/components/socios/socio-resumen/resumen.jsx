@@ -1,4 +1,3 @@
-import React from 'react';
 import './resumen.css';
 
 function SociosResumen({ stats }) {

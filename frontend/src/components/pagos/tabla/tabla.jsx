@@ -9,7 +9,8 @@ function PagosTabla({
   elementosPorPagina = 8,
   onVerTodos,
   onCambiarEstado,
-  onVerDetalle
+  onVerDetalle,
+  cargando = false
 }) {
   // Formateador de moneda en pesos argentinos
   const formatearMonto = (valor) => {
@@ -47,7 +48,13 @@ function PagosTabla({
             </tr>
           </thead>
           <tbody>
-            {pagos.length > 0 ? (
+            {cargando ? (
+              <tr>
+                <td colSpan="6" className="Caja-pagos-sin-resultados" style={{ color: '#10b981', padding: '32px' }}>
+                  Cargando listado de pagos...
+                </td>
+              </tr>
+            ) : pagos.length > 0 ? (
               pagos.map((item) => (
                 <tr key={item.id} className="Caja-pagos-fila">
                   {/* Socio con Avatar */}

@@ -295,6 +295,7 @@ function Pagos() {
               onVerTodos={handleLimpiarFiltros}
               onCambiarEstado={handleCambiarEstado}
               onVerDetalle={handleVerDetalle}
+              cargando={cargando}
             />
 
             {/* Componente Modular: Resumen de Pagos */}

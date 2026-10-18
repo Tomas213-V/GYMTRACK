@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import NavGlobal from "../../components/nav-global/nav-global";
 import Sidebar from "../../components/sidebar/sidebar";
@@ -18,8 +18,7 @@ import {
   FaBuilding,
   FaClock,
   FaCheckCircle,
-  FaHourglassHalf,
-  FaTimesCircle
+  FaHourglassHalf
 } from "react-icons/fa";
 import {
   ResponsiveContainer,
@@ -53,7 +52,9 @@ function Dashboard() {
       if (rawUser) {
         try {
           setUsuario(JSON.parse(rawUser));
-        } catch {}
+        } catch (e) {
+          console.debug("Error leyendo usuario de sesión:", e);
+        }
       }
 
       // 2. Cargar métricas del dashboard
@@ -171,7 +172,7 @@ function Dashboard() {
               ACCIONES RÁPIDAS (SHORTCUTS)
              ========================================================= */}
           <section className="admin-dash-quick-actions">
-            <Link to="/socios" className="admin-dash-quick-btn quick-btn-socios">
+            <Link to="/socios-dueño" className="admin-dash-quick-btn quick-btn-socios">
               <div className="quick-btn-icon-box">
                 <FaUserPlus />
               </div>
@@ -182,7 +183,7 @@ function Dashboard() {
               <FaChevronRight className="quick-btn-arrow" />
             </Link>
 
-            <Link to="/pagos" className="admin-dash-quick-btn quick-btn-pagos">
+            <Link to="/pagos-dueño" className="admin-dash-quick-btn quick-btn-pagos">
               <div className="quick-btn-icon-box">
                 <FaReceipt />
               </div>
@@ -193,7 +194,7 @@ function Dashboard() {
               <FaChevronRight className="quick-btn-arrow" />
             </Link>
 
-            <Link to="/asistencias" className="admin-dash-quick-btn quick-btn-asist">
+            <Link to="/asistencias-dueño" className="admin-dash-quick-btn quick-btn-asist">
               <div className="quick-btn-icon-box">
                 <FaCalendarCheck />
               </div>
@@ -204,7 +205,7 @@ function Dashboard() {
               <FaChevronRight className="quick-btn-arrow" />
             </Link>
 
-            <Link to="/rutinas" className="admin-dash-quick-btn quick-btn-rutinas">
+            <Link to="/rutinas-dueño" className="admin-dash-quick-btn quick-btn-rutinas">
               <div className="quick-btn-icon-box">
                 <FaDumbbell />
               </div>
@@ -477,7 +478,7 @@ function Dashboard() {
                   <h3 className="dash-table-title">Vencimientos Próximos (7 días)</h3>
                   <p className="dash-table-subtitle">Socios cuyas membresías están por caducar</p>
                 </div>
-                <Link to="/pagos" className="dash-view-all-link">
+                <Link to="/pagos-dueño" className="dash-view-all-link">
                   Gestionar cuotas <FaChevronRight />
                 </Link>
               </div>
@@ -522,7 +523,7 @@ function Dashboard() {
                   <h3 className="dash-table-title">Últimos Ingresos Registrados</h3>
                   <p className="dash-table-subtitle">Socios que ingresaron recientemente al gimnasio</p>
                 </div>
-                <Link to="/asistencias" className="dash-view-all-link">
+                <Link to="/asistencias-dueño" className="dash-view-all-link">
                   Ver todas <FaChevronRight />
                 </Link>
               </div>
@@ -563,7 +564,7 @@ function Dashboard() {
                   <h3 className="dash-table-title">Últimos Pagos Recibidos</h3>
                   <p className="dash-table-subtitle">Cobranzas y registros financieros recientes</p>
                 </div>
-                <Link to="/pagos" className="dash-view-all-link">
+                <Link to="/pagos-dueño" className="dash-view-all-link">
                   Ver todos <FaChevronRight />
                 </Link>
               </div>

@@ -46,11 +46,8 @@ function SocioDetalleModal({
 
   // Cargar información extendida del socio y planes del gimnasio
   useEffect(() => {
+    let montado = true;
     if (abierto && socio?.id_socio) {
-      setConfirmandoEliminar(false);
-      setModoEdicion(false);
-      setErrorMsg("");
-      setExitoMsg("");
       setCargandoDetalle(true);
 
       const idGym = gymId || (() => {
@@ -68,6 +65,7 @@ function SocioDetalleModal({
         getPlanes({ id_gimnasio: idGym }).catch(() => [])
       ])
         .then(([socioData, planes]) => {
+          if (!montado) return;
           const s = socioData || socio;
           setDetalle(s);
 
@@ -93,15 +91,14 @@ function SocioDetalleModal({
           });
         })
         .finally(() => {
-          setCargandoDetalle(false);
+          if (montado) setCargandoDetalle(false);
         });
     } else {
       setDetalle(null);
-      setModoEdicion(false);
-      setConfirmandoEliminar(false);
-      setErrorMsg("");
-      setExitoMsg("");
     }
+    return () => {
+      montado = false;
+    };
   }, [abierto, socio, gymId]);
 
   if (!abierto || !socio) return null;
@@ -239,6 +236,13 @@ function SocioDetalleModal({
           </div>
         )}
 
+        {/* Indicador de sincronización de datos extendidos */}
+        {cargandoDetalle && (
+          <div style={{ padding: '6px 20px', fontSize: '13px', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', borderBottom: '1px solid rgba(16, 185, 129, 0.2)' }}>
+            <span>Sincronizando información detallada del socio...</span>
+          </div>
+        )}
+
         {/* Cuerpo del Modal */}
         <div className="socio-detalle-cuerpo">
           {!modoEdicion ? (
@@ -345,7 +349,7 @@ function SocioDetalleModal({
               {/* Barra de Acciones: Ver Perfil y Editar */}
               <div className="socio-detalle-acciones-barra" style={{ display: 'flex', gap: '10px' }}>
                 <a
-                  href={`/perfil?id=${socio.id_socio}`}
+                  href={`/perfil-dueño?id=${socio.id_socio}`}
                   className="socio-btn-editar"
                   style={{ textDecoration: 'none', background: '#22252b', color: '#f3f4f6', borderColor: '#363a45', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                 >

@@ -10,14 +10,14 @@ function Publicidad() {
 
         
          <div className="Caja-publicidad-imagen">
-            <img src="./Telefono.png" alt="" />
+            <img src="/Telefono.png" alt="GymTrack App Móvil" />
          </div>
          <div className="Caja-publicidad-texto">
            <b>Empezá hoy mismo a entrenar mejor</b>
            <p>Unite a miles de personas que ya transformaron su entrenamiento con GymTrack</p>
           <div className="Caja-publicidad-vinculos">
-            <Link to="/register">Crear mi cuenta <i><FaArrowRight/></i></Link>
-            <Link to="/precio">Ver precios</Link>
+            <Link to="/register-dueño">Crear mi cuenta <i><FaArrowRight/></i></Link>
+            <Link to="/precio-landing">Ver precios</Link>
           </div>
           
          </div>

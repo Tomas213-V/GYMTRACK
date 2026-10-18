@@ -94,8 +94,14 @@ function Login() {
 
       console.log('Login exitoso:', data)
 
+      // Limpiar sesión de socio para evitar colisiones entre roles
+      localStorage.removeItem('socio')
+
       // Guardamos el token JWT.
       localStorage.setItem('token', data.token)
+
+      // Guardamos el rol explícitamente como dueño.
+      localStorage.setItem('rol', 'dueño')
 
       // Guardamos también los datos del usuario.
       localStorage.setItem(
@@ -105,9 +111,9 @@ function Login() {
 
       // Comprobamos si el usuario tiene un gimnasio asociado.
       if (data.usuario?.gimnasio?.id_gimnasio) {
-        navigate('/dashboard')
+        navigate('/dashboard-dueño')
       } else {
-        navigate('/crear-gimnasio')
+        navigate('/crear-gimnasio-dueño')
       }
 
     } catch (error) {
@@ -225,7 +231,7 @@ function Login() {
           {/* BOTÓN REGISTRARSE */}
 
           <Link
-            to="/register"
+            to="/register-dueño"
             className="register-button-login"
           >
             Registrarse

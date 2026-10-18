@@ -58,9 +58,9 @@ async function crearPreferenciaMercadoPago({ titulo, monto, externalReference, s
           },
           external_reference: externalReference,
           back_urls: {
-            success: `${FRONTEND_URL}/socio/membresia?pago_status=approved&ref=${externalReference}`,
-            pending: `${FRONTEND_URL}/socio/membresia?pago_status=pending&ref=${externalReference}`,
-            failure: `${FRONTEND_URL}/socio/membresia?pago_status=rejected&ref=${externalReference}`
+            success: `${FRONTEND_URL}/membresia-socio?pago_status=approved&ref=${externalReference}`,
+            pending: `${FRONTEND_URL}/membresia-socio?pago_status=pending&ref=${externalReference}`,
+            failure: `${FRONTEND_URL}/membresia-socio?pago_status=rejected&ref=${externalReference}`
           }
         })
       });

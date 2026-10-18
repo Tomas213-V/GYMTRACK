@@ -1,4 +1,3 @@
-import React from 'react';
 
 /**
  * Logotipos oficiales vectoriales de Mercado Pago y Ualá con alta fidelidad

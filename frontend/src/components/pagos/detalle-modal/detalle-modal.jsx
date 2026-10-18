@@ -3,15 +3,11 @@ import {
   FaTimes, 
   FaTrash, 
   FaUser, 
-  FaCalendarAlt, 
   FaMoneyBillWave, 
   FaCreditCard, 
   FaExchangeAlt, 
   FaReceipt, 
-  FaExclamationTriangle,
-  FaCheckCircle,
-  FaClock,
-  FaTimesCircle
+  FaExclamationTriangle
 } from "react-icons/fa";
 import { getPagoById } from "../../../services/pagoService";
 import "./detalle-modal.css";
@@ -31,26 +27,26 @@ function PagosDetalleModal({
 
   // Cargar información completa del pago desde la API cuando se abre el modal
   useEffect(() => {
+    let montado = true;
     if (abierto && pago?.id) {
-      setConfirmandoEliminar(false);
-      setErrorMsg("");
       setCargandoDetalle(true);
       getPagoById(pago.id)
         .then((data) => {
-          setDetalle(data);
+          if (montado) setDetalle(data);
         })
         .catch((err) => {
           console.warn("No se pudo cargar detalle extendido:", err);
-          setDetalle(null);
+          if (montado) setDetalle(null);
         })
         .finally(() => {
-          setCargandoDetalle(false);
+          if (montado) setCargandoDetalle(false);
         });
     } else {
       setDetalle(null);
-      setConfirmandoEliminar(false);
-      setErrorMsg("");
     }
+    return () => {
+      montado = false;
+    };
   }, [abierto, pago]);
 
   if (!abierto || !pago) return null;
@@ -141,6 +137,13 @@ function PagosDetalleModal({
           <div className="Caja-pagos-alerta Caja-pagos-alerta-error">
             <FaExclamationTriangle />
             <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {/* Indicador de carga de datos extendidos */}
+        {cargandoDetalle && (
+          <div style={{ padding: '6px 20px', fontSize: '13px', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', borderBottom: '1px solid rgba(16, 185, 129, 0.2)' }}>
+            <span>Sincronizando información extendida...</span>
           </div>
         )}
 

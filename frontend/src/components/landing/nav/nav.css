@@ -51,11 +51,7 @@
 /* Contenedor desktop */
 .Caja-nav-landing-collapse {
     display: flex;
-    align-items: center;
-    gap: 40px;
-    flex: 1;
-    justify-content: space-between;
-    margin-left: 40px;
+  
 }
 
 .Caja-nav-landing-opciones {

@@ -1,6 +1,6 @@
 import "./calificaciones.css"
 import { FaStar } from "react-icons/fa6";
-function Calificaciones(params) {
+function Calificaciones() {
   
     const array=5
   

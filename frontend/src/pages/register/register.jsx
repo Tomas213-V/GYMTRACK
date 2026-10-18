@@ -84,7 +84,7 @@ function Register() {
       setSuccess('¡Cuenta creada correctamente! Redirigiendo para iniciar sesión...');
 
       setTimeout(() => {
-        navigate('/login');
+        navigate('/login-dueño');
       }, 1500);
     } catch (error) {
       setBackendError(error.message);
@@ -197,7 +197,7 @@ function Register() {
 
         <p className="register-footer-text">
           ¿Ya tenés una cuenta?{' '}
-          <Link to="/login">
+          <Link to="/login-dueño">
             Iniciar sesión
           </Link>
         </p>

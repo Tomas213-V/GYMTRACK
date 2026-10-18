@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
 import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
 import {
@@ -18,7 +18,6 @@ import {
   FaTrashAlt,
   FaTimes,
   FaCheck,
-  FaFire,
   FaStar,
   FaLayerGroup
 } from 'react-icons/fa';
@@ -48,7 +47,7 @@ export default function SocioEjercicios() {
   });
 
   // Cargar ejercicios del socio (Gimnasio + Propios)
-  const loadEjercicios = async () => {
+  const loadEjercicios = useCallback(async () => {
     setLoading(true);
     setErrorMsg('');
     try {
@@ -63,11 +62,11 @@ export default function SocioEjercicios() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filtroOrigen, filtroGrupo, searchTerm]);
 
   useEffect(() => {
     loadEjercicios();
-  }, [filtroOrigen, filtroGrupo, searchTerm]);
+  }, [loadEjercicios]);
 
   // Contadores para las tarjetas de métricas
   const totalCount = ejercicios.length;

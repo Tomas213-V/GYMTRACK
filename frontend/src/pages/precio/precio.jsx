@@ -64,7 +64,7 @@ function Precio(params) {
                         ))}
                     </div>
                     <div className="Caja-precio-tarjeta-hipervinculo">
-                       <Link to="/login">Comenzar ahora <i><FaArrowRight/></i></Link>
+                       <Link to="/login-dueño">Comenzar ahora <i><FaArrowRight/></i></Link>
                     </div>
                 </div>
             ))}

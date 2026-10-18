@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { FaUserPlus, FaTimes, FaSave } from 'react-icons/fa'
 import { createSocio } from '../../../services/socioService'
 import { getPlanes } from '../../../services/pagoService'

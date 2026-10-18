@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom"
 import "./landing.css"
 import NavLanding from "../../components/landing/nav/nav"
 import Aviso from "../../components/landing/aviso/aviso"
@@ -8,7 +7,7 @@ import Botones from "../../components/landing/botones-landing/botones"
 import Calificaciones from "../../components/landing/calificaciones/calificaciones"
 import Caracteristicas from "../../components/landing/caracteristicas/caracteristicas"
 import Foother from "../../components/Foother/foother"
-function Landing(params) {
+function Landing() {
     return (
         <>
             <div className="Caja-landing">

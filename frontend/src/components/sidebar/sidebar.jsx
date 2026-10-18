@@ -10,7 +10,6 @@ import {
     FaUser, 
     FaCreditCard, 
     FaSignOutAlt, 
-    FaRunning,
     FaTimes
 } from "react-icons/fa";
 import { FaHouse } from "react-icons/fa6";
@@ -34,19 +33,19 @@ function Sidebar() {
 
     // Cerrar el drawer en móviles al cambiar de página
     useEffect(() => {
-        setAbiertoMovil(false);
+        setAbiertoMovil(prev => (prev ? false : prev));
     }, [location.pathname]);
 
     // Opciones exclusivas para Dueño / Administrador de Gimnasio
     const opciones = [
-        { ruta: "/dashboard", nombre: "Inicio", icono: <FaHouse /> },
-        { ruta: "/socios", nombre: "Socios", icono: <FaUsers /> },
-        { ruta: "/membresia-admin", nombre: "Membresías", icono: <FaCreditCard />, alias: ["/membresias-admin", "/membresias"] },
-        { ruta: "/asistencias", nombre: "Asistencias", icono: <FaCalendarCheck /> },
-        { ruta: "/rutinas", nombre: "Rutinas", icono: <FaDumbbell /> },
-        { ruta: "/pagos", nombre: "Pagos", icono: <FaMoneyBill /> },
-        { ruta: "/perfil", nombre: "Mi Perfil", icono: <FaUser /> },
-        { ruta: "/support", nombre: "Soporte", icono: <FaHeadset /> }
+        { ruta: "/dashboard-dueño", nombre: "Inicio", icono: <FaHouse />, alias: ["/dashboard", "/dashboard-dueno"] },
+        { ruta: "/socios-dueño", nombre: "Socios", icono: <FaUsers />, alias: ["/socios", "/socios-dueno"] },
+        { ruta: "/membresia-dueño", nombre: "Membresías", icono: <FaCreditCard />, alias: ["/membresias-dueño", "/membresia-admin", "/membresias", "/membresias-admin", "/membresia-dueno", "/membresias-dueno"] },
+        { ruta: "/asistencias-dueño", nombre: "Asistencias", icono: <FaCalendarCheck />, alias: ["/asistencias", "/asistencias-dueno"] },
+        { ruta: "/rutinas-dueño", nombre: "Rutinas", icono: <FaDumbbell />, alias: ["/rutinas", "/rutinas-dueno"] },
+        { ruta: "/pagos-dueño", nombre: "Pagos", icono: <FaMoneyBill />, alias: ["/pagos", "/pagos-dueno"] },
+        { ruta: "/perfil-dueño", nombre: "Mi Perfil", icono: <FaUser />, alias: ["/perfil", "/perfil-dueno"] },
+        { ruta: "/support-dueño", nombre: "Soporte", icono: <FaHeadset />, alias: ["/support", "/support-dueno", "/soporte-dueño", "/soporte-dueno"] }
     ];
 
     const handleLogout = () => {
@@ -54,7 +53,7 @@ function Sidebar() {
         localStorage.removeItem('usuario');
         localStorage.removeItem('socio');
         localStorage.removeItem('rol');
-        navigate('/login');
+        navigate('/login-dueño');
     };
 
     return (

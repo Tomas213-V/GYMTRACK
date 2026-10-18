@@ -1,4 +1,3 @@
-import React from 'react';
 import './card.css';
 
 function SocioCard({ socio, onClick }) {

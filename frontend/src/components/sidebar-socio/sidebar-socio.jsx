@@ -31,22 +31,22 @@ function SidebarSocio() {
 
     // Cerrar el drawer en móviles al cambiar de página
     useEffect(() => {
-        setAbiertoMovil(false);
+        setAbiertoMovil(prev => (prev ? false : prev));
     }, [location.pathname]);
 
     // Opciones exclusivas para Socio del Gimnasio
     const opciones = [
-        { ruta: "/socio/dashboard", nombre: "Inicio", icono: <FaHouse /> },
-        { ruta: "/socio/rutinas", nombre: "Rutinas", icono: <FaDumbbell />, alias: ["/rutinas"] },
-        { ruta: "/socio/ejercicios", nombre: "Ejercicios", icono: <FaRunning />, alias: ["/ejercicios"] },
-        { ruta: "/socio/asistencia", nombre: "Asistencia", icono: <FaCalendarCheck />, alias: ["/asistencias"] },
+        { ruta: "/dashboard-socio", nombre: "Inicio", icono: <FaHouse />, alias: ["/socio/dashboard"] },
+        { ruta: "/rutinas-socio", nombre: "Rutinas", icono: <FaDumbbell />, alias: ["/socio/rutinas", "/rutinas"] },
+        { ruta: "/ejercicios-socio", nombre: "Ejercicios", icono: <FaRunning />, alias: ["/socio/ejercicios", "/ejercicios"] },
+        { ruta: "/asistencia-socio", nombre: "Asistencia", icono: <FaCalendarCheck />, alias: ["/asistencias", "/socio/asistencia", "/asistencias-socio"] },
         { 
-            ruta: "/socio/membresia", 
+            ruta: "/membresia-socio", 
             nombre: "Membresía", 
             icono: <FaCreditCard />, 
-            alias: ["/membresia", "/mi-membresia"] 
+            alias: ["/socio/membresia", "/membresia", "/mi-membresia"] 
         },
-        { ruta: "/perfil", nombre: "Perfil", icono: <FaUser /> }
+        { ruta: "/perfil-socio", nombre: "Perfil", icono: <FaUser />, alias: ["/perfil"] }
     ];
 
     const handleLogout = () => {

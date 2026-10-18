@@ -1,5 +1,5 @@
 import "./subtitulo.css"
-function Subtitulo(params) {
+function Subtitulo() {
     return(
         <>
          <div className="Caja-subtitulo">

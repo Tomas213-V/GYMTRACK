@@ -18,7 +18,7 @@ function NavLanding() {
         <nav className="Caja-nav-landing">
             <div className="Caja-nav-landing-imagen">
                 <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
-                    <img src="./logo_verde_sindondo.png" alt="GymTrack Logo" />
+                    <img src="/logo_verde_sindondo.png" alt="GymTrack Logo" />
                     <b>GYMTRACK</b>
                 </Link>
             </div>
@@ -36,21 +36,21 @@ function NavLanding() {
             <div className={`Caja-nav-landing-collapse ${menuAbierto ? "abierto" : ""}`}>
                 <div className="Caja-nav-landing-opciones">
                     <Link to="/" onClick={cerrarMenu}>Inicio</Link>
-                    <Link to="/ejercicios" onClick={cerrarMenu}>Ejercicios</Link>
-                    <Link to="/progress" onClick={cerrarMenu}>Progreso</Link>
-                    <Link to="/precio" onClick={cerrarMenu}>Precio</Link>
-                    <Link to="/support" onClick={cerrarMenu}>Soporte</Link>
+                    <Link to="/ejercicios-landing" onClick={cerrarMenu}>Ejercicios</Link>
+                    <Link to="/progress-landing" onClick={cerrarMenu}>Progreso</Link>
+                    <Link to="/precio-landing" onClick={cerrarMenu}>Precio</Link>
+                    <Link to="/support-landing" onClick={cerrarMenu}>Soporte</Link>
                 </div>
-
+</div>
                 <div className="Caja-nav-landing-botones">
-                    <Link to="/login" onClick={cerrarMenu}>
+                    <Link to="/login-dueño" onClick={cerrarMenu}>
                         <FaExternalLinkAlt /> Iniciar sesión
                     </Link>
-                    <Link to="/register" onClick={cerrarMenu}>
+                    <Link to="/register-dueño" onClick={cerrarMenu}>
                         Registrarse
                     </Link>  
                 </div>
-            </div>
+            
         </nav>
     );
 }

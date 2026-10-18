@@ -1,4 +1,3 @@
-import React from 'react'
 import SocioCard from './card'
 import './list.css'
 

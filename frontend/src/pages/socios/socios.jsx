@@ -1,4 +1,3 @@
-import React from 'react'
 import NavGlobal from '../../components/nav-global/nav-global'
 import Sidebar from '../../components/sidebar/sidebar'
 import SocioContent from '../../components/socios/socio-content/content'

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
 import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
 import {
@@ -329,6 +329,29 @@ export default function SocioMembresia() {
         <SidebarSocio />
 
         <main className="socio-membresia-main">
+          {/* Banner de Error */}
+          {errorMsg && (
+            <div
+              style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid #ef4444',
+                color: '#ef4444',
+                padding: '14px 20px',
+                borderRadius: '10px',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                fontWeight: '600',
+                fontSize: '14.5px',
+                boxShadow: '0 4px 15px rgba(239, 68, 68, 0.2)'
+              }}
+            >
+              <FaTimes />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
           {/* Banner de Notificación */}
           {notificacion && (
             <div

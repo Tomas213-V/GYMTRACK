@@ -240,7 +240,7 @@ function Perfil() {
   // Cerrar sesión
   const handleLogout = () => {
     localStorage.clear();
-    navigate(esSocio ? '/login-socio' : '/login');
+    navigate(esSocio ? '/login-socio' : '/login-dueño');
   };
 
   // Obtener iniciales para avatar
@@ -289,11 +289,11 @@ function Perfil() {
       {/* Navegación según el rol: Si es socio mostramos barra adaptada, si es admin usamos NavGlobal */}
       {esSocio ? (
         <header className="perfil-socio-nav">
-          <Link to="/socio/dashboard" className="perfil-socio-marca">
+          <Link to="/dashboard-socio" className="perfil-socio-marca">
             GYM<span>TRACK</span>
           </Link>
           <div className="perfil-socio-nav-actions">
-            <Link to="/socio/dashboard" className="perfil-nav-btn perfil-nav-btn-secondary">
+            <Link to="/dashboard-socio" className="perfil-nav-btn perfil-nav-btn-secondary">
               <FaArrowLeft /> Panel de Socio
             </Link>
             <button onClick={handleLogout} className="perfil-nav-btn perfil-nav-btn-logout">
@@ -314,7 +314,7 @@ function Perfil() {
           <div className="perfil-topbar">
             <div className="perfil-topbar-left">
               <button
-                onClick={() => navigate(esSocio ? '/socio/dashboard' : '/socios')}
+                onClick={() => navigate(esSocio ? '/dashboard-socio' : '/socios-dueño')}
                 className="perfil-btn-volver"
               >
                 <FaArrowLeft /> Volver
@@ -335,7 +335,7 @@ function Perfil() {
                 <span className="perfil-selector-label">Socio activo:</span>
                 <select
                   value={socio.id_socio || socioIdParam || ''}
-                  onChange={(e) => navigate(`/perfil?id=${e.target.value}`)}
+                  onChange={(e) => navigate(`/perfil-dueño?id=${e.target.value}`)}
                   className="perfil-selector-select"
                 >
                   {perfilData.sociosDisponibles.map((s) => (
@@ -1029,7 +1029,7 @@ function Perfil() {
                           <button
                             className="perfil-btn-primary"
                             style={{ height: '36px', fontSize: '12px', padding: '0 14px' }}
-                            onClick={() => navigate('/socio/asistencia')}
+                            onClick={() => navigate('/asistencia-socio')}
                           >
                             <FaCalendarAlt /> Marcar Asistencia
                           </button>

@@ -64,14 +64,19 @@ function LoginSocio() {
         contrasena: formData.contrasena,
       })
 
+      // Limpiamos datos previos de usuario dueño para evitar interferencia
+      localStorage.removeItem('usuario')
+
       // Guardamos la sesión
       localStorage.setItem('token', data.token)
-      localStorage.setItem('usuario', JSON.stringify(data.usuario))
+      if (data.usuario) {
+        localStorage.setItem('usuario', JSON.stringify(data.usuario))
+      }
       localStorage.setItem('socio', JSON.stringify(data.socio))
       localStorage.setItem('rol', 'socio')
 
       // Redireccionar al dashboard de socios
-      navigate('/socio/dashboard')
+      navigate('/dashboard-socio')
 
     } catch (error) {
       setBackendError(error.message)
@@ -150,7 +155,7 @@ function LoginSocio() {
 
           {/* ENLACES */}
           <div className="login-links">
-            <Link to="/login">
+            <Link to="/login-dueño">
               ¿Eres dueño? Iniciar como dueño
             </Link>
 
@@ -183,7 +188,7 @@ function LoginSocio() {
 
           {/* BOTÓN REGRESAR AL LOGIN DE DUEÑO */}
           <Link
-            to="/login"
+            to="/login-dueño"
             className="register-button-login"
           >
             Acceso para Administradores

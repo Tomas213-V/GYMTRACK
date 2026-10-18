@@ -1,4 +1,6 @@
-const API_URL = 'http://localhost:3000/api/socio';
+const API_URL = import.meta.env.VITE_API_URL 
+  ? `${import.meta.env.VITE_API_URL}/socio` 
+  : 'http://localhost:3000/api/socio';
 
 /**
  * Obtener headers comunes con token JWT

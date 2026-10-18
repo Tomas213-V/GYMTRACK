@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { fetchSocios } from '../../../services/socioService'
 import SocioHeader from '../socio-header/header'
 import SocioResumen from '../socio-resumen/resumen'
@@ -38,7 +38,7 @@ function SociosContent() {
     }
   })()
 
-  const loadSocios = async () => {
+  const loadSocios = useCallback(async () => {
     try {
       setLoading(true)
       setError('')
@@ -51,11 +51,11 @@ function SociosContent() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [page, estado, search])
 
   useEffect(() => {
     loadSocios()
-  }, [page, estado, search])
+  }, [loadSocios])
 
   const handleOpenCreateModal = () => {
     setShowCreateModal(true)

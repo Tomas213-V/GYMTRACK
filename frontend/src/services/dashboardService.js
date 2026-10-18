@@ -15,7 +15,6 @@ function getHeaders() {
  * Obtener todos los datos consolidados del dashboard del dueño/administrador
  */
 export async function fetchDashboardAdmin() {
-  const token = localStorage.getItem('token');
   let gymId = '';
 
   try {
@@ -66,7 +65,9 @@ async function compilarFallbackDashboard(gymId) {
       if (resResumen.ok) {
         resumenPagos = await resResumen.json();
       }
-    } catch {}
+    } catch (err) {
+      console.debug('Fallback pagos ignorado:', err);
+    }
 
     // 2. Socios
     let listaSocios = [];
@@ -78,7 +79,9 @@ async function compilarFallbackDashboard(gymId) {
         listaSocios = d.socios || [];
         totalSocios = d.total || listaSocios.length;
       }
-    } catch {}
+    } catch (err) {
+      console.debug('Fallback socios ignorado:', err);
+    }
 
     // 3. Asistencias
     let listaAsistencias = [];
@@ -93,7 +96,9 @@ async function compilarFallbackDashboard(gymId) {
       if (resStats.ok) {
         statsAsist = await resStats.json();
       }
-    } catch {}
+    } catch (err) {
+      console.debug('Fallback asistencias ignorado:', err);
+    }
 
     const sociosActivos = listaSocios.filter(s => (s.estado || '').toLowerCase() === 'activo').length;
     const sociosInactivos = listaSocios.filter(s => (s.estado || '').toLowerCase() === 'inactivo').length;

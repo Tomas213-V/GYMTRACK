@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
 import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
 import { 
@@ -25,7 +24,6 @@ import {
   FaExclamationTriangle,
   FaInfoCircle,
   FaCheck,
-  FaArrowRight,
   FaBolt
 } from 'react-icons/fa';
 
@@ -47,7 +45,6 @@ const formatDni = (dni) => {
 };
 
 export default function AsistenciaSocio() {
-  const navigate = useNavigate();
 
   // --------------------------------------------------------------------------
   // Estados de Usuario & Perfil

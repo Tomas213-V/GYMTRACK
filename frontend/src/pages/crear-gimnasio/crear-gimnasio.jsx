@@ -6,7 +6,14 @@ import './crear-gimnasio.css';
 
 function CrearGimnasio() {
   const navigate = useNavigate();
-  const [usuario, setUsuario] = useState(null);
+  const [usuario] = useState(() => {
+    try {
+      const userGuardado = localStorage.getItem('usuario');
+      return userGuardado ? JSON.parse(userGuardado) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const [formData, setFormData] = useState({
     nombre: '',
@@ -20,21 +27,10 @@ function CrearGimnasio() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const userGuardado = localStorage.getItem('usuario');
-    if (userGuardado) {
-      try {
-        const u = JSON.parse(userGuardado);
-        setUsuario(u);
-
-        // Si ya tiene un gimnasio asociado, redirigir directo al dashboard
-        if (u.gimnasio && u.gimnasio.id_gimnasio) {
-          navigate('/dashboard');
-        }
-      } catch {
-        // Ignorar
-      }
+    if (usuario?.gimnasio?.id_gimnasio) {
+      navigate('/dashboard-dueño');
     }
-  }, [navigate]);
+  }, [usuario, navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -76,7 +72,7 @@ function CrearGimnasio() {
       }
 
       setTimeout(() => {
-        navigate('/dashboard');
+        navigate('/dashboard-dueño');
       }, 1000);
     } catch (err) {
       setError(err.message || 'Ocurrió un error al registrar el gimnasio.');
@@ -88,7 +84,7 @@ function CrearGimnasio() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
-    navigate('/login');
+    navigate('/login-dueño');
   };
 
   return (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import NavGlobal from '../../components/nav-global/nav-global';
 import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
@@ -27,7 +27,6 @@ import {
   FaReceipt,
   FaSyncAlt,
   FaChevronRight,
-  FaInfoCircle,
   FaUser,
   FaRunning,
   FaLightbulb
@@ -50,7 +49,7 @@ export default function DashboardSocio() {
   // --------------------------------------------------------------------------
   // Estados Locales y de Datos
   // --------------------------------------------------------------------------
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [notificacion, setNotificacion] = useState('');
   const [ejerciciosCompletados, setEjerciciosCompletados] = useState({});
 
@@ -285,6 +284,7 @@ export default function DashboardSocio() {
       }));
       setTimeout(() => setNotificacion(''), 6000);
     } catch (err) {
+      console.debug('Fallo checkin remoto, activando confirmación local:', err);
       // Si falla llamada de red, aplicar confirmación local para no bloquear la experiencia
       setNotificacion('¡Check-in registrado con éxito! Que tengas un gran entrenamiento 💪');
       setModalCheckinAbierto(false);
@@ -340,6 +340,7 @@ export default function DashboardSocio() {
       setNotasProgreso('');
       setTimeout(() => setNotificacion(''), 5000);
     } catch (err) {
+      console.debug('Fallo guardado de peso remoto, aplicando contingencia local:', err);
       // Contingencia visual suave
       const pesoNum = Number(nuevoPeso);
       setDashboardData(prev => ({
@@ -497,7 +498,7 @@ export default function DashboardSocio() {
               </div>
 
               <button 
-                onClick={() => navigate('/socio/membresia')} 
+                onClick={() => navigate('/membresia-socio')} 
                 className="socio-pc-kpi-footer-link"
               >
                 <span>Gestionar suscripción</span>
@@ -576,7 +577,7 @@ export default function DashboardSocio() {
               </div>
 
               <button 
-                onClick={() => navigate('/asistencias')} 
+                onClick={() => navigate('/asistencia-socio')} 
                 className="socio-pc-kpi-footer-link"
                 style={{ color: '#fbbf24' }}
               >
@@ -645,7 +646,7 @@ export default function DashboardSocio() {
                     </div>
                   </div>
 
-                  <Link to="/rutinas" className="socio-pc-card-action">
+                  <Link to="/rutinas-socio" className="socio-pc-card-action">
                     <span>Ver todas mis rutinas</span>
                     <FaChevronRight style={{ fontSize: '11px' }} />
                   </Link>
@@ -725,7 +726,7 @@ export default function DashboardSocio() {
                 {/* Acciones de la Rutina */}
                 <div className="socio-pc-routine-footer-btns">
                   <button 
-                    onClick={() => navigate('/rutinas')}
+                    onClick={() => navigate('/rutinas-socio')}
                     className="socio-pc-btn-primary"
                     style={{ flex: '0 0 auto', padding: '10px 20px', fontSize: '13.5px' }}
                   >
@@ -734,7 +735,7 @@ export default function DashboardSocio() {
                   </button>
 
                   <button 
-                    onClick={() => navigate('/ejercicios')}
+                    onClick={() => navigate('/ejercicios-socio')}
                     className="socio-pc-btn-secondary"
                     style={{ flex: '0 0 auto', padding: '10px 18px', fontSize: '13.5px' }}
                   >
@@ -758,7 +759,7 @@ export default function DashboardSocio() {
                     </div>
                   </div>
 
-                  <Link to="/asistencias" className="socio-pc-card-action">
+                  <Link to="/asistencia-socio" className="socio-pc-card-action">
                     <span>Ver asistencias</span>
                     <FaChevronRight style={{ fontSize: '11px' }} />
                   </Link>
@@ -873,7 +874,7 @@ export default function DashboardSocio() {
                 </div>
 
                 <div className="socio-pc-actions-grid">
-                  <Link to="/rutinas" className="socio-pc-action-btn-card">
+                  <Link to="/rutinas-socio" className="socio-pc-action-btn-card">
                     <div className="socio-pc-action-icon-circle" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e' }}>
                       <FaDumbbell />
                     </div>
@@ -883,7 +884,7 @@ export default function DashboardSocio() {
                     </div>
                   </Link>
 
-                  <Link to="/socio/membresia" className="socio-pc-action-btn-card">
+                  <Link to="/membresia-socio" className="socio-pc-action-btn-card">
                     <div className="socio-pc-action-icon-circle" style={{ background: 'rgba(14, 165, 233, 0.15)', color: '#38bdf8' }}>
                       <FaCreditCard />
                     </div>
@@ -893,7 +894,7 @@ export default function DashboardSocio() {
                     </div>
                   </Link>
 
-                  <Link to="/socio/asistencia" className="socio-pc-action-btn-card">
+                  <Link to="/asistencia-socio" className="socio-pc-action-btn-card">
                     <div className="socio-pc-action-icon-circle" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
                       <FaCalendarCheck />
                     </div>
@@ -903,7 +904,7 @@ export default function DashboardSocio() {
                     </div>
                   </Link>
 
-                  <Link to="/ejercicios" className="socio-pc-action-btn-card">
+                  <Link to="/ejercicios-socio" className="socio-pc-action-btn-card">
                     <div className="socio-pc-action-icon-circle" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc' }}>
                       <FaRunning />
                     </div>
@@ -913,7 +914,7 @@ export default function DashboardSocio() {
                     </div>
                   </Link>
 
-                  <Link to="/perfil" className="socio-pc-action-btn-card">
+                  <Link to="/perfil-socio" className="socio-pc-action-btn-card">
                     <div className="socio-pc-action-icon-circle" style={{ background: 'rgba(255, 255, 255, 0.08)', color: '#e2e8f0' }}>
                       <FaUser />
                     </div>
@@ -1184,7 +1185,7 @@ export default function DashboardSocio() {
                 className="socio-pc-btn-primary" 
                 onClick={() => {
                   setModalReciboAbierto(false);
-                  navigate('/socio/membresia');
+                  navigate('/membresia-socio');
                 }}
               >
                 <span>Ir a Mis Pagos y Facturas</span>
