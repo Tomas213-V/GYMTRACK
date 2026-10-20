@@ -99,6 +99,84 @@
   border: 1px solid rgba(34, 197, 94, 0.2);
 }
 
+.membresia-inactiva-card {
+  border: 1px dashed rgba(148, 163, 184, 0.25);
+  background: linear-gradient(180deg, #11161b 0%, #0d1217 100%);
+}
+
+.membresia-sin-activo-wrapper {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  gap: 16px;
+}
+
+.membresia-sin-activo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.membresia-sin-activo-badge-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 22px;
+}
+
+.membresia-sin-activo-content h3 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 8px 0;
+}
+
+.membresia-sin-activo-content p {
+  color: #94a3b8;
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.membresia-sin-activo-footer {
+  margin-top: 8px;
+}
+
+.planes-empty-box {
+  background: #0d1217;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 40px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  grid-column: 1 / -1;
+}
+
+.planes-empty-box h3 {
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+}
+
+.planes-empty-box p {
+  color: #94a3b8;
+  font-size: 14px;
+  max-width: 440px;
+  margin: 0;
+  line-height: 1.5;
+}
+
 .membresia-plan-header {
   display: flex;
   align-items: flex-start;
@@ -168,6 +246,22 @@
   background: rgba(245, 158, 11, 0.15);
   color: #f59e0b;
   border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.status-pausada,
+.status-pausado {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.status-inactiva,
+.status-inactivo,
+.status-cancelada,
+.status-cancelado {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
 .status-sin_membresia {

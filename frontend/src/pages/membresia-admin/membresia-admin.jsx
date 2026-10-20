@@ -33,7 +33,9 @@ import {
   FaExclamationTriangle,
   FaSyncAlt,
   FaFilter,
-  FaUserPlus
+  FaUserPlus,
+  FaPause,
+  FaPlay
 } from 'react-icons/fa';
 
 import './membresia-admin.css';
@@ -134,6 +136,7 @@ export default function MembresiaAdmin() {
     const planesActivos = planes.filter(p => p.estado === 'activo').length;
     const totalMembresias = membresias.length;
     const membresiasActivas = membresias.filter(m => m.estado === 'activa').length;
+    const membresiasPausadas = membresias.filter(m => m.estado === 'pausada' || m.estado === 'inactiva').length;
     const membresiasVencidas = membresias.filter(m => m.estado === 'vencida').length;
     const membresiasCanceladas = membresias.filter(m => m.estado === 'cancelada').length;
 
@@ -147,6 +150,7 @@ export default function MembresiaAdmin() {
       totalPlanes: planes.length,
       totalMembresias,
       membresiasActivas,
+      membresiasPausadas,
       membresiasVencidas,
       membresiasCanceladas,
       estimadoActivo
@@ -171,7 +175,11 @@ export default function MembresiaAdmin() {
   const membresiasFiltradas = useMemo(() => {
     return membresias.filter(m => {
       if (filtroEstadoMembresia !== 'todos') {
-        if (m.estado !== filtroEstadoMembresia) return false;
+        if (filtroEstadoMembresia === 'pausada') {
+          if (m.estado !== 'pausada' && m.estado !== 'inactiva') return false;
+        } else if (m.estado !== filtroEstadoMembresia) {
+          return false;
+        }
       }
 
       if (busquedaSocio.trim()) {
@@ -404,6 +412,22 @@ export default function MembresiaAdmin() {
       mostrarNotificacion(err.message || 'Error al guardar la membresía', 'error');
     } finally {
       setGuardando(false);
+    }
+  };
+
+  const alternarPausaMembresiaSocio = async (memb) => {
+    const esActiva = (memb.estado || '').toLowerCase() === 'activa';
+    const nuevoEstado = esActiva ? 'pausada' : 'activa';
+    try {
+      await updateMembresiaSocio(memb.id_membresia, { estado: nuevoEstado });
+      mostrarNotificacion(
+        esActiva
+          ? `Membresía de ${memb.socio?.nombre || 'socio'} pausada (ya no le aparecerá en su apartado de membresías).`
+          : `Membresía de ${memb.socio?.nombre || 'socio'} reanudada y activada exitosamente.`
+      );
+      await cargarDatos();
+    } catch (err) {
+      mostrarNotificacion(err.message || 'Error al cambiar estado de la membresía', 'error');
     }
   };
 
@@ -780,6 +804,12 @@ export default function MembresiaAdmin() {
                       Activas ({metricas.membresiasActivas})
                     </button>
                     <button
+                      className={`pill-btn ${filtroEstadoMembresia === 'pausada' ? 'pill-activo' : ''}`}
+                      onClick={() => setFiltroEstadoMembresia('pausada')}
+                    >
+                      Pausadas ({metricas.membresiasPausadas})
+                    </button>
+                    <button
                       className={`pill-btn ${filtroEstadoMembresia === 'vencida' ? 'pill-activo' : ''}`}
                       onClick={() => setFiltroEstadoMembresia('vencida')}
                     >
@@ -895,7 +925,7 @@ export default function MembresiaAdmin() {
                               {/* Estado Badge */}
                               <td>
                                 <span className={`estado-badge estado-${memb.estado}`}>
-                                  {memb.estado === 'activa' ? 'Activa' : memb.estado === 'vencida' ? 'Vencida' : 'Cancelada'}
+                                  {memb.estado === 'activa' ? 'Activa' : memb.estado === 'vencida' ? 'Vencida' : memb.estado === 'pausada' ? 'Pausada' : memb.estado === 'inactiva' ? 'Inactiva' : 'Cancelada'}
                                 </span>
                               </td>
 
@@ -909,6 +939,24 @@ export default function MembresiaAdmin() {
                                   >
                                     <FaEdit />
                                   </button>
+
+                                  {memb.estado === 'activa' ? (
+                                    <button
+                                      className="btn-tabla-action btn-tabla-pausar"
+                                      onClick={() => alternarPausaMembresiaSocio(memb)}
+                                      title="Pausar membresía (ocultar del apartado del socio)"
+                                    >
+                                      <FaPause />
+                                    </button>
+                                  ) : (memb.estado === 'pausada' || memb.estado === 'inactiva') ? (
+                                    <button
+                                      className="btn-tabla-action btn-tabla-activar"
+                                      onClick={() => alternarPausaMembresiaSocio(memb)}
+                                      title="Reanudar membresía (volver a habilitar para el socio)"
+                                    >
+                                      <FaPlay />
+                                    </button>
+                                  ) : null}
 
                                   {memb.estado !== 'cancelada' && (
                                     <button
@@ -1215,7 +1263,9 @@ export default function MembresiaAdmin() {
                     value={formMembresia.estado}
                     onChange={(e) => setFormMembresia({ ...formMembresia, estado: e.target.value })}
                   >
-                    <option value="activa">Activa (Habilitado para entrenar)</option>
+                    <option value="activa">Activa (Habilitada para entrenar)</option>
+                    <option value="pausada">Pausada (En pausa - No visible en apartado del socio)</option>
+                    <option value="inactiva">Inactiva (No visible para el socio)</option>
                     <option value="vencida">Vencida</option>
                     <option value="cancelada">Cancelada</option>
                   </select>
