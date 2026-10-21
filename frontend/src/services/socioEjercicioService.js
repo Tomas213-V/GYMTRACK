@@ -1,3 +1,16 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: socioEjercicioService.js
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Servicio para la biblioteca de ejercicios y catálogo personal del alumno.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR:
+ * 1. Catálogo Compartido vs Personal: El socio puede consultar tanto los ejercicios oficiales
+ *    cargados por su gimnasio como crear sus propios ejercicios personalizados.
+ * 2. Filtros: Búsqueda por origen ('todos', 'gimnasio', 'propios') y por grupo muscular (pecho, espalda, etc.).
+ */
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 const getHeaders = () => {
@@ -7,6 +20,7 @@ const getHeaders = () => {
     'Authorization': `Bearer ${token}`
   };
 };
+
 
 /**
  * Consultar ejercicios disponibles del gimnasio y propios creados por el socio

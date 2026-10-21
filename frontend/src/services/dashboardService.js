@@ -1,3 +1,20 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: dashboardService.js
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Servicio para la obtención y consolidación de KPIs y analíticas del Dueño.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR:
+ * 1. Propósito: Proveer a la vista `Dashboard` todos los datos necesarios para gráficos,
+ *    tarjetas de resumen, asistencias en vivo y tendencias de ingresos.
+ * 2. Estrategia de Carga Resiliente:
+ *    - Intenta consultar el endpoint primario `/dashboard/admin?id_gimnasio=...`.
+ *    - Si el endpoint consolidado no responde, activa `compilarFallbackDashboard(gymId)`
+ *      que consulta endpoints individuales (pagos, socios, asistencias) para garantizar
+ *      que la interfaz nunca quede en blanco o bloqueada.
+ */
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 function getHeaders() {
@@ -10,6 +27,7 @@ function getHeaders() {
   }
   return headers;
 }
+
 
 /**
  * Obtener todos los datos consolidados del dashboard del dueño/administrador

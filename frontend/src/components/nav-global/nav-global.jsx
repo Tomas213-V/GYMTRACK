@@ -1,3 +1,19 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: nav-global.jsx
+ * RUTA: frontend/src/components/nav-global/nav-global.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Barra superior de navegación unificada para el ecosistema GymTrack.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 1. PASO 1 (Inicialización de Avatar): `obtenerDatosUsuarioIniciales` extrae la información del usuario
+ *    desde `localStorage` y calcula dinámicamente sus iniciales (ej: "Juan Pérez" -> "JP") para el avatar.
+ * 2. PASO 2 (Toggle de Menú Móvil): Emite un evento global de navegador (`window.dispatchEvent`)
+ *    llamado `'gymtrack:toggle-sidebar'` que los componentes de menú lateral escuchan para abrirse en pantallas pequeñas.
+ * 3. PASO 3 (Enlace Inteligente a Perfil): Discrimina el rol para derivar a `/perfil-socio` o `/perfil-dueño`.
+ */
+
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { FaBars, FaBell, FaChevronDown } from "react-icons/fa";
@@ -26,6 +42,7 @@ function obtenerDatosUsuarioIniciales() {
   }
   return { nombre: "Usuario", iniciales: "GT" };
 }
+
 
 function NavGlobal() {
   const [datosUsuario] = useState(obtenerDatosUsuarioIniciales);

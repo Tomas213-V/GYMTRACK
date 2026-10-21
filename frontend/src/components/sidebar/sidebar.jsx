@@ -1,3 +1,20 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: sidebar.jsx
+ * RUTA: frontend/src/components/sidebar/sidebar.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Menú lateral de navegación para el rol Dueño / Administrador de Gimnasio.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 1. PASO 1 (Escucha de Eventos Responsive): Suscribe un listener a `'gymtrack:toggle-sidebar'`
+ *    para abrirse o cerrarse en modo modal/drawer cuando el usuario pulsa la hamburguesa en el navbar.
+ * 2. PASO 2 (Opciones de Navegación): Define las rutas del dueño (Inicio, Socios, Membresías,
+ *    Asistencias, Rutinas, Pagos, Mi Perfil, Soporte) e incluye aliases para retrocompatibilidad.
+ * 3. PASO 3 (Cierre de Sesión Seguro): `handleLogout()` elimina todos los tokens y objetos de
+ *    `localStorage` y transiciona al login.
+ */
+
 import { useState, useEffect } from "react";
 import "./sidebar.css";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -18,6 +35,7 @@ function Sidebar() {
     const location = useLocation();
     const navigate = useNavigate();
     const [abiertoMovil, setAbiertoMovil] = useState(false);
+
 
     // Escuchar evento personalizado disparado desde NavGlobal para alternar el menú en móviles
     useEffect(() => {

@@ -1,3 +1,34 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: dashboard.jsx
+ * RUTA: frontend/src/pages/dashboard/dashboard.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Panel de Control (Dashboard) principal del Administrador / Dueño del Gimnasio.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 
+ * Este componente es el centro neurálgico de analítica del sistema:
+ * 
+ * 1. PASO 1 (Ciclo de Vida y Carga):
+ *    - `cargarDatos()`: Recupera la sesión activa de `localStorage` y llama a `fetchDashboardAdmin()`.
+ *    - Actualiza el timestamp de última sincronización para informar frescura de datos al dueño.
+ * 
+ * 2. PASO 2 (Formateadores Auxiliares):
+ *    - `formatearDinero()`: Formatea importes en pesos argentinos (ARS) con `Intl.NumberFormat`.
+ *    - `formatearHora()` y `formatearFecha()`: Adaptan timestamps ISO a formato local `es-AR`.
+ * 
+ * 3. PASO 3 (Visualización de Datos con Recharts):
+ *    - Gráficos de Área (AreaChart): Evolución de ingresos en los últimos meses.
+ *    - Gráficos de Barras (BarChart): Distribución de asistencias por franja horaria / día.
+ *    - Gráficos de Pastel (PieChart): Proporción de socios por planes de membresía.
+ * 
+ * 4. PASO 4 (Acciones Rápidas y Tablas en Vivo):
+ *    - Últimos socios registrados con badge de estado.
+ *    - Últimos pagos cobrados con botón de acceso a caja.
+ *    - Acceso a registro manual de asistencias e invitaciones.
+ */
+
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import NavGlobal from "../../components/nav-global/nav-global";
@@ -37,6 +68,7 @@ import {
 import "./dashboard.css";
 
 const PIE_COLORS = ["#22c55e", "#0ea5e9", "#f59e0b", "#a855f7", "#ec4899", "#14b8a6"];
+
 
 function Dashboard() {
   const [loading, setLoading] = useState(true);

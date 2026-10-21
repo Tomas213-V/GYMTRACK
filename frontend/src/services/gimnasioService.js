@@ -1,3 +1,16 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: gimnasioService.js
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Servicio para el alta y consulta del gimnasio perteneciente al dueño autenticado.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR:
+ * 1. Flujo de Onboarding: Cuando un dueño se registra por primera vez, no tiene gimnasio asignado.
+ *    Este servicio permite crearlo mediante `crearGimnasio()` asociando nombre, dirección y contacto.
+ * 2. Consulta de Estado: `obtenerMiGimnasio()` verifica los datos actualizados del gimnasio activo.
+ */
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 /**
@@ -13,6 +26,7 @@ function getHeaders() {
   }
   return headers;
 }
+
 
 /**
  * Registrar un nuevo gimnasio vinculado al usuario autenticado

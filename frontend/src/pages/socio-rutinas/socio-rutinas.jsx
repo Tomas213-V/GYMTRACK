@@ -1,3 +1,22 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: socio-rutinas.jsx
+ * RUTA: frontend/src/pages/socio-rutinas/socio-rutinas.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Módulo interactivo de Rutinas para el Socio / Alumno.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 1. PASO 1 (Rutinas Asignadas vs Plantillas del Gimnasio):
+ *    - El alumno puede visualizar la rutina personalizada asignada por su profesor.
+ *    - Pestaña para explorar y "adoptar" rutinas modelo creadas por el gimnasio (hipertrofia, definición, fuerza).
+ * 2. PASO 2 (Modo Entrenamiento Activo):
+ *    - Cronómetro de descanso entre series integrado (`FaStopwatch`).
+ *    - Seguimiento de repeticiones y cargas efectivas levantadas.
+ * 3. PASO 3 (Rutinas Propias):
+ *    - Permite al alumno crear sus propias secuencias de ejercicios personalizadas si lo desea.
+ */
+
 import { useState, useEffect, useMemo } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
 import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
@@ -45,6 +64,7 @@ import {
 import './socio-rutinas.css';
 
 export default function SocioRutinas() {
+
 
   // Datos del socio desde sesión
   const socioLocal = useMemo(() => {

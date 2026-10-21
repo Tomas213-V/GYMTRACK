@@ -1,3 +1,17 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: socioMembresiaService.js
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Servicio para que el socio consulte su suscripción y renueve membresías.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR:
+ * 1. Consulta de Membresía Actual: `getMiMembresia()` devuelve el estado de la suscripción,
+ *    días restantes de vigencia y el historial de pagos realizados por el alumno.
+ * 2. Renovación y Planes: `getPlanesDisponibles()` lista los planes que su gimnasio ofrece,
+ *    permitiendo al alumno seleccionar y adquirir un plan nuevo mediante la pasarela de pagos.
+ */
+
 const API_URL = import.meta.env.VITE_API_URL 
   ? `${import.meta.env.VITE_API_URL}/socio` 
   : 'http://localhost:3000/api/socio';
@@ -15,6 +29,7 @@ function getHeaders() {
   }
   return headers;
 }
+
 
 /**
  * 1. Obtener la membresía actual, métricas temporales e historial de pagos del socio

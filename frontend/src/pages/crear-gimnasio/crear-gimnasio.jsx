@@ -1,3 +1,22 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: crear-gimnasio.jsx
+ * RUTA: frontend/src/pages/crear-gimnasio/crear-gimnasio.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Pantalla de Onboarding inicial para que un nuevo dueño configure su gimnasio.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 1. PASO 1 (Verificación Previa): En el `useEffect`, si el usuario ya cuenta con un gimnasio
+ *    asociado (`usuario.gimnasio.id_gimnasio`), se lo desvía inmediatamente al Dashboard
+ *    para evitar que vuelva a crear otro por error.
+ * 2. PASO 2 (Formulario de Creación): Solicita el Nombre Comercial (obligatorio), Dirección,
+ *    Teléfono de contacto y Correo de soporte del gimnasio.
+ * 3. PASO 3 (Actualización de Sesión): Al recibir respuesta satisfactoria del backend, actualiza
+ *    el objeto en `localStorage.setItem('usuario')` para guardar el nuevo gimnasio asociado
+ *    y transiciona al panel de control con los datos actualizados.
+ */
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { crearGimnasio } from '../../services/gimnasioService';
@@ -21,6 +40,7 @@ function CrearGimnasio() {
     telefono: '',
     email: ''
   });
+
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');

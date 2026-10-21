@@ -1,3 +1,20 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: rutinaService.js
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Servicio para la creación y gestión de rutinas de entrenamiento y ejercicios.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR:
+ * 1. Estructura de Rutina: Cada rutina contiene información general (nombre, objetivo, socio asignado, estado)
+ *    y una colección de días de entrenamiento con sus correspondientes ejercicios, series, repeticiones y descansos.
+ * 2. Operaciones:
+ *    - `fetchRutinas()`: Búsqueda con filtros por socio y estado.
+ *    - `fetchRutinaById()`: Detalle completo para visualización o edición.
+ *    - `createRutina()` / `updateRutina()`: Guardado de la rutina y sus bloques de ejercicios.
+ *    - `deleteRutina()`: Eliminación de la rutina.
+ */
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 const getHeaders = () => {
@@ -7,6 +24,7 @@ const getHeaders = () => {
     'Authorization': `Bearer ${token}`
   };
 };
+
 
 /**
  * Obtener todas las rutinas con filtros opcionales

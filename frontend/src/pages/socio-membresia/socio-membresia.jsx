@@ -1,3 +1,21 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: socio-membresia.jsx
+ * RUTA: frontend/src/pages/socio-membresia/socio-membresia.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Módulo de Gestión de Membresías, Pagos y Facturación del Socio.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 1. PASO 1 (Métricas de Suscripción): Exhibe plan contratado, porcentaje de tiempo transcurrido,
+ *    días restantes de acceso y estado actual (activa/por vencer/vencida).
+ * 2. PASO 2 (Pasarela de Cobros):
+ *    - Integra opciones de renovación con pasarelas digitales (Mercado Pago, transferencia bancaria).
+ *    - Validación de comprobantes y confirmación de cobro.
+ * 3. PASO 3 (Historial de Pagos y Recibos):
+ *    - Lista de cuotas abonadas con fecha, importe en pesos y número de factura/recibo descargable.
+ */
+
 import { useState, useEffect } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
 import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
@@ -34,6 +52,7 @@ import {
 import './socio-membresia.css';
 
 export default function SocioMembresia() {
+
   // --------------------------------------------------------------------------
   // Estados Principales
   // --------------------------------------------------------------------------

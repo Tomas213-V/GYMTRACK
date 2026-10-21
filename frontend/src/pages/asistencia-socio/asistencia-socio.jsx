@@ -1,3 +1,19 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: asistencia-socio.jsx
+ * RUTA: frontend/src/pages/asistencia-socio/asistencia-socio.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Módulo de Asistencias, Historial y Pase Digital para el Socio.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 1. PASO 1 (Identificación del Socio): Recupera los datos del socio logueado y de su gimnasio.
+ * 2. PASO 2 (Check-in Diario): Comprueba si el socio ya asistió hoy y permite auto-marcar la entrada.
+ * 3. PASO 3 (Historial y Calendario): Lista los días entrenados, horarios de entrada y rachas
+ *    de entrenamiento (streak de días consecutivos).
+ * 4. PASO 4 (Credencial y Pase): Despliega un comprobante con el DNI formateado para presentar en molinetes/recepción.
+ */
+
 import { useState, useEffect, useMemo } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
 import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
@@ -45,6 +61,7 @@ const formatDni = (dni) => {
 };
 
 export default function AsistenciaSocio() {
+
 
   // --------------------------------------------------------------------------
   // Estados de Usuario & Perfil

@@ -1,3 +1,24 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: pagos.jsx
+ * RUTA: frontend/src/pages/pagos/pagos.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Módulo de Caja, Facturación e Historial de Cobros del Administrador.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 1. PASO 1 (Estados de Negocio):
+ *    - `pagos`: Lista de cobros registrados asociados al gimnasio activo.
+ *    - `resumen`: Tarjetas con métricas agregadas (total recaudado en ARS, cobros realizados, pendientes, vencidos).
+ *    - `busqueda`, `filtroEstado`, `fechaDesde`, `fechaHasta`: Panel de filtros cruzados.
+ * 2. PASO 2 (Modales y Flujos):
+ *    - `modalAbierto`: Despliega `<PagosModal />` para cobrar manualmente una membresía a un socio.
+ *    - `modalDetalleAbierto`: Despliega `<PagosDetalleModal />` para anular, emitir comprobante o cambiar estado.
+ * 3. PASO 3 (Normalización de Datos):
+ *    - Aplica `formatearFecha()` y normaliza la información anidada del socio (`item.membresia.socio`)
+ *      para exhibirla ordenadamente en la tabla interactiva `<PagosTabla />`.
+ */
+
 import { useState, useEffect, useCallback } from "react";
 import NavGlobal from "../../components/nav-global/nav-global";
 import Sidebar from "../../components/sidebar/sidebar";
@@ -21,6 +42,7 @@ function Pagos() {
 
   const [cargando, setCargando] = useState(true);
   const [usuarioActual, setUsuarioActual] = useState(null);
+
 
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("todos");

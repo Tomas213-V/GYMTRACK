@@ -1,3 +1,18 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: membresiaAdminService.js
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Servicio para la configuración de planes de precios y asignación de suscripciones.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR:
+ * 1. Catálogo de Planes: Permite al dueño crear planes (ej: "Mensual Pase Libre", "Trimestral Musculación")
+ *    especificando precio, duración en días y estado.
+ * 2. Suscripciones de Socios: Gestiona la asignación de planes a alumnos específicos, registrando
+ *    fecha de inicio, vencimiento automático y estados (activa, vencida, cancelada).
+ * 3. Operaciones CRUD completas tanto para planes como para suscripciones.
+ */
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 /**
@@ -13,6 +28,7 @@ const getHeaders = () => {
   }
   return headers;
 };
+
 
 // ==============================================================================
 // 1. GESTIÓN DE PLANES DE MEMBRESÍA (CATÁLOGO)

@@ -1,3 +1,19 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: asistenciaService.js
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Servicio para el registro de ingresos/check-ins y estadísticas de concurrencia.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR:
+ * 1. Control de accesos: Permite registrar asistencias tanto por el ID numérico de socio
+ *    como mediante su número de documento (DNI) para mayor velocidad en el mostrador del gimnasio.
+ * 2. Manejo robusto de respuestas: Implementa `parseAsistenciaResponse` para garantizar mensajes de
+ *    error claros incluso cuando el servidor responde con formatos no convencionales.
+ * 3. Analítica: Provee estadísticas comparativas entre el mes en curso y el mes anterior para
+ *    medir la retención de los socios.
+ */
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 const getHeaders = () => {
@@ -7,6 +23,7 @@ const getHeaders = () => {
     'Authorization': `Bearer ${token}`
   };
 };
+
 
 async function parseAsistenciaResponse(response, fallbackMessage) {
   let data;

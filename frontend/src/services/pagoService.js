@@ -1,7 +1,27 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: pagoService.js
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Capa de servicios para la administración financiera, cobros y métricas de caja.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR:
+ * 1. Propósito: Conectar los componentes de tesorería y facturación con la API REST del backend.
+ * 2. Autenticación y Autorización: Utiliza tokens Bearer inyectados en los headers HTTP.
+ * 3. Filtrado por Gimnasio: Cada dueño gestiona estrictamente los pagos de su gimnasio (`id_gimnasio`).
+ * 4. Métodos disponibles:
+ *    - `getPagos()`: Listado paginado con rangos de fechas (desde/hasta) y filtro por estado.
+ *    - `getResumenPagos()`: Métricas numéricas (total recaudado, completados, pendientes, vencidos).
+ *    - `getMembresias()` y `getPlanes()`: Catálogos para el modal de nuevo cobro.
+ *    - `registrarPago()`: Alta de cobro con método (efectivo, MP, transferencia, etc.).
+ *    - `actualizarEstadoPago()`: Transición de estado (pagado, pendiente, vencido).
+ *    - `getPagoById()` y `eliminarPago()`: Consulta detallada y baja.
+ */
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 /**
- * Obtener headers comunes con token JWT si está disponible
+ * Función auxiliar para inyectar token JWT y cabeceras JSON en cada petición.
  */
 function getHeaders() {
   const token = localStorage.getItem('token');
@@ -13,6 +33,7 @@ function getHeaders() {
   }
   return headers;
 }
+
 
 /**
  * Obtener listado de pagos con paginación y filtros opcionales

@@ -1,3 +1,31 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: dashboard-socio.jsx
+ * RUTA: frontend/src/pages/dashboard-socio/dashboard-socio.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Portal y Dashboard principal del Socio / Alumno del gimnasio.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 
+ * Este componente brinda una experiencia integral para el entrenamiento del socio:
+ * 
+ * 1. PASO 1 (Membresía y Estado): Informa si la suscripción está activa o vencida,
+ *    días restantes de vigencia, tipo de pase y botón de acceso rápido para renovar o pagar.
+ * 
+ * 2. PASO 2 (Check-in / Asistencia Digital):
+ *    - Permite al socio confirmar su llegada mediante botón de autogestión (`realizarCheckinSocio()`).
+ *    - Presenta un modal con confirmación visual de ingreso.
+ * 
+ * 3. PASO 3 (Entrenamiento del Día):
+ *    - Visualiza la rutina asignada para hoy con sus ejercicios, series y repeticiones.
+ *    - Permite marcar ejercicios completados mediante checkboxes interactivos guardados en el estado.
+ * 
+ * 4. PASO 4 (Evolución y Gráficos):
+ *    - Despliega un gráfico interactivo (`AreaChart`) de peso corporal y evolución física.
+ *    - Modal para registrar nuevas mediciones de peso con fecha y notas (`modalProgresoAbierto`).
+ */
+
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import NavGlobal from '../../components/nav-global/nav-global';
@@ -45,6 +73,7 @@ import './dashboard-socio.css';
 
 export default function DashboardSocio() {
   const navigate = useNavigate();
+
 
   // --------------------------------------------------------------------------
   // Estados Locales y de Datos

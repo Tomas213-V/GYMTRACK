@@ -1,9 +1,24 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: dashboardSocioService.js
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Servicio para el panel personal del socio (KPIs personales, check-in y peso).
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR:
+ * 1. Base URL: Apunta a los endpoints exclusivos de socio (`/api/socio/...`).
+ * 2. Operaciones:
+ *    - `fetchDashboardSocio()`: Obtiene el resumen del socio (días entrenados, estado de membresía, rutina actual).
+ *    - `realizarCheckinSocio()`: Registra el ingreso del alumno por autogestión.
+ *    - `registrarProgresoSocio()`: Guarda mediciones corporales y evolución física del alumno.
+ */
+
 const API_URL = import.meta.env.VITE_API_URL 
   ? `${import.meta.env.VITE_API_URL}/socio` 
   : 'http://localhost:3000/api/socio';
 
 /**
- * Obtener headers comunes con token JWT
+ * Obtener headers comunes con token JWT para autorizar peticiones del alumno.
  */
 function getHeaders() {
   const token = localStorage.getItem('token');
@@ -15,6 +30,7 @@ function getHeaders() {
   }
   return headers;
 }
+
 
 /**
  * Obtener toda la información consolidada del Dashboard de Socio

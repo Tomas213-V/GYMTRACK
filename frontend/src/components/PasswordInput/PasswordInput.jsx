@@ -1,3 +1,21 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: PasswordInput.jsx
+ * RUTA: frontend/src/components/PasswordInput/PasswordInput.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Componente reutilizable para campos de contraseña con toggle de visibilidad.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR:
+ * 1. Propósito: Proveer un input seguro y accesible que permita al usuario alternar entre
+ *    modo oculto (`type="password"`) y modo visible (`type="text"`) mediante un ícono de ojo SVG.
+ * 2. Props:
+ *    - `id`, `name`: Identificadores del elemento HTML para accesibilidad (`htmlFor`).
+ *    - `value`, `onChange`: Control bidireccional estándar de React.
+ *    - `placeholder`, `label`: Textos descriptivos.
+ *    - `error`: Mensaje de validación a renderizar si existe fallo.
+ */
+
 import { useState } from 'react'
 import './PasswordInput.css'
 
@@ -10,10 +28,9 @@ function PasswordInput({
   label = 'Contraseña',
   error = ''
 }) {
-
-  // Controla si la contraseña se muestra
-  // o permanece oculta.
+  // PASO 1: Estado booleano para alternar entre mostrar u ocultar la clave
   const [showPassword, setShowPassword] = useState(false)
+
 
   return (
     <div className="password-form-group">

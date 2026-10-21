@@ -6,8 +6,22 @@ const supabase = require('../config/supabase');
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
+ * =========================================================================================
+ * CONTROLADOR: registerOwner
+ * RUTA: POST /api/auth/register
+ * DESCRIPCIÓN: Registra un nuevo dueño en la base de datos Supabase y opcionalmente su gimnasio.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO:
+ * 1. Valida campos obligatorios y formato de email.
+ * 2. Comprueba unicidad del email contra la tabla 'usuario'.
+ * 3. Encripta la contraseña usando bcrypt (saltRounds = 10).
+ * 4. Inserta el registro con rol 'dueño' y estado 'activo'.
+ * 5. Si se aportaron datos de gimnasio, lo crea y lo asocia mediante 'id_usuario'.
+ * 6. Emite un token JWT con vigencia de 24h para autologueo inmediato.
  */
 const registerOwner = async (req, res) => {
+
   try {
     const { 
       nombreGimnasio, 

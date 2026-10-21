@@ -1,3 +1,19 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: sidebar-socio.jsx
+ * RUTA: frontend/src/components/sidebar-socio/sidebar-socio.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Menú lateral de navegación exclusivo para el portal de Socios / Alumnos.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 1. PASO 1 (Rutas del Alumno): Acceso directo a Inicio (`/dashboard-socio`), Rutinas (`/rutinas-socio`),
+ *    Biblioteca de Ejercicios (`/ejercicios-socio`), Control de Asistencia (`/asistencia-socio`),
+ *    Membresía (`/membresia-socio`) y Mi Perfil (`/perfil-socio`).
+ * 2. PASO 2 (Modo Responsive): Cierre automático al seleccionar cualquier elemento de navegación.
+ * 3. PASO 3 (Logout): `handleLogout()` limpia las credenciales del alumno y redirige a `/login-socio`.
+ */
+
 import { useState, useEffect } from "react";
 import "../sidebar/sidebar.css";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -16,6 +32,7 @@ function SidebarSocio() {
     const location = useLocation();
     const navigate = useNavigate();
     const [abiertoMovil, setAbiertoMovil] = useState(false);
+
 
     // Escuchar evento personalizado disparado desde NavGlobal para alternar el menú en móviles
     useEffect(() => {

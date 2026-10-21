@@ -1,3 +1,21 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: asistencias.jsx
+ * RUTA: frontend/src/pages/asistencias/asistencias.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Panel de Control de Asistencias, Entradas en Vivo y Métricas de Concurrencia.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 1. PASO 1 (Métricas de Concurrencia): Calcula el total de ingresos del mes actual comparado
+ *    con el mes previo para identificar crecimiento o deserción en el gimnasio.
+ * 2. PASO 2 (Registro Rápido en Recepción): Permite marcar el ingreso de un socio usando su
+ *    DNI o seleccionándolo de una lista desplegable con auto-completado.
+ * 3. PASO 3 (Historial y Búsqueda): Tabla interactiva con paginación, filtros por fecha y
+ *    posibilidad de consultar el historial individual de cada socio (`fetchHistorialPorSocio`).
+ * 4. PASO 4 (Exportación): Generación de reportes y opción de supresión de registros erróneos.
+ */
+
 import { useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import NavGlobal from '../../components/nav-global/nav-global';
@@ -32,6 +50,7 @@ import './asistencias.css';
 export default function Asistencias() {
   const rol = localStorage.getItem('rol');
   const esSocio = rol === 'socio' || Boolean(localStorage.getItem('socio'));
+
 
   // Estados para datos
   const [asistencias, setAsistencias] = useState([]);
