@@ -191,17 +191,38 @@ const createSocio = async (req, res) => {
       const socioVinculado = sociosOtrosGyms[0];
       const nombreGym = socioVinculado.gimnasio?.nombre || 'otro gimnasio';
 
-      // Si el cliente no ha confirmado explícitamente continuar con el alta
-      if (!req.body.confirmarVinculacion) {
-        return res.status(409).json({
-          alertaVinculacion: true,
-          error: `Atención: El socio con DNI ${cleanDni} (${socioVinculado.nombre} ${socioVinculado.apellido || ''}) se encuentra actualmente activo en el gimnasio "${nombreGym}" sin haberse dado de baja.`,
-          gimnasioNombre: nombreGym,
-          socioNombre: `${socioVinculado.nombre} ${socioVinculado.apellido || ''}`.trim(),
-          dni: socioVinculado.dni,
-          idGimnasio: socioVinculado.id_gimnasio
-        });
-      }
+      // Bloquear la creación: no se puede registrar porque ya está activo en otro gimnasio
+      return res.status(400).json({
+        bloqueadoPorOtroGimnasio: true,
+        error: `No es posible registrar al socio. El socio con DNI ${cleanDni} (${socioVinculado.nombre} ${socioVinculado.apellido || ''}) ya se encuentra activo en el gimnasio "${nombreGym}". Debe tramitar la baja en dicho establecimiento antes de poder inscribirse.`,
+        gimnasioNombre: nombreGym,
+        socioNombre: `${socioVinculado.nombre} ${socioVinculado.apellido || ''}`.trim(),
+        dni: socioVinculado.dni,
+        idGimnasio: socioVinculado.id_gimnasio
+      });
+
+      /*
+       * [FUNCIONES PRESERVADAS PARA EL FUTURO - BAJA AUTOMÁTICA EN GIMNASIO ANTERIOR]
+       * En caso de requerir en el futuro traspasos o bajas automáticas entre gimnasios:
+       *
+       * try {
+       *   const idsOtrosSocios = sociosOtrosGyms.map((s) => s.id_socio);
+       *   // 1. Cambiar estado a 'inactivo' en el gimnasio anterior
+       *   await supabase
+       *     .from('socio')
+       *     .update({ estado: 'inactivo' })
+       *     .in('id_socio', idsOtrosSocios);
+       *
+       *   // 2. Cancelar membresías activas previas en el gimnasio anterior
+       *   await supabase
+       *     .from('membresia')
+       *     .update({ estado: 'cancelada' })
+       *     .in('id_socio', idsOtrosSocios)
+       *     .in('estado', ['activo', 'activa']);
+       * } catch (errBaja) {
+       *   console.error('Error al aplicar baja automática en gimnasio anterior:', errBaja);
+       * }
+       */
     }
 
     // Crear la ficha de socio directamente
@@ -917,7 +938,8 @@ const verificarDniSocio = async (req, res) => {
           dni: otro.dni,
           estado: otro.estado
         },
-        mensaje: `Aviso: El socio figura actualmente activo en el gimnasio "${nombreGimnasio}" sin haberse dado de baja.`
+        bloqueado: true,
+        mensaje: `No se puede registrar este socio: actualmente figura ACTIVO en el gimnasio "${nombreGimnasio}". Debe tramitar la baja en dicho establecimiento antes de poder inscribirse.`
       });
     }
 

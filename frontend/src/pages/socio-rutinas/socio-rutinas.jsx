@@ -630,9 +630,17 @@ export default function SocioRutinas() {
   const handleIniciarEntrenamiento = (rutina) => {
     setWorkoutRutina(rutina);
     setEjerciciosCompletados({});
+    setWorkoutTimerSeconds(0);
     setWorkoutModalOpen(true);
     setRestTimerSeconds(null);
     setTimerActivo(false);
+  };
+
+  // Cerrar Modo Entrenamiento
+  const handleCerrarEntrenamiento = () => {
+    setWorkoutModalOpen(false);
+    setTimerActivo(false);
+    setRestTimerSeconds(null);
   };
 
   const toggleEjercicioCompletado = (idRe) => {
@@ -1016,7 +1024,7 @@ export default function SocioRutinas() {
                             </p>
                           </div>
 
-                          <div style={{ display: 'flex', gap: '8px' }}>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                             <button
                               type="button"
                               className="sr-btn-primary"
@@ -1030,6 +1038,14 @@ export default function SocioRutinas() {
                               onClick={handleOpenAddEjercicio}
                             >
                               <FaPlus /> Agregar Ejercicio
+                            </button>
+                            <button
+                              type="button"
+                              className="sr-btn-close-detail"
+                              onClick={() => setSelectedRutina(null)}
+                              title="Cerrar panel de rutina"
+                            >
+                              <FaTimes /> Cerrar
                             </button>
                           </div>
                         </div>
@@ -1720,7 +1736,7 @@ export default function SocioRutinas() {
           MODAL 4: MODO ENTRENAMIENTO INTERACTIVO (WORKOUT MODE)
           ================================================================ */}
       {workoutModalOpen && workoutRutina && (
-        <div className="sr-modal-overlay">
+        <div className="sr-modal-overlay" onClick={handleCerrarEntrenamiento}>
           <div className="sr-workout-modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="sr-workout-header">
               <div>
@@ -1752,10 +1768,30 @@ export default function SocioRutinas() {
                     const hechos = Object.values(ejerciciosCompletados).filter(Boolean).length;
                     const total = workoutRutina.rutina_ejercicio?.length || 0;
                     alert(`¡Entrenamiento finalizado! 🏆\nTiempo: ${formatTime(workoutTimerSeconds)}\nEjercicios completados: ${hechos} de ${total}.\n¡Excelente trabajo! 💪`);
-                    setWorkoutModalOpen(false);
+                    handleCerrarEntrenamiento();
                   }}
                 >
                   <FaCheck /> Terminar Sesión
+                </button>
+
+                {/* Botón Cerrar / Salir del Entrenamiento */}
+                <button
+                  type="button"
+                  className="sr-btn-close-workout"
+                  onClick={handleCerrarEntrenamiento}
+                  title="Cerrar panel de entrenamiento"
+                >
+                  <FaTimes /> Cerrar
+                </button>
+
+                {/* Botón X de Cierre Rápido */}
+                <button
+                  type="button"
+                  className="sr-workout-close-x"
+                  onClick={handleCerrarEntrenamiento}
+                  title="Cerrar ventana"
+                >
+                  <FaTimes />
                 </button>
               </div>
             </div>

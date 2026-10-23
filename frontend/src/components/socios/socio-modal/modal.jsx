@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { FaUserPlus, FaTimes, FaSave, FaExclamationTriangle, FaCheckCircle, FaSpinner } from 'react-icons/fa'
+import { FaUserPlus, FaTimes, FaSave, FaExclamationTriangle, FaBan, FaSpinner } from 'react-icons/fa'
 import { createSocio, verificarDniSocio } from '../../../services/socioService'
 import { getPlanes } from '../../../services/pagoService'
 import './modal.css'
@@ -9,10 +9,9 @@ function SocioModal({ onClose, onSuccess, gymId }) {
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
 
-  // Estado para la alerta de socio vinculado a otro gimnasio
+  // Estado para la alerta de socio vinculado y activo en otro gimnasio
   const [alertaVinculacion, setAlertaVinculacion] = useState(null)
   const [verificandoDni, setVerificandoDni] = useState(false)
-  const [mostrarConfirmacion, setMostrarConfirmacion] = useState(false)
   const timeoutDniRef = useRef(null)
 
   const [formData, setFormData] = useState({
@@ -108,26 +107,22 @@ function SocioModal({ onClose, onSuccess, gymId }) {
     }, 500)
   }
 
-  // Ejecución de guardado (con o sin confirmación de vinculación inter-gimnasio)
-  const ejecutarGuardado = async (confirmarVinculacion = false) => {
+  // Ejecución de guardado
+  const ejecutarGuardado = async () => {
     setError('')
     setCargando(true)
     try {
-      await createSocio({
-        ...formData,
-        confirmarVinculacion
-      })
-      setMostrarConfirmacion(false)
+      await createSocio(formData)
       onSuccess()
     } catch (err) {
-      if (err.alertaVinculacion) {
+      if (err.bloqueadoPorOtroGimnasio || err.alertaVinculacion) {
         setAlertaVinculacion({
           vinculado: true,
           gimnasioNombre: err.gimnasioNombre || 'Otro gimnasio',
           socioNombre: err.socioNombre || formData.nombre,
           dni: err.dni || formData.dni
         })
-        setMostrarConfirmacion(true)
+        setError(err.message || 'No se puede registrar este socio: figura activo en otro gimnasio.')
       } else {
         setError(err.message || 'Error al registrar el socio.')
       }
@@ -140,23 +135,24 @@ function SocioModal({ onClose, onSuccess, gymId }) {
     e.preventDefault()
     setError('')
 
-    // Si ya detectamos alerta de vinculación y no se confirmó, requerir confirmación
+    // Si ya detectamos que está activo en otro gimnasio, bloquear
     if (alertaVinculacion?.vinculado) {
-      setMostrarConfirmacion(true)
+      setError(`No es posible registrar este socio: actualmente figura ACTIVO en el gimnasio "${alertaVinculacion.gimnasioNombre}". Debe tramitar su baja allí primero.`)
       return
     }
 
-    // Si aún no se verificó el DNI, comprobar antes de registrar
+    // Comprobar DNI antes de registrar
     const cheq = await verificarDni(formData.dni)
     if (cheq?.existeEnEsteGimnasio) {
+      setError('Ya existe un socio registrado con este DNI en tu gimnasio.')
       return
     }
     if (cheq?.vinculado) {
-      setMostrarConfirmacion(true)
+      setError(`No es posible registrar este socio: actualmente figura ACTIVO en el gimnasio "${cheq.gimnasioNombre}". Debe tramitar su baja allí primero.`)
       return
     }
 
-    ejecutarGuardado(false)
+    ejecutarGuardado()
   }
 
   return (
@@ -180,17 +176,16 @@ function SocioModal({ onClose, onSuccess, gymId }) {
         {error && <div className="socio-modal-error">{error}</div>}
 
         {alertaVinculacion?.vinculado && (
-          <div className="socio-modal-alerta-vinculado">
+          <div className="socio-modal-alerta-vinculado bloqueo">
             <div className="socio-modal-alerta-icono">
-              <FaExclamationTriangle />
+              <FaBan />
             </div>
             <div className="socio-modal-alerta-cuerpo">
               <div className="socio-modal-alerta-titulo">
-                ⚠️ Socio vinculado a otro gimnasio
+                🚫 Registro no permitido: Socio activo en otro gimnasio
               </div>
               <p className="socio-modal-alerta-texto">
-                Este socio (<strong>{alertaVinculacion.socioNombre || 'DNI ' + alertaVinculacion.dni}</strong>) 
-                figura actualmente registrado y <strong>ACTIVO</strong> en el gimnasio <strong>"{alertaVinculacion.gimnasioNombre}"</strong> sin haberse dado de baja.
+                El socio con DNI <strong>{alertaVinculacion.dni}</strong> ({alertaVinculacion.socioNombre}) figura actualmente registrado y <strong>ACTIVO</strong> en el gimnasio <strong>"{alertaVinculacion.gimnasioNombre}"</strong>.
               </p>
               {alertaVinculacion.telefonoGimnasio && (
                 <p className="socio-modal-alerta-contacto">
@@ -198,7 +193,7 @@ function SocioModal({ onClose, onSuccess, gymId }) {
                 </p>
               )}
               <span className="socio-modal-alerta-aviso">
-                Coordiná el pase o baja correspondiente antes de inscribirlo. Al guardar, se te solicitará confirmación.
+                No se puede crear el socio mientras continúe activo en otro gimnasio. El socio debe solicitar previamente la baja en dicho establecimiento para poder inscribirse aquí.
               </span>
             </div>
           </div>
@@ -341,50 +336,34 @@ function SocioModal({ onClose, onSuccess, gymId }) {
             <button type="button" className="socio-btn-cancelar" onClick={onClose}>
               Cancelar
             </button>
-            <button type="submit" className="socio-btn-guardar" disabled={cargando}>
+            <button
+              type="submit"
+              className="socio-btn-guardar"
+              disabled={cargando || !!alertaVinculacion?.vinculado}
+              title={
+                alertaVinculacion?.vinculado
+                  ? `El socio está activo en "${alertaVinculacion.gimnasioNombre}". Debe tramitar la baja primero.`
+                  : 'Guardar Socio'
+              }
+            >
               <FaSave />
               <span>{cargando ? 'Guardando...' : 'Guardar Socio'}</span>
             </button>
           </div>
         </form>
 
-        {/* Modal de confirmación si el socio está vinculado a otro gimnasio */}
-        {mostrarConfirmacion && (
-          <div className="socio-modal-confirm-overlay">
-            <div className="socio-modal-confirm-card">
-              <div className="socio-modal-confirm-icono">
-                <FaExclamationTriangle />
-              </div>
-              <h3>¿Confirmar Registro de Socio?</h3>
-              <p className="socio-modal-confirm-desc">
-                El socio con DNI <strong>{formData.dni}</strong> ({alertaVinculacion?.socioNombre || formData.nombre}) 
-                figura actualmente registrado y <strong>ACTIVO</strong> en el gimnasio <strong>"{alertaVinculacion?.gimnasioNombre}"</strong> sin haberse dado de baja.
-              </p>
-              <p className="socio-modal-confirm-pregunta">
-                ¿Deseas inscribirlo en tu gimnasio de todas maneras?
-              </p>
-              <div className="socio-modal-confirm-acciones">
-                <button
-                  type="button"
-                  className="socio-btn-cancelar"
-                  onClick={() => setMostrarConfirmacion(false)}
-                  disabled={cargando}
-                >
-                  Revisar Datos
-                </button>
-                <button
-                  type="button"
-                  className="socio-btn-confirmar-vinculacion"
-                  disabled={cargando}
-                  onClick={() => ejecutarGuardado(true)}
-                >
-                  <FaCheckCircle />
-                  <span>{cargando ? 'Inscribiendo...' : 'Sí, Registrar de Todos Modos'}</span>
-                </button>
+        {/*
+          [PRESERVADO PARA EL FUTURO - MODAL DE CONFIRMACIÓN / BAJA AUTOMÁTICA]
+          En caso de requerir confirmación manual o reactivar la baja automática entre gimnasios:
+          
+          mostrarConfirmacion && (
+            <div className="socio-modal-confirm-overlay">
+              <div className="socio-modal-confirm-card">
+                ...
               </div>
             </div>
-          </div>
-        )}
+          )
+        */}
       </div>
     </div>
   )
