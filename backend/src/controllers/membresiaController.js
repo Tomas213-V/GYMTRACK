@@ -34,17 +34,67 @@ const getMembresias = async (req, res) => {
       query = query.eq('id_socio', id_socio);
     }
 
-    if (estado && estado.toLowerCase() !== 'todos') {
-      query = query.eq('estado', estado.toLowerCase());
-    }
-
     const { data: membresias, error } = await query;
 
     if (error) {
       return res.status(500).json({ error: 'Error al consultar las membresías: ' + error.message });
     }
 
-    return res.status(200).json({ membresias: membresias || [] });
+    const hoyStr = new Date().toISOString().split('T')[0];
+    const idsParaMarcarVencidas = [];
+
+    // Procesar y normalizar estados dinámicamente
+    const membresiasProcesadas = (membresias || []).map((m) => {
+      let estadoNormalizado = (m.estado || '').toLowerCase().trim();
+
+      // 1. Canceladas se preservan siempre
+      if (estadoNormalizado === 'cancelada' || estadoNormalizado === 'cancelado') {
+        estadoNormalizado = 'cancelada';
+      } else if (m.fecha_vencimiento && m.fecha_vencimiento < hoyStr) {
+        // 2. Si la fecha ya venció, pasa automáticamente a 'vencida'
+        if (estadoNormalizado !== 'vencida' && estadoNormalizado !== 'vencido') {
+          idsParaMarcarVencidas.push(m.id_membresia);
+        }
+        estadoNormalizado = 'vencida';
+      } else if (estadoNormalizado === 'vencida' || estadoNormalizado === 'vencido') {
+        estadoNormalizado = 'vencida';
+      } else {
+        // 3. Activa si la fecha no venció y no está cancelada
+        estadoNormalizado = 'activa';
+      }
+
+      return {
+        ...m,
+        estado: estadoNormalizado
+      };
+    });
+
+    // Actualizar en base de datos las membresías que ya hayan caducado
+    if (idsParaMarcarVencidas.length > 0) {
+      supabase
+        .from('membresia')
+        .update({ estado: 'vencida' })
+        .in('id_membresia', idsParaMarcarVencidas)
+        .then(() => {})
+        .catch(err => console.error('Error al actualizar membresías vencidas en BD:', err));
+    }
+
+    // Filtrar por estado si se solicitó por parámetro
+    let resultadoFinal = membresiasProcesadas;
+    if (estado && estado.toLowerCase() !== 'todos') {
+      const eFilter = estado.toLowerCase().trim();
+      const filtroNormalizado = (eFilter === 'activo' || eFilter === 'activa')
+        ? 'activa'
+        : (eFilter === 'vencido' || eFilter === 'vencida')
+          ? 'vencida'
+          : (eFilter === 'cancelado' || eFilter === 'cancelada')
+            ? 'cancelada'
+            : eFilter;
+
+      resultadoFinal = membresiasProcesadas.filter(m => m.estado === filtroNormalizado);
+    }
+
+    return res.status(200).json({ membresias: resultadoFinal });
 
   } catch (error) {
     return res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
@@ -149,7 +199,9 @@ const createMembresia = async (req, res) => {
       precio: precio !== undefined ? parseFloat(precio) : plan.precio,
       fecha_inicio: fInicio.toISOString().split('T')[0],
       fecha_vencimiento: fVencimiento.toISOString().split('T')[0],
-      estado: estado ? estado.trim().toLowerCase() : 'activo'
+      estado: fVencimiento.toISOString().split('T')[0] < new Date().toISOString().split('T')[0]
+        ? 'vencida'
+        : (estado && estado.toLowerCase().startsWith('cancel') ? 'cancelada' : 'activa')
     };
 
     const { data: nuevaMembresia, error: insertErr } = await supabase
@@ -220,7 +272,25 @@ const updateMembresia = async (req, res) => {
     }
 
     if (estado) {
-      updateData.estado = estado.trim().toLowerCase();
+      const e = estado.trim().toLowerCase();
+      updateData.estado = (e === 'activo' || e === 'activa')
+        ? 'activa'
+        : (e === 'vencido' || e === 'vencida')
+          ? 'vencida'
+          : (e === 'cancelado' || e === 'cancelada')
+            ? 'cancelada'
+            : e;
+    }
+
+    // Si la fecha de vencimiento es anterior a hoy y no se canceló manualmente, pasar a vencida
+    const fVencCheck = updateData.fecha_vencimiento || membActual.fecha_vencimiento;
+    const hoyStr = new Date().toISOString().split('T')[0];
+    if (updateData.estado !== 'cancelada' && fVencCheck) {
+      if (fVencCheck < hoyStr) {
+        updateData.estado = 'vencida';
+      } else if (updateData.estado === 'vencida') {
+        updateData.estado = 'activa';
+      }
     }
 
     if (precio !== undefined) {

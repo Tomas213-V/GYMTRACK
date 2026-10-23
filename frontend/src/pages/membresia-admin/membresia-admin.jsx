@@ -147,19 +147,58 @@ export default function MembresiaAdmin() {
   }, []);
 
   // --------------------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // Helper: Detección Dinámica y Normalización de Estado de Membresía
+  // --------------------------------------------------------------------------
+  const obtenerEstadoMembresia = (memb) => {
+    if (!memb) return 'activa';
+    const est = (memb.estado || '').toLowerCase().trim();
+
+    // Cancelada tiene máxima prioridad (baja administrativa voluntaria)
+    if (est === 'cancelada' || est === 'cancelado') {
+      return 'cancelada';
+    }
+
+    // Verificar si la fecha de vencimiento ya expiró (comparando contra hoy a las 00:00)
+    if (memb.fecha_vencimiento) {
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      const venc = new Date(memb.fecha_vencimiento.split('T')[0] + 'T00:00:00');
+      if (venc < hoy) {
+        return 'vencida';
+      }
+    }
+
+    if (est === 'vencida' || est === 'vencido') {
+      return 'vencida';
+    }
+
+    return 'activa';
+  };
+
+  // --------------------------------------------------------------------------
   // Métricas y Estadísticas Calculadas
   // --------------------------------------------------------------------------
   const metricas = useMemo(() => {
-    const planesActivos = planes.filter(p => p.estado === 'activo').length;
+    const planesActivos = planes.filter(p => p.estado === 'activo' || p.estado === 'activa').length;
     const totalMembresias = membresias.length;
-    const membresiasActivas = membresias.filter(m => m.estado === 'activa').length;
-    const membresiasVencidas = membresias.filter(m => m.estado === 'vencida').length;
-    const membresiasCanceladas = membresias.filter(m => m.estado === 'cancelada').length;
 
-    // Calcular recaudación estimada mensual por membresías activas
-    const estimadoActivo = membresias
-      .filter(m => m.estado === 'activa')
-      .reduce((acc, curr) => acc + (parseFloat(curr.precio) || 0), 0);
+    let membresiasActivas = 0;
+    let membresiasVencidas = 0;
+    let membresiasCanceladas = 0;
+    let estimadoActivo = 0;
+
+    membresias.forEach(m => {
+      const estadoReal = obtenerEstadoMembresia(m);
+      if (estadoReal === 'activa') {
+        membresiasActivas += 1;
+        estimadoActivo += (parseFloat(m.precio) || parseFloat(m.plan_membresia?.precio) || 0);
+      } else if (estadoReal === 'vencida') {
+        membresiasVencidas += 1;
+      } else if (estadoReal === 'cancelada') {
+        membresiasCanceladas += 1;
+      }
+    });
 
     return {
       planesActivos,
@@ -189,8 +228,10 @@ export default function MembresiaAdmin() {
   // --------------------------------------------------------------------------
   const membresiasFiltradas = useMemo(() => {
     return membresias.filter(m => {
+      const estadoReal = obtenerEstadoMembresia(m);
+
       if (filtroEstadoMembresia !== 'todos') {
-        if (m.estado !== filtroEstadoMembresia) return false;
+        if (estadoReal !== filtroEstadoMembresia) return false;
       }
 
       if (busquedaSocio.trim()) {
@@ -327,6 +368,7 @@ export default function MembresiaAdmin() {
 
   const abrirModalEditarMembresia = (memb) => {
     setMembresiaEditando(memb);
+    const estadoReal = obtenerEstadoMembresia(memb);
     setFormMembresia({
       id_socio: memb.id_socio,
       id_plan_membresia: memb.id_plan_membresia || memb.plan_membresia?.id_plan_membresia || '',
@@ -334,7 +376,7 @@ export default function MembresiaAdmin() {
       fecha_vencimiento: memb.fecha_vencimiento ? memb.fecha_vencimiento.split('T')[0] : '',
       dias_adicionales: 0,
       precio: memb.precio !== undefined ? memb.precio : (memb.plan_membresia?.precio || ''),
-      estado: memb.estado || 'activa'
+      estado: estadoReal
     });
     setModalMembresiaAbierto(true);
   };
@@ -376,9 +418,13 @@ export default function MembresiaAdmin() {
   const handleExtenderDiasRapido = (diasExtra) => {
     const base = formMembresia.fecha_vencimiento ? new Date(formMembresia.fecha_vencimiento) : new Date();
     base.setDate(base.getDate() + diasExtra);
+    const nuevaFechaStr = base.toISOString().split('T')[0];
+    const hoyStr = new Date().toISOString().split('T')[0];
+
     setFormMembresia(prev => ({
       ...prev,
-      fecha_vencimiento: base.toISOString().split('T')[0]
+      fecha_vencimiento: nuevaFechaStr,
+      estado: (prev.estado === 'vencida' && nuevaFechaStr >= hoyStr) ? 'activa' : prev.estado
     }));
   };
 
@@ -842,12 +888,13 @@ export default function MembresiaAdmin() {
                       </thead>
                       <tbody>
                         {membresiasFiltradas.map((memb) => {
+                          const estadoReal = obtenerEstadoMembresia(memb);
                           const diasRestantes = calcularDiasRestantes(memb.fecha_vencimiento);
-                          const esVencida = diasRestantes !== null && diasRestantes < 0;
+                          const esVencida = estadoReal === 'vencida' || (diasRestantes !== null && diasRestantes < 0);
                           const esPorVencer = diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 5;
 
                           return (
-                            <tr key={memb.id_membresia} className={`fila-membresia ${memb.estado === 'cancelada' ? 'fila-cancelada' : ''}`}>
+                            <tr key={memb.id_membresia} className={`fila-membresia ${estadoReal === 'cancelada' ? 'fila-cancelada' : estadoReal === 'vencida' ? 'fila-vencida' : ''}`}>
                               {/* Socio */}
                               <td>
                                 <div className="socio-col-user">
@@ -896,7 +943,7 @@ export default function MembresiaAdmin() {
 
                               {/* Días Restantes */}
                               <td>
-                                {memb.estado === 'cancelada' ? (
+                                {estadoReal === 'cancelada' ? (
                                   <span className="dias-badge dias-cancelado">Cancelada</span>
                                 ) : diasRestantes === null ? (
                                   <span className="dias-badge">-</span>
@@ -913,8 +960,8 @@ export default function MembresiaAdmin() {
 
                               {/* Estado Badge */}
                               <td>
-                                <span className={`estado-badge estado-${memb.estado}`}>
-                                  {memb.estado === 'activa' ? 'Activa' : memb.estado === 'vencida' ? 'Vencida' : 'Cancelada'}
+                                <span className={`estado-badge estado-${estadoReal}`}>
+                                  {estadoReal === 'activa' ? 'Activa' : estadoReal === 'vencida' ? 'Vencida' : 'Cancelada'}
                                 </span>
                               </td>
 
@@ -929,7 +976,7 @@ export default function MembresiaAdmin() {
                                     <FaEdit />
                                   </button>
 
-                                  {memb.estado !== 'cancelada' && (
+                                  {estadoReal !== 'cancelada' && (
                                     <button
                                       className="btn-tabla-action btn-tabla-cancelar"
                                       onClick={() => confirmarCancelarMembresia(memb)}
