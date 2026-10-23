@@ -1,3 +1,22 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: perfil.jsx
+ * RUTA: frontend/src/pages/perfil/perfil.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Módulo de Perfil de Usuario, Credenciales, Datos Personales y Seguridad.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 1. PASO 1 (Contexto Dual - Socio vs Dueño):
+ *    - Si lo abre un socio (`esSocio = true`), muestra su ficha, membresía y opción de cambio de contraseña.
+ *    - Si lo abre un administrador con parámetro `?id=...`, permite inspeccionar la ficha completa de un socio específico.
+ * 2. PASO 2 (Pestañas de Navegación):
+ *    - 'info': Datos personales (nombre, teléfono, email, DNI).
+ *    - 'membresia': Detalle del plan y vencimientos.
+ *    - 'seguridad': Cambio de contraseña con validación de requisitos.
+ *    - 'historial': Registro de pagos y asistencias.
+ */
+
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
@@ -28,6 +47,7 @@ import { getPerfilSocio, updatePerfilSocio } from '../../services/socioService';
 import './perfil.css';
 
 function Perfil() {
+
   const location = useLocation();
   const navigate = useNavigate();
 

@@ -1,34 +1,59 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: login.jsx
+ * RUTA: frontend/src/pages/login/login.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Pantalla de inicio de sesión para el rol Dueño / Administrador de Gimnasio.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 
+ * 1. PASO 1 (Manejo de Estado): Se declaran los estados reactivos para email, contraseña,
+ *    errores de validación de campos, errores de autenticación de red/backend, y estado `loading`.
+ * 
+ * 2. PASO 2 (Validación Previa): Se comprueba que el email posea estructura sintáctica válida
+ *    y que el campo de contraseña no se encuentre vacío.
+ * 
+ * 3. PASO 3 (Autenticación y Persistencia):
+ *    - Se despacha la petición `login()` a la API backend.
+ *    - Se borran sesiones previas de rol socio (`localStorage.removeItem('socio')`) para evitar colisiones.
+ *    - Se persiste el token JWT (`token`), el rol (`dueño`) y el objeto serializado del usuario (`usuario`).
+ * 
+ * 4. PASO 4 (Enrutamiento Condicional):
+ *    - Si el usuario YA tiene un gimnasio creado (`data.usuario.gimnasio.id_gimnasio`), se lo envía a `/dashboard-dueño`.
+ *    - Si es un usuario recién registrado sin gimnasio, se lo redirige inmediatamente a `/crear-gimnasio-dueño`.
+ */
+
 import { useState } from 'react'
-
 import { Link, useNavigate } from 'react-router-dom'
-
 import { login } from '../../services/authService.js'
-
 import logoImg from '../../assets/logo_verde.jpg'
-
 import PasswordInput from '../../components/PasswordInput/PasswordInput'
-
 import './login.css'
 
 function Login() {
-
-  // Permite navegar a otras páginas desde JavaScript.
+  // Hook de enrutamiento programático
   const navigate = useNavigate()
 
-  // Datos que escribe el usuario.
+  // ---------------------------------------------------------------------------------------
+  // PASO 1: DEFINICIÓN DE ESTADOS REACTIVOS
+  // ---------------------------------------------------------------------------------------
+
+  // Estado con las credenciales ingresadas por el dueño
   const [formData, setFormData] = useState({
     email: '',
     contrasena: '',
   })
 
-  // Errores de validación.
+  // Errores de validación por campo individual
   const [errors, setErrors] = useState({})
 
-  // Error devuelto por el backend.
+  // Mensaje de error devuelto por la API (ej: "Credenciales incorrectas")
   const [backendError, setBackendError] = useState('')
 
-  // Indica si estamos esperando la respuesta del backend.
+  // Indicador de solicitud en curso para deshabilitar botones
   const [loading, setLoading] = useState(false)
+
 
   // Actualiza los campos del formulario.
   const handleChange = (event) => {

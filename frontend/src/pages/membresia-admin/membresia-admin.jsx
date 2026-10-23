@@ -1,3 +1,21 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: membresia-admin.jsx
+ * RUTA: frontend/src/pages/membresia-admin/membresia-admin.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Panel de Control del Administrador para la Configuración de Planes y Membresías.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 1. PASO 1 (Pestaña "Planes"):
+ *    - Definición del catálogo comercial del gimnasio (ej: Pase Diario, Mensual, Trimestral, Anual).
+ *    - Configuración de tarifas en pesos y vigencia en días.
+ *    - Activación, deshabilitación y eliminación de planes.
+ * 2. PASO 2 (Pestaña "Socios"):
+ *    - Asignación manual de membresías a socios seleccionados.
+ *    - Control de estados (activas, vencidas, canceladas) y filtros de búsqueda rápida.
+ */
+
 import { useState, useEffect, useMemo } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar/sidebar';
@@ -41,6 +59,7 @@ import {
 import './membresia-admin.css';
 
 export default function MembresiaAdmin() {
+
   // --------------------------------------------------------------------------
   // Estados Generales
   // --------------------------------------------------------------------------

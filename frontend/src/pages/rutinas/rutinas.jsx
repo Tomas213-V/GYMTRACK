@@ -1,3 +1,22 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: rutinas.jsx
+ * RUTA: frontend/src/pages/rutinas/rutinas.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Panel Administrativo para la Creación, Edición y Asignación de Rutinas.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 1. PASO 1 (Catálogos Requeridos):
+ *    - `sociosList`: Socios del gimnasio para asociar el plan de entrenamiento.
+ *    - `catalogoEjercicios`: Base de datos de ejercicios por grupo muscular (pecho, espalda, pierna, etc.).
+ * 2. PASO 2 (Diseñador de Rutinas):
+ *    - Permite estructurar entrenamientos divididos por días (Lunes: Pecho/Tríceps, Miércoles: Piernas, etc.).
+ *    - Configuración por ejercicio de series, repeticiones, peso sugerido y descansos entre series.
+ * 3. PASO 3 (Gestión de Estados):
+ *    - Rutinas activas, pausadas o archivadas.
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar/sidebar';
@@ -45,6 +64,7 @@ export default function Rutinas() {
   const usuarioLocal = JSON.parse(localStorage.getItem('usuario') || 'null');
   const esSocio = rol === 'socio' || Boolean(socioLocal) || usuarioLocal?.rol === 'socio';
   const socioIdActual = socioLocal?.id_socio || usuarioLocal?.id_socio || (esSocio ? 1 : '');
+
 
   // Listado y selección
   const [rutinas, setRutinas] = useState([]);

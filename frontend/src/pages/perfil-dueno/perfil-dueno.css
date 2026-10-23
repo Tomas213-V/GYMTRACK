@@ -1,0 +1,673 @@
+/* ==============================================================================
+   GYMTRACK - PÁGINA DE PERFIL DEL DUEÑO Y SU GIMNASIO
+   ============================================================================== */
+
+:root {
+  --pd-bg: #0d0f12;
+  --pd-card-bg: #14171d;
+  --pd-card-border: #232832;
+  --pd-card-hover: #1a1e26;
+  --pd-green: #84cc16;
+  --pd-green-hover: #a3e635;
+  --pd-green-glow: rgba(132, 204, 22, 0.22);
+  --pd-green-subtle: rgba(132, 204, 22, 0.08);
+  --pd-text-primary: #f8fafc;
+  --pd-text-secondary: #9ca3af;
+  --pd-text-muted: #6b7280;
+  --pd-input-bg: #0d0f12;
+  --pd-danger: #ef4444;
+  --pd-warning: #f59e0b;
+}
+
+.perfil-dueno-layout {
+  min-height: 100vh;
+  background-color: var(--pd-bg);
+  color: var(--pd-text-primary);
+  display: flex;
+  flex-direction: column;
+  font-family: 'Nunito Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  box-sizing: border-box;
+}
+
+.perfil-dueno-main-wrapper {
+  display: flex;
+  flex: 1;
+  width: 100%;
+}
+
+.perfil-dueno-content {
+  flex: 1;
+  padding: 32px 40px;
+  max-width: 1360px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1024px) {
+  .perfil-dueno-content {
+    padding: 24px 20px 40px;
+  }
+}
+
+/* ==============================================================================
+   TOPBAR
+   ============================================================================== */
+.perfil-dueno-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.perfil-dueno-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.perfil-dueno-btn-volver {
+  background: #191d24;
+  border: 1px solid var(--pd-card-border);
+  color: var(--pd-text-secondary);
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.perfil-dueno-btn-volver:hover {
+  background: #232832;
+  color: #ffffff;
+  border-color: #3b4353;
+  transform: translateX(-2px);
+}
+
+.perfil-dueno-topbar-left h1 {
+  font-size: 26px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 4px 0;
+  letter-spacing: -0.5px;
+}
+
+.perfil-dueno-topbar-left p {
+  font-size: 14px;
+  color: var(--pd-text-secondary);
+  margin: 0;
+}
+
+.perfil-dueno-badge-rol {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--pd-green-subtle);
+  border: 1px solid rgba(132, 204, 22, 0.3);
+  color: var(--pd-green);
+  padding: 8px 16px;
+  border-radius: 30px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.perfil-dueno-badge-icon {
+  font-size: 14px;
+}
+
+/* ==============================================================================
+   FEEDBACK ALERTS
+   ============================================================================== */
+.perfil-dueno-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  font-size: 14px;
+  font-weight: 500;
+  animation: pdSlideIn 0.3s ease-out;
+}
+
+@keyframes pdSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.perfil-dueno-alert.exito {
+  background-color: rgba(132, 204, 22, 0.12);
+  border: 1px solid rgba(132, 204, 22, 0.4);
+  color: #bef264;
+}
+
+.perfil-dueno-alert.error {
+  background-color: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.perfil-dueno-alert-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.perfil-dueno-alert-close {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.perfil-dueno-alert-close:hover {
+  opacity: 1;
+}
+
+/* ==============================================================================
+   LOADING
+   ============================================================================== */
+.perfil-dueno-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  color: var(--pd-text-secondary);
+}
+
+.perfil-dueno-spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(132, 204, 22, 0.2);
+  border-top-color: var(--pd-green);
+  border-radius: 50%;
+  animation: pdSpin 0.9s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes pdSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==============================================================================
+   HERO CARD
+   ============================================================================== */
+.perfil-dueno-hero-card {
+  background: linear-gradient(135deg, #161a22 0%, #111419 100%);
+  border: 1px solid var(--pd-card-border);
+  border-radius: 18px;
+  padding: 28px 32px;
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  flex-wrap: wrap;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.perfil-dueno-hero-main {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex: 1;
+  min-width: 280px;
+}
+
+.perfil-dueno-avatar-wrapper {
+  position: relative;
+}
+
+.perfil-dueno-avatar {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #222834 0%, #14171d 100%);
+  border: 3px solid var(--pd-green);
+  color: var(--pd-green);
+  font-size: 28px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 1px;
+  box-shadow: 0 0 20px var(--pd-green-glow);
+}
+
+.perfil-dueno-status-dot {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 3px solid #14171d;
+  background-color: var(--pd-green);
+  box-shadow: 0 0 8px var(--pd-green);
+}
+
+.perfil-dueno-hero-info h2 {
+  font-size: 24px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.3px;
+}
+
+.perfil-dueno-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.perfil-dueno-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #1c212a;
+  color: var(--pd-text-secondary);
+  border: 1px solid #282f3c;
+}
+
+.perfil-dueno-tag.tag-rol {
+  background: rgba(132, 204, 22, 0.12);
+  color: var(--pd-green);
+  border-color: rgba(132, 204, 22, 0.3);
+}
+
+.perfil-dueno-tag.tag-gym {
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.perfil-dueno-tag.tag-estado {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.perfil-dueno-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  font-size: 13px;
+  color: var(--pd-text-secondary);
+}
+
+.perfil-dueno-hero-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* Quick Stats */
+.perfil-dueno-quick-stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.perfil-dueno-stat-box {
+  background: #111419;
+  border: 1px solid var(--pd-card-border);
+  border-radius: 12px;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 140px;
+}
+
+.perfil-dueno-stat-icon-wrapper {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(132, 204, 22, 0.1);
+  color: var(--pd-green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.perfil-dueno-stat-val {
+  display: block;
+  font-size: 20px;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1.2;
+}
+
+.perfil-dueno-stat-val.accent {
+  color: var(--pd-green);
+}
+
+.perfil-dueno-stat-label {
+  display: block;
+  font-size: 11px;
+  color: var(--pd-text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ==============================================================================
+   TABS BAR
+   ============================================================================== */
+.perfil-dueno-tabs-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--pd-card-border);
+  padding-bottom: 12px;
+  overflow-x: auto;
+}
+
+.perfil-dueno-tab-btn {
+  background: #14171d;
+  border: 1px solid var(--pd-card-border);
+  color: var(--pd-text-secondary);
+  padding: 12px 22px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.25s ease;
+  white-space: nowrap;
+}
+
+.perfil-dueno-tab-btn:hover {
+  background: #1c212a;
+  color: #ffffff;
+  border-color: #384253;
+}
+
+.perfil-dueno-tab-btn.activo {
+  background: var(--pd-green);
+  color: #0b0d10;
+  border-color: var(--pd-green);
+  box-shadow: 0 4px 16px var(--pd-green-glow);
+}
+
+/* ==============================================================================
+   GRID Y TARJETAS DE CONTENIDO
+   ============================================================================== */
+.perfil-dueno-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 28px;
+}
+
+@media (max-width: 992px) {
+  .perfil-dueno-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.perfil-dueno-card {
+  background: var(--pd-card-bg);
+  border: 1px solid var(--pd-card-border);
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.perfil-dueno-card-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 28px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--pd-card-border);
+}
+
+.perfil-dueno-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(132, 204, 22, 0.12);
+  color: var(--pd-green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.perfil-dueno-card-header h3 {
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 4px 0;
+}
+
+.perfil-dueno-card-header p {
+  font-size: 13px;
+  color: var(--pd-text-secondary);
+  margin: 0;
+}
+
+/* Form Styles */
+.perfil-dueno-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.perfil-dueno-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .perfil-dueno-form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.perfil-dueno-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.perfil-dueno-form-group label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.perfil-dueno-form-group label .req {
+  color: var(--pd-green);
+}
+
+.perfil-dueno-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.perfil-dueno-input-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--pd-text-muted);
+  font-size: 15px;
+  pointer-events: none;
+}
+
+.perfil-dueno-input {
+  width: 100%;
+  background-color: var(--pd-input-bg);
+  border: 1px solid var(--pd-card-border);
+  border-radius: 10px;
+  padding: 12px 14px 12px 42px;
+  color: #ffffff;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.perfil-dueno-input:focus {
+  border-color: var(--pd-green);
+  box-shadow: 0 0 0 3px var(--pd-green-subtle);
+}
+
+.perfil-dueno-input.read-only {
+  background-color: #111419;
+  color: var(--pd-text-secondary);
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.perfil-dueno-input-help {
+  font-size: 12px;
+  color: var(--pd-text-muted);
+}
+
+.perfil-dueno-input-btn-ver {
+  position: absolute;
+  right: 14px;
+  background: none;
+  border: none;
+  color: var(--pd-text-secondary);
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  transition: color 0.2s ease;
+}
+
+.perfil-dueno-input-btn-ver:hover {
+  color: var(--pd-green);
+}
+
+.perfil-dueno-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--pd-card-border);
+}
+
+.perfil-dueno-btn-submit {
+  background: var(--pd-green);
+  color: #0b0d10;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px var(--pd-green-glow);
+}
+
+.perfil-dueno-btn-submit:hover:not(:disabled) {
+  background: var(--pd-green-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px var(--pd-green-glow);
+}
+
+.perfil-dueno-btn-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Side Card */
+.perfil-dueno-side-card {
+  background: linear-gradient(135deg, #171c24 0%, #111419 100%);
+  border: 1px solid var(--pd-card-border);
+  border-radius: 16px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.perfil-dueno-side-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(132, 204, 22, 0.1);
+  color: var(--pd-green);
+  border: 1px solid rgba(132, 204, 22, 0.25);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  width: fit-content;
+}
+
+.perfil-dueno-side-card h4 {
+  font-size: 18px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+}
+
+.perfil-dueno-side-card p {
+  font-size: 13px;
+  color: var(--pd-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.perfil-dueno-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.perfil-dueno-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #e2e8f0;
+}
+
+.perfil-dueno-checklist-item .chk-icon {
+  color: var(--pd-green);
+  font-size: 14px;
+  flex-shrink: 0;
+}

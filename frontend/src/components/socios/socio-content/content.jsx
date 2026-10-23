@@ -1,4 +1,24 @@
 
+/**
+ * =========================================================================================
+ * ARCHIVO: content.jsx
+ * RUTA: frontend/src/components/socios/socio-content/content.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Controlador central de la interfaz de Socios (listado, filtros, modales y paginación).
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 1. PASO 1 (Estados Reactivos):
+ *    - `socios`: Listado de socios recuperados de la API para la página actual.
+ *    - `search` y `estado`: Criterios de filtrado reactivo (búsqueda por texto y filtro por activo/pendiente/inactivo).
+ *    - `page`, `totalPages`, `totalSocios`: Control de navegación paginada (límite de 6 por página).
+ * 2. PASO 2 (Modales):
+ *    - `showCreateModal`: Abre `<SocioModal />` para registrar un nuevo alumno.
+ *    - `showDetailModal`: Abre `<SocioDetalleModal />` para ver ficha médica, pagos y editar o dar de baja.
+ * 3. PASO 3 (Sincronización con el Servidor):
+ *    - `loadSocios()`: Función memoizada con `useCallback` que invoca `fetchSocios` y actualiza la lista.
+ */
+
 import { useState, useEffect, useCallback } from 'react'
 import { fetchSocios } from '../../../services/socioService'
 import SocioHeader from '../socio-header/header'
@@ -17,6 +37,7 @@ function SociosContent() {
   // Filtros y Búsqueda (Solamente DNI o Teléfono)
   const [search, setSearch] = useState('')
   const [estado, setEstado] = useState('todos')
+
 
   // Paginación
   const [page, setPage] = useState(1)

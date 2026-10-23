@@ -1,34 +1,78 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: App.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Enrutador central y mapa de navegación de la aplicación web.
+ * =========================================================================================
+ * 
+ * GUÍA DE ARQUITECTURA PARA UN DESARROLLADOR EXTERNO:
+ * GYMTRACK está estructurado en 3 grandes áreas de navegación:
+ * 
+ * 1. ZONA PÚBLICA (Landing & Marketing):
+ *    - Páginas informativas abiertas a cualquier visitante sin autenticación:
+ *      Landing (`/`, `/landing`), Precios (`/precio-landing`), Soporte (`/support-landing`), etc.
+ * 
+ * 2. ZONA DEL DUEÑO / ADMINISTRADOR DEL GIMNASIO:
+ *    - Autenticación: Login (`/login-dueño`) y Registro (`/register-dueño`).
+ *    - Creación de Gimnasio: Onboarding forzoso si el dueño aún no registró su establecimiento (`/crear-gimnasio-dueño`).
+ *    - Panel Administrativo (Protegido con `<ProtectedRoute rolRequerido="dueño">`):
+ *      Dashboard analítico, Gestión de Socios, Pagos/Caja, Membresías del Gym, Asistencias,
+ *      Rutinas y Perfil del administrador.
+ * 
+ * 3. ZONA DEL SOCIO / ALUMNO:
+ *    - Autenticación: Login del socio (`/login-socio`) usando DNI o credenciales otorgadas por el gimnasio.
+ *    - Panel del Socio (Protegido con `<ProtectedRoute rolRequerido="socio">`):
+ *      Dashboard personal, Estado y pago de Membresías, Catálogo de Ejercicios,
+ *      Rutinas asignadas por profesores, Registro y código QR de Asistencias.
+ * 
+ * CONTROL DE ACCESO:
+ * `<ProtectedRoute />` inspecciona el token JWT en localStorage, valida el rol del usuario,
+ * y verifica si el dueño ya dio de alta su gimnasio antes de permitir el ingreso.
+ */
+
 import { Route, Routes } from 'react-router-dom'
 
+// Páginas Públicas y de Presentación
 import Landing from './pages/landing/landing'
+import Progress from './pages/progress/progress'
+import Precio from './pages/precio/precio'
+import Soporte from './pages/support/support'
+import Ejercicios from './pages/ejercicios/ejercicios'
+
+// Autenticación
 import Login from './pages/login/login'
 import LoginSocio from './pages/login-socio/login-socio'
+import Register from './pages/register/register'
+
+// Páginas del Rol Dueño / Administrador
+import Dashboard from './pages/dashboard/dashboard'
+import CrearGimnasio from './pages/crear-gimnasio/crear-gimnasio'
+import Socios from './pages/socios/socios'
+import Pagos from './pages/pagos/pagos'
+import MembresiaAdmin from './pages/membresia-admin/membresia-admin'
+import Asistencias from './pages/asistencias/asistencias'
+import Rutinas from './pages/rutinas/rutinas'
+import Perfil from './pages/perfil/perfil'
+import PerfilDueno from './pages/perfil-dueno/perfil-dueno'
+
+// Páginas del Rol Socio / Alumno
 import DashboardSocio from './pages/dashboard-socio/dashboard-socio'
 import SocioMembresia from './pages/socio-membresia/socio-membresia'
 import AsistenciaSocio from './pages/asistencia-socio/asistencia-socio'
-import Register from './pages/register/register'
-import Dashboard from './pages/dashboard/dashboard'
-import Progress from './pages/progress/progress'
-import Precio from './pages/precio/precio'
-import Ejercicios from './pages/ejercicios/ejercicios'
 import SocioEjercicios from './pages/socio-ejercicios/socio-ejercicios'
-import Soporte from './pages/support/support'
-import Pagos from './pages/pagos/pagos'
-import CrearGimnasio from './pages/crear-gimnasio/crear-gimnasio'
-import Socios from './pages/socios/socios'
-import Asistencias from './pages/asistencias/asistencias'
-import Rutinas from './pages/rutinas/rutinas'
 import SocioRutinas from './pages/socio-rutinas/socio-rutinas'
-import Perfil from './pages/perfil/perfil'
-import MembresiaAdmin from './pages/membresia-admin/membresia-admin'
-import './App.css'
+
+// Componente Guardián de Rutas y Estilos Generales
 import ProtectedRoute from './components/ProtectedRoute'
+import './App.css'
+
 function App() {
   return (
     <>
       <Routes>
         {/* =========================================================
-            RUTAS DE LA LANDING (-landing)
+            SECCIÓN 1: RUTAS PÚBLICAS / LANDING PAGE
+            Accesibles libremente por cualquier usuario sin iniciar sesión.
             ========================================================= */}
         <Route path="/" element={<Landing />} />
         <Route path="/landing" element={<Landing />} />
@@ -254,7 +298,7 @@ function App() {
           path="/perfil-dueño"
           element={
             <ProtectedRoute rolRequerido="dueño">
-              <Perfil />
+              <PerfilDueno />
             </ProtectedRoute>
           }
         />
@@ -262,7 +306,7 @@ function App() {
           path="/perfil-dueno"
           element={
             <ProtectedRoute rolRequerido="dueño">
-              <Perfil />
+              <PerfilDueno />
             </ProtectedRoute>
           }
         />
@@ -474,7 +518,11 @@ function App() {
           path="/perfil"
           element={
             <ProtectedRoute>
-              <Perfil />
+              {localStorage.getItem('rol') === 'socio' || Boolean(localStorage.getItem('socio')) ? (
+                <Perfil />
+              ) : (
+                <PerfilDueno />
+              )}
             </ProtectedRoute>
           }
         />

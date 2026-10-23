@@ -1,3 +1,22 @@
+/**
+ * =========================================================================================
+ * ARCHIVO: login-socio.jsx
+ * RUTA: frontend/src/pages/login-socio/login-socio.jsx
+ * PROYECTO: GYMTRACK - Frontend
+ * DESCRIPCIÓN: Pantalla de inicio de sesión exclusiva para Socios y Alumnos del Gimnasio.
+ * =========================================================================================
+ * 
+ * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
+ * 1. PASO 1 (Campos Requeridos): A diferencia del dueño, el socio valida su identidad mediante
+ *    una combinación de Email, Documento de Identidad (DNI) y Contraseña.
+ * 2. PASO 2 (Validación Local): Comprueba la estructura sintáctica de los campos obligatorios.
+ * 3. PASO 3 (Aislamiento de Sesión):
+ *    - Limpia rastros de sesiones de dueño (`localStorage.removeItem('usuario')`).
+ *    - Persiste el token JWT y el objeto específico del socio (`localStorage.setItem('socio')`).
+ *    - Fija el rol en `'socio'` para que `ProtectedRoute` le permita acceder a su portal.
+ * 4. PASO 4 (Redirección): Al autenticarse con éxito, navega automáticamente a `/dashboard-socio`.
+ */
+
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { loginSocio } from '../../services/authService.js'
@@ -8,11 +27,15 @@ import '../login/login.css'
 function LoginSocio() {
   const navigate = useNavigate()
 
+  // ---------------------------------------------------------------------------------------
+  // PASO 1: ESTADO LOCAL DEL FORMULARIO DE ACCESO DEL SOCIO
+  // ---------------------------------------------------------------------------------------
   const [formData, setFormData] = useState({
     email: '',
     dni: '',
     contrasena: '',
   })
+
 
   const [errors, setErrors] = useState({})
   const [backendError, setBackendError] = useState('')
