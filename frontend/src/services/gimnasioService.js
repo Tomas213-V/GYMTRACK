@@ -74,3 +74,28 @@ export async function obtenerMiGimnasio() {
     throw error;
   }
 }
+
+/**
+ * Actualizar los datos del gimnasio del usuario autenticado
+ * @param {Object} datosGimnasio - { nombre, direccion, telefono, email }
+ */
+export async function actualizarMiGimnasio(datosGimnasio) {
+  try {
+    const res = await fetch(`${API_URL}/gimnasios/mi-gimnasio`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(datosGimnasio),
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Error al actualizar los datos del gimnasio');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error en actualizarMiGimnasio:', error);
+    throw error;
+  }
+}

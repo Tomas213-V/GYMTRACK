@@ -512,82 +512,8 @@ const getPerfilSocio = async (req, res) => {
       targetId = req.usuario.id_socio;
     }
 
-    // 2. Si no hay targetId y es un usuario (dueño/admin), buscar si tiene ficha de socio con el mismo email
-    if (!targetId && req.usuario?.id_usuario) {
-      const { data: sVinculado } = await supabase
-        .from('socio')
-        .select('id_socio')
-        .ilike('email', req.usuario.email || '')
-        .eq('id_gimnasio', req.usuario.id_gimnasio || 0)
-        .maybeSingle();
-
-      if (sVinculado) {
-        targetId = sVinculado.id_socio;
-      }
-    }
-
-    // 3. Si aún no hay targetId y es un dueño/admin, tomar el socio más reciente del gimnasio
-    if (!targetId && req.usuario?.id_gimnasio) {
-      const { data: sReciente } = await supabase
-        .from('socio')
-        .select('id_socio')
-        .eq('id_gimnasio', req.usuario.id_gimnasio)
-        .order('id_socio', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (sReciente) {
-        targetId = sReciente.id_socio;
-      }
-    }
-
-    // 4. Si aún no hay ningún socio registrado en el gimnasio pero es dueño, retornar datos del dueño y su gimnasio
-    if (!targetId && req.usuario?.id_usuario) {
-      const { data: userProfile } = await supabase
-        .from('usuario')
-        .select('id_usuario, nombre, apellido, email, rol, estado, fecha_creacion')
-        .eq('id_usuario', req.usuario.id_usuario)
-        .maybeSingle();
-
-      let gymData = null;
-      if (req.usuario?.id_gimnasio) {
-        const { data: g } = await supabase
-          .from('gimnasio')
-          .select('*')
-          .eq('id_gimnasio', req.usuario.id_gimnasio)
-          .maybeSingle();
-        gymData = g;
-      }
-
-      return res.status(200).json({
-        tipo: 'usuario',
-        socio: {
-          id_socio: null,
-          nombre: userProfile?.nombre || 'Administrador',
-          apellido: userProfile?.apellido || '',
-          dni: '',
-          telefono: '',
-          email: userProfile?.email || '',
-          fecha_alta: userProfile?.fecha_creacion?.split('T')[0] || '',
-          estado: userProfile?.estado || 'activo'
-        },
-        gimnasio: gymData,
-        membresia: null,
-        historialMembresias: [],
-        ultimosPagos: [],
-        ultimasAsistencias: [],
-        estadisticas: {
-          totalAsistencias: 0,
-          totalPagos: 0,
-          estadoMembresia: 'dueño',
-          diasRestantes: null
-        },
-        sociosDisponibles: []
-      });
-    }
-
     if (!targetId) {
-      return res.status(400).json({ error: 'No se pudo identificar el socio a consultar.' });
+      return res.status(400).json({ error: 'No se especificó el ID del socio a consultar (?id=).' });
     }
 
     // Permisos: Si quien consulta tiene rol de socio, sólo puede ver su propio perfil

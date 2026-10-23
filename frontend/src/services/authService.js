@@ -132,4 +132,54 @@ export async function loginSocio(userData) {
  */
 export function isAuthenticated() {
   return localStorage.getItem('token') !== null
+}
+
+// =========================================================================================
+// 5. PERFIL DE USUARIO / DUEÑO
+// =========================================================================================
+/**
+ * Obtiene los datos del usuario autenticado (dueño y su gimnasio asociado)
+ * @returns {Promise<Object>} Objeto con datos del usuario y su gimnasio
+ */
+export async function getPerfilOwner() {
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_URL}/auth/me`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    }
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Error al obtener datos del perfil de administrador.');
+  }
+
+  return data;
+}
+
+/**
+ * Actualiza los datos personales o contraseña del dueño
+ * @param {Object} datos - { nombre, apellido, email, contrasena_actual, nueva_contrasena }
+ * @returns {Promise<Object>} Objeto con usuario actualizado y nuevo token si corresponde
+ */
+export async function updatePerfilOwner(datos) {
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_URL}/auth/me`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(datos)
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Error al actualizar el perfil.');
+  }
+
+  return data;
 }

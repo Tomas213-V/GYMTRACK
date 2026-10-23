@@ -53,6 +53,7 @@ import MembresiaAdmin from './pages/membresia-admin/membresia-admin'
 import Asistencias from './pages/asistencias/asistencias'
 import Rutinas from './pages/rutinas/rutinas'
 import Perfil from './pages/perfil/perfil'
+import PerfilDueno from './pages/perfil-dueno/perfil-dueno'
 
 // Páginas del Rol Socio / Alumno
 import DashboardSocio from './pages/dashboard-socio/dashboard-socio'
@@ -297,7 +298,7 @@ function App() {
           path="/perfil-dueño"
           element={
             <ProtectedRoute rolRequerido="dueño">
-              <Perfil />
+              <PerfilDueno />
             </ProtectedRoute>
           }
         />
@@ -305,7 +306,7 @@ function App() {
           path="/perfil-dueno"
           element={
             <ProtectedRoute rolRequerido="dueño">
-              <Perfil />
+              <PerfilDueno />
             </ProtectedRoute>
           }
         />
@@ -517,7 +518,11 @@ function App() {
           path="/perfil"
           element={
             <ProtectedRoute>
-              <Perfil />
+              {localStorage.getItem('rol') === 'socio' || Boolean(localStorage.getItem('socio')) ? (
+                <Perfil />
+              ) : (
+                <PerfilDueno />
+              )}
             </ProtectedRoute>
           }
         />
