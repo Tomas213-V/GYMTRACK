@@ -156,16 +156,52 @@ const createSocio = async (req, res) => {
       contrasenaHash = await bcrypt.hash(rawPass, 10);
     }
 
+    const cleanDni = dni.toString().trim();
+    const dniSinPuntos = cleanDni.replace(/[\.\s-]/g, '');
+
     // Verificar DNI duplicado en el mismo gimnasio
     const { data: socioExistente } = await supabase
       .from('socio')
       .select('id_socio')
-      .eq('dni', dni.toString().trim())
+      .in('dni', [cleanDni, dniSinPuntos])
       .eq('id_gimnasio', idGimnasio)
       .maybeSingle();
 
     if (socioExistente) {
-      return res.status(400).json({ error: 'Ya existe un socio registrado con este DNI.' });
+      return res.status(400).json({ error: 'Ya existe un socio registrado con este DNI en tu gimnasio.' });
+    }
+
+    // Verificar si el socio está registrado y ACTIVO en otro gimnasio
+    const { data: sociosOtrosGyms } = await supabase
+      .from('socio')
+      .select(`
+        id_socio,
+        nombre,
+        apellido,
+        dni,
+        estado,
+        id_gimnasio,
+        gimnasio (id_gimnasio, nombre, telefono)
+      `)
+      .in('dni', [cleanDni, dniSinPuntos])
+      .neq('id_gimnasio', idGimnasio)
+      .ilike('estado', 'activo');
+
+    if (sociosOtrosGyms && sociosOtrosGyms.length > 0) {
+      const socioVinculado = sociosOtrosGyms[0];
+      const nombreGym = socioVinculado.gimnasio?.nombre || 'otro gimnasio';
+
+      // Si el cliente no ha confirmado explícitamente continuar con el alta
+      if (!req.body.confirmarVinculacion) {
+        return res.status(409).json({
+          alertaVinculacion: true,
+          error: `Atención: El socio con DNI ${cleanDni} (${socioVinculado.nombre} ${socioVinculado.apellido || ''}) se encuentra actualmente activo en el gimnasio "${nombreGym}" sin haberse dado de baja.`,
+          gimnasioNombre: nombreGym,
+          socioNombre: `${socioVinculado.nombre} ${socioVinculado.apellido || ''}`.trim(),
+          dni: socioVinculado.dni,
+          idGimnasio: socioVinculado.id_gimnasio
+        });
+      }
     }
 
     // Crear la ficha de socio directamente
@@ -805,6 +841,96 @@ const updatePerfilSocio = async (req, res) => {
   }
 };
 
+/**
+ * 9. VERIFICAR DNI Y VINCULACIÓN INTER-GIMNASIO
+ * GET /api/socios/verificar-dni?dni=39123456
+ */
+const verificarDniSocio = async (req, res) => {
+  try {
+    const idGimnasio = req.usuario?.id_gimnasio;
+    const { dni } = req.query;
+
+    if (!dni || !dni.toString().trim()) {
+      return res.status(400).json({ error: 'El DNI es requerido para la verificación.' });
+    }
+
+    const cleanDni = dni.toString().trim();
+    const dniSinPuntos = cleanDni.replace(/[\.\s-]/g, '');
+
+    // 1. Verificar si ya existe en el gimnasio actual
+    let queryMismo = supabase
+      .from('socio')
+      .select('id_socio, nombre, apellido, dni, estado')
+      .in('dni', [cleanDni, dniSinPuntos]);
+
+    if (idGimnasio) {
+      queryMismo = queryMismo.eq('id_gimnasio', idGimnasio);
+    }
+
+    const { data: sociosMismoGym } = await queryMismo;
+
+    if (sociosMismoGym && sociosMismoGym.length > 0) {
+      return res.status(200).json({
+        existeEnEsteGimnasio: true,
+        vinculadoOtroGimnasio: false,
+        socio: sociosMismoGym[0],
+        mensaje: 'Ya existe un socio registrado con este DNI en tu gimnasio.'
+      });
+    }
+
+    // 2. Verificar si está registrado y ACTIVO en otro gimnasio
+    let queryOtro = supabase
+      .from('socio')
+      .select(`
+        id_socio,
+        nombre,
+        apellido,
+        dni,
+        estado,
+        id_gimnasio,
+        gimnasio (id_gimnasio, nombre, telefono, email)
+      `)
+      .in('dni', [cleanDni, dniSinPuntos])
+      .ilike('estado', 'activo');
+
+    if (idGimnasio) {
+      queryOtro = queryOtro.neq('id_gimnasio', idGimnasio);
+    }
+
+    const { data: sociosOtroGym, error: errOtro } = await queryOtro;
+
+    if (!errOtro && sociosOtroGym && sociosOtroGym.length > 0) {
+      const otro = sociosOtroGym[0];
+      const nombreGimnasio = otro.gimnasio?.nombre || 'otro gimnasio';
+      return res.status(200).json({
+        existeEnEsteGimnasio: false,
+        vinculadoOtroGimnasio: true,
+        gimnasio: {
+          id_gimnasio: otro.id_gimnasio,
+          nombre: nombreGimnasio,
+          telefono: otro.gimnasio?.telefono || null
+        },
+        socio: {
+          id_socio: otro.id_socio,
+          nombre: otro.nombre,
+          apellido: otro.apellido,
+          dni: otro.dni,
+          estado: otro.estado
+        },
+        mensaje: `Aviso: El socio figura actualmente activo en el gimnasio "${nombreGimnasio}" sin haberse dado de baja.`
+      });
+    }
+
+    return res.status(200).json({
+      existeEnEsteGimnasio: false,
+      vinculadoOtroGimnasio: false
+    });
+
+  } catch (error) {
+    return res.status(500).json({ error: 'Error al verificar DNI del socio: ' + error.message });
+  }
+};
+
 module.exports = {
   getSocios,
   getSocioById,
@@ -813,5 +939,6 @@ module.exports = {
   changeEstadoSocio,
   deleteSocio,
   getPerfilSocio,
-  updatePerfilSocio
+  updatePerfilSocio,
+  verificarDniSocio
 };

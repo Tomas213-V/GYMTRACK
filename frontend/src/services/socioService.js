@@ -59,6 +59,25 @@ export async function fetchSocios({ page = 1, limit = 6, estado = '', search = '
 }
 
 /**
+ * PASO 1b: Verificación preventiva de DNI y vinculación con otros gimnasios.
+ * 
+ * @param {string|number} dni - Documento a verificar
+ * @returns {Promise<{existeEnEsteGimnasio: boolean, vinculadoOtroGimnasio: boolean, gimnasio?: Object, socio?: Object, mensaje?: string}>}
+ */
+export async function verificarDniSocio(dni) {
+  if (!dni) return null;
+  const cleanDni = dni.toString().trim();
+  if (!cleanDni) return null;
+
+  const response = await fetch(`${API_URL}/socios/verificar-dni?dni=${encodeURIComponent(cleanDni)}`, {
+    headers: getHeaders()
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Error al verificar DNI');
+  return data;
+}
+
+/**
  * PASO 2: Creación de un nuevo socio en el gimnasio.
  * 
  * @param {Object} socioData - Datos del formulario (nombre, apellido, dni, email, telefono, etc.)
@@ -71,7 +90,15 @@ export async function createSocio(socioData) {
     body: JSON.stringify(socioData)
   });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al crear socio.');
+  if (!response.ok) {
+    const error = new Error(data.error || 'Error al crear socio.');
+    error.status = response.status;
+    error.alertaVinculacion = data.alertaVinculacion || false;
+    error.gimnasioNombre = data.gimnasioNombre;
+    error.socioNombre = data.socioNombre;
+    error.dni = data.dni;
+    throw error;
+  }
   return data;
 }
 
