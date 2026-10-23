@@ -149,19 +149,42 @@ export default function MembresiaAdmin() {
   }, []);
 
   // --------------------------------------------------------------------------
+  // Funciones Auxiliares de Cálculo de Estados de Membresía
+  // --------------------------------------------------------------------------
+  const calcularDiasRestantes = (fechaVenc) => {
+    if (!fechaVenc) return null;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const venc = new Date(fechaVenc.split('T')[0] + 'T00:00:00');
+    const diffTime = venc - hoy;
+    const diffDias = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDias;
+  };
+
+  const obtenerEstadoMembresia = (memb) => {
+    const est = (memb?.estado || '').toLowerCase().trim();
+    if (est === 'cancelada' || est === 'cancelado') return 'cancelada';
+    if (est === 'pausada' || est === 'pausado' || est === 'inactiva' || est === 'inactivo') return 'pausada';
+    const dias = calcularDiasRestantes(memb?.fecha_vencimiento);
+    if (est === 'vencida' || est === 'vencido' || (dias !== null && dias < 0)) return 'vencida';
+    if (est === 'activa' || est === 'activo' || !est) return 'activa';
+    return est;
+  };
+
+  // --------------------------------------------------------------------------
   // Métricas y Estadísticas Calculadas
   // --------------------------------------------------------------------------
   const metricas = useMemo(() => {
     const planesActivos = planes.filter(p => p.estado === 'activo').length;
     const totalMembresias = membresias.length;
-    const membresiasActivas = membresias.filter(m => m.estado === 'activa').length;
-    const membresiasPausadas = membresias.filter(m => m.estado === 'pausada' || m.estado === 'inactiva').length;
-    const membresiasVencidas = membresias.filter(m => m.estado === 'vencida').length;
-    const membresiasCanceladas = membresias.filter(m => m.estado === 'cancelada').length;
+    const membresiasActivas = membresias.filter(m => obtenerEstadoMembresia(m) === 'activa').length;
+    const membresiasPausadas = membresias.filter(m => obtenerEstadoMembresia(m) === 'pausada').length;
+    const membresiasVencidas = membresias.filter(m => obtenerEstadoMembresia(m) === 'vencida').length;
+    const membresiasCanceladas = membresias.filter(m => obtenerEstadoMembresia(m) === 'cancelada').length;
 
     // Calcular recaudación estimada mensual por membresías activas
     const estimadoActivo = membresias
-      .filter(m => m.estado === 'activa')
+      .filter(m => obtenerEstadoMembresia(m) === 'activa')
       .reduce((acc, curr) => acc + (parseFloat(curr.precio) || 0), 0);
 
     return {
@@ -193,10 +216,11 @@ export default function MembresiaAdmin() {
   // --------------------------------------------------------------------------
   const membresiasFiltradas = useMemo(() => {
     return membresias.filter(m => {
+      const estadoCalculado = obtenerEstadoMembresia(m);
       if (filtroEstadoMembresia !== 'todos') {
         if (filtroEstadoMembresia === 'pausada') {
-          if (m.estado !== 'pausada' && m.estado !== 'inactiva') return false;
-        } else if (m.estado !== filtroEstadoMembresia) {
+          if (estadoCalculado !== 'pausada') return false;
+        } else if (estadoCalculado !== filtroEstadoMembresia) {
           return false;
         }
       }
@@ -514,15 +538,7 @@ export default function MembresiaAdmin() {
     }
   };
 
-  const calcularDiasRestantes = (fechaVenc) => {
-    if (!fechaVenc) return null;
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const venc = new Date(fechaVenc.split('T')[0] + 'T00:00:00');
-    const diffTime = venc - hoy;
-    const diffDias = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDias;
-  };
+
 
   return (
     <div className="membresia-admin-layout">
@@ -876,8 +892,10 @@ export default function MembresiaAdmin() {
                           const esVencida = diasRestantes !== null && diasRestantes < 0;
                           const esPorVencer = diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 5;
 
+                          const estadoCalculado = obtenerEstadoMembresia(memb);
+
                           return (
-                            <tr key={memb.id_membresia} className={`fila-membresia ${memb.estado === 'cancelada' ? 'fila-cancelada' : ''}`}>
+                            <tr key={memb.id_membresia} className={`fila-membresia ${estadoCalculado === 'cancelada' ? 'fila-cancelada' : ''}`}>
                               {/* Socio */}
                               <td>
                                 <div className="socio-col-user">
@@ -926,7 +944,7 @@ export default function MembresiaAdmin() {
 
                               {/* Días Restantes */}
                               <td>
-                                {memb.estado === 'cancelada' ? (
+                                {estadoCalculado === 'cancelada' ? (
                                   <span className="dias-badge dias-cancelado">Cancelada</span>
                                 ) : diasRestantes === null ? (
                                   <span className="dias-badge">-</span>
@@ -943,9 +961,20 @@ export default function MembresiaAdmin() {
 
                               {/* Estado Badge */}
                               <td>
-                                <span className={`estado-badge estado-${memb.estado}`}>
-                                  {memb.estado === 'activa' ? 'Activa' : memb.estado === 'vencida' ? 'Vencida' : memb.estado === 'pausada' ? 'Pausada' : memb.estado === 'inactiva' ? 'Inactiva' : 'Cancelada'}
-                                </span>
+                                {(() => {
+                                  const estadoCalculado = obtenerEstadoMembresia(memb);
+                                  return (
+                                    <span className={`estado-badge estado-${estadoCalculado}`}>
+                                      {estadoCalculado === 'activa'
+                                        ? 'Activa'
+                                        : estadoCalculado === 'vencida'
+                                        ? 'Vencida'
+                                        : estadoCalculado === 'pausada'
+                                        ? 'Pausada'
+                                        : 'Cancelada'}
+                                    </span>
+                                  );
+                                })()}
                               </td>
 
                               {/* Acciones */}
