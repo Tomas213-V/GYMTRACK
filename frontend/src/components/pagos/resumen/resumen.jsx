@@ -1,7 +1,7 @@
 import { FaDollarSign, FaCheck, FaClock } from "react-icons/fa";
 import "./resumen.css";
 
-function PagosResumen({ resumen, onVerEstadisticas }) {
+function PagosResumen({ resumen }) {
   // Formateador de moneda en pesos argentinos
   const formatearMonto = (valor) => {
     return new Intl.NumberFormat("es-AR", {
@@ -15,15 +15,6 @@ function PagosResumen({ resumen, onVerEstadisticas }) {
     <div className="Caja-pagos-resumen">
       <div className="Caja-pagos-resumen-header">
         <h2>Resumen de pagos</h2>
-        <button
-          className="Caja-pagos-btn-estadisticas"
-          onClick={
-            onVerEstadisticas ||
-            (() => alert("Módulo de analíticas avanzadas en construcción."))
-          }
-        >
-          Ver estadísticas
-        </button>
       </div>
 
       <div className="Caja-pagos-resumen-subtitulo">Este mes</div>
