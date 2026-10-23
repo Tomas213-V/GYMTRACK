@@ -98,11 +98,13 @@ const getDashboardAdmin = async (req, res) => {
         if (estado === 'pagado') {
           recaudacionMesActual += monto;
           pagosRealizados += 1;
-        } else if (estado === 'pendiente') {
-          pagosPendientes += 1;
-        } else if (estado === 'vencido') {
-          pagosVencidos += 1;
         }
+      }
+
+      if (estado === 'pendiente') {
+        pagosPendientes += 1;
+      } else if (estado === 'vencido') {
+        pagosVencidos += 1;
       }
 
       if (fPago >= inicioMesAnterior && fPago <= finMesAnterior && estado === 'pagado') {
@@ -211,7 +213,8 @@ const getDashboardAdmin = async (req, res) => {
       .from('membresia')
       .select(`
         id_membresia,
-        fecha_fin,
+        fecha_inicio,
+        fecha_vencimiento,
         estado,
         plan_membresia(nombre),
         socio!inner(id_socio, nombre, apellido, dni, id_gimnasio)
@@ -232,25 +235,53 @@ const getDashboardAdmin = async (req, res) => {
       value: planesConteo[nombre]
     }));
 
-    // Membresías próximas a vencer (próximos 7 días)
-    const fechaHoyIso = ahora.toISOString();
-    const proximosVencimientos = membresiasList
-      .filter(m => {
-        if (!m.fecha_fin) return false;
-        const fFin = new Date(m.fecha_fin).toISOString();
-        return fFin >= fechaHoyIso && fFin <= en7Dias;
-      })
-      .map(m => ({
-        id_membresia: m.id_membresia,
-        socio: {
-          id_socio: m.socio?.id_socio,
-          nombre: `${m.socio?.nombre || ''} ${m.socio?.apellido || ''}`.trim(),
-          dni: m.socio?.dni
-        },
-        plan: m.plan_membresia?.nombre || 'Estándar',
-        fecha_fin: m.fecha_fin
-      }))
-      .slice(0, 6);
+    // Fecha actual a medianoche para cálculo exacto de días
+    const hoyDate = new Date();
+    hoyDate.setHours(0, 0, 0, 0);
+
+    let totalMembresiasVencidas = 0;
+    let totalMembresiasPorVencer = 0;
+    const proximosVencimientos = [];
+
+    membresiasList.forEach(m => {
+      const est = (m.estado || '').toLowerCase().trim();
+      // Si la membresía está cancelada, no se cuenta como deuda o cuota a cobrar
+      if (est === 'cancelada' || est === 'cancelado') return;
+
+      let esVencida = est === 'vencida' || est === 'vencido';
+      let esPorVencer = false;
+
+      if (m.fecha_vencimiento) {
+        const fStr = String(m.fecha_vencimiento).split('T')[0];
+        const [y, mes, d] = fStr.split('-').map(Number);
+        const fVencDate = new Date(y, mes - 1, d, 23, 59, 59, 999);
+        const diffMs = fVencDate.getTime() - hoyDate.getTime();
+        const diasRestantes = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+        if (diasRestantes <= 0 || fVencDate < ahora) {
+          esVencida = true;
+        } else if (diasRestantes <= 7) {
+          esPorVencer = true;
+        }
+      }
+
+      if (esVencida) {
+        totalMembresiasVencidas += 1;
+      } else if (esPorVencer) {
+        totalMembresiasPorVencer += 1;
+        proximosVencimientos.push({
+          id_membresia: m.id_membresia,
+          socio: {
+            id_socio: m.socio?.id_socio,
+            nombre: `${m.socio?.nombre || ''} ${m.socio?.apellido || ''}`.trim(),
+            dni: m.socio?.dni
+          },
+          plan: m.plan_membresia?.nombre || 'Estándar',
+          fecha_fin: m.fecha_vencimiento,
+          fecha_vencimiento: m.fecha_vencimiento
+        });
+      }
+    });
 
     // 6. ACTIVIDAD RECIENTE (Últimas 6 asistencias y últimos 6 pagos)
     const ultimasAsistencias = asistenciasList.slice(0, 6).map(a => ({
@@ -299,7 +330,8 @@ const getDashboardAdmin = async (req, res) => {
           mesAnterior: asistenciasMesAnterior,
           variacionPorcentaje: variacionAsistencias
         },
-        membresiasPorVencer: proximosVencimientos.length
+        membresiasPorVencer: totalMembresiasPorVencer,
+        membresiasVencidas: totalMembresiasVencidas
       },
       graficos: {
         ingresosMensuales: ingresosUltimos6Meses,

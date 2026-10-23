@@ -110,16 +110,16 @@ export default function DashboardSocio() {
       horario: 'Lun a Vie 07:00 a 22:30 | Sáb 09:00 a 18:00'
     },
     membresia: {
-      id_membresia: 1,
-      plan: 'Plan Musculación & Funcional',
-      descripcion_plan: 'Acceso total a sala de musculación, cardio y vestuarios premium',
-      estado: 'activa',
-      fecha_inicio: '2026-05-15',
-      fecha_vencimiento: '2026-06-15',
-      precio: 12500,
-      dias_restantes: 72,
-      porcentaje_transcurrido: 35,
-      expirada: false
+      id_membresia: null,
+      plan: 'Sin Membresía Activa',
+      descripcion_plan: '',
+      estado: 'sin_membresia',
+      fecha_inicio: null,
+      fecha_vencimiento: null,
+      precio: 0,
+      dias_restantes: 0,
+      porcentaje_transcurrido: 0,
+      expirada: true
     },
     ultimo_pago: {
       id_pago: 104,
@@ -494,46 +494,64 @@ export default function DashboardSocio() {
           <section className="socio-pc-kpi-grid">
             
             {/* KPI 1: Membresía */}
-            <div className="socio-pc-kpi-card">
-              <div>
-                <div className="socio-pc-kpi-top">
-                  <div className="socio-pc-kpi-icon-wrap icon-green">
-                    <FaCrown />
-                  </div>
-                  <span className="socio-pc-kpi-badge badge-active-green">
-                    ● {membresia.estado === 'activa' ? 'Activa' : 'Vigente'}
-                  </span>
-                </div>
-                <h3 className="socio-pc-kpi-title">Membresía</h3>
-                <div className="socio-pc-kpi-val" style={{ fontSize: '20px' }}>
-                  {membresia.plan}
-                </div>
-                <p className="socio-pc-kpi-detail">
-                  Vence el <strong>{membresia.fecha_vencimiento || '15 Jun 2026'}</strong>
-                </p>
+            {(() => {
+              const tieneMembresiaActiva = Boolean(
+                dashboardData.membresia &&
+                dashboardData.membresia.id_membresia &&
+                !['sin_membresia', 'inactivo', 'inactiva', 'pausa', 'pausado', 'pausada', 'cancelado', 'cancelada'].includes((dashboardData.membresia.estado || '').toLowerCase().trim())
+              );
 
-                <div className="socio-pc-kpi-progress">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#94a3b8', marginBottom: '5px' }}>
-                    <span>Vigencia</span>
-                    <span>{membresia.dias_restantes ? `${membresia.dias_restantes} días restantes` : 'Al día'}</span>
-                  </div>
-                  <div className="socio-pc-progress-bar-bg">
-                    <div 
-                      className="socio-pc-progress-bar-fill" 
-                      style={{ width: `${100 - (membresia.porcentaje_transcurrido || 25)}%` }} 
-                    />
-                  </div>
-                </div>
-              </div>
+              return (
+                <div className="socio-pc-kpi-card">
+                  <div>
+                    <div className="socio-pc-kpi-top">
+                      <div className={`socio-pc-kpi-icon-wrap ${tieneMembresiaActiva ? 'icon-green' : 'icon-neutral'}`} style={!tieneMembresiaActiva ? { background: 'rgba(148, 163, 184, 0.1)', color: '#94a3b8' } : {}}>
+                        <FaCrown />
+                      </div>
+                      <span className={`socio-pc-kpi-badge ${tieneMembresiaActiva ? 'badge-active-green' : 'badge-pill-neutral'}`}>
+                        ● {tieneMembresiaActiva ? (dashboardData.membresia.estado === 'activa' ? 'Activa' : 'Vigente') : 'Sin Membresía'}
+                      </span>
+                    </div>
+                    <h3 className="socio-pc-kpi-title">Membresía</h3>
+                    <div className="socio-pc-kpi-val" style={{ fontSize: '20px' }}>
+                      {tieneMembresiaActiva ? dashboardData.membresia.plan : 'Sin Membresía Activa'}
+                    </div>
+                    <p className="socio-pc-kpi-detail">
+                      {tieneMembresiaActiva 
+                        ? <>Vence el <strong>{dashboardData.membresia.fecha_vencimiento}</strong></>
+                        : <span>No posees un pase activo actualmente</span>}
+                    </p>
 
-              <button 
-                onClick={() => navigate('/membresia-socio')} 
-                className="socio-pc-kpi-footer-link"
-              >
-                <span>Gestionar suscripción</span>
-                <FaChevronRight style={{ fontSize: '11px' }} />
-              </button>
-            </div>
+                    {tieneMembresiaActiva ? (
+                      <div className="socio-pc-kpi-progress">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#94a3b8', marginBottom: '5px' }}>
+                          <span>Vigencia</span>
+                          <span>{dashboardData.membresia.dias_restantes ? `${dashboardData.membresia.dias_restantes} días restantes` : 'Al día'}</span>
+                        </div>
+                        <div className="socio-pc-progress-bar-bg">
+                          <div 
+                            className="socio-pc-progress-bar-fill" 
+                            style={{ width: `${100 - (dashboardData.membresia.porcentaje_transcurrido || 0)}%` }} 
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ marginTop: '14px', fontSize: '12px', color: '#94a3b8' }}>
+                        Consulta las opciones activas disponibles para activar tu acceso.
+                      </div>
+                    )}
+                  </div>
+
+                  <button 
+                    onClick={() => navigate('/membresia-socio')} 
+                    className="socio-pc-kpi-footer-link"
+                  >
+                    <span>{tieneMembresiaActiva ? 'Gestionar suscripción' : 'Ver membresías disponibles'}</span>
+                    <FaChevronRight style={{ fontSize: '11px' }} />
+                  </button>
+                </div>
+              );
+            })()}
 
             {/* KPI 2: Último Pago */}
             <div className="socio-pc-kpi-card">

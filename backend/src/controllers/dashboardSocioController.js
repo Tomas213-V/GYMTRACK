@@ -71,7 +71,7 @@ const getDashboardSocio = async (req, res) => {
         .eq('id_socio', idSocio)
         .single(),
 
-      // b. Membresía más reciente
+      // b. Membresías del socio (para resolver membresía activa vigente)
       supabase
         .from('membresia')
         .select(`
@@ -85,13 +85,12 @@ const getDashboardSocio = async (req, res) => {
             nombre,
             descripcion,
             precio,
-            duracion_dias
+            duracion_dias,
+            estado
           )
         `)
         .eq('id_socio', idSocio)
-        .order('fecha_vencimiento', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+        .order('fecha_vencimiento', { ascending: false }),
 
       // c. Último pago realizado
       supabase
@@ -188,7 +187,17 @@ const getDashboardSocio = async (req, res) => {
     }
 
     const socio = socioRes.data;
-    const membresia = membresiaRes.data || null;
+
+    // Filtrar para encontrar la membresía activa vigente (excluyendo pausadas, canceladas o inactivas)
+    const ESTADOS_EXCLUIDOS = ['inactivo', 'inactiva', 'pausa', 'pausado', 'pausada', 'cancelado', 'cancelada', 'eliminado', 'eliminada', 'sin_membresia'];
+    const rawMembresias = membresiaRes.data ? (Array.isArray(membresiaRes.data) ? membresiaRes.data : [membresiaRes.data]) : [];
+    
+    const membresia = rawMembresias.find(m => {
+      const estMemb = (m.estado || '').toLowerCase().trim();
+      const estPlan = (m.plan_membresia?.estado || '').toLowerCase().trim();
+      return estMemb && !ESTADOS_EXCLUIDOS.includes(estMemb) && (!m.plan_membresia || !ESTADOS_EXCLUIDOS.includes(estPlan));
+    }) || null;
+
     const ultimoPago = ultimoPagoRes.data || null;
     const ultimoProgreso = progresoRes.data || null;
     const historialProgreso = progresoHistorialRes.data || [];
@@ -262,8 +271,13 @@ const getDashboardSocio = async (req, res) => {
         porcentaje_transcurrido: porcentajeTranscurrido,
         expirada: membresiaExpirada
       } : {
+        id_membresia: null,
         estado: 'sin_membresia',
-        mensaje: 'No tienes una membresía activa asignada.'
+        plan: 'Sin Membresía Activa',
+        mensaje: 'No tienes una membresía activa asignada actualmente.',
+        dias_restantes: 0,
+        porcentaje_transcurrido: 0,
+        expirada: true
       },
       ultimo_pago: ultimoPago ? {
         id_pago: ultimoPago.id_pago,

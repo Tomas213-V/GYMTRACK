@@ -61,20 +61,13 @@ export default function SocioMembresia() {
   const [notificacion, setNotificacion] = useState('');
   const [copiadoKey, setCopiadoKey] = useState('');
 
+  // Estados excluidos que representan que una membresía o plan está pausado, cancelado o inactivo
+  const ESTADOS_EXCLUIDOS = ['inactivo', 'inactiva', 'pausa', 'pausado', 'pausada', 'cancelado', 'cancelada', 'eliminado', 'eliminada', 'sin_membresia'];
+
   // Datos de la membresía y socio
   const [socio, setSocio] = useState(null);
   const [gimnasio, setGimnasio] = useState(null);
-  const [membresia, setMembresia] = useState({
-    nombre_plan: 'Premium Plan',
-    precio_formateado: '$12.500',
-    fecha_inicio_formateada: '15 Dic 2025',
-    fecha_vencimiento_formateada: '15 Jun 2026',
-    dias_restantes: 120,
-    tiempo_restante_texto: '120 días',
-    porcentaje_transcurrido: 35,
-    estado: 'activa',
-    estado_etiqueta: 'Activa'
-  });
+  const [membresia, setMembresia] = useState(null);
   const [historialPagos, setHistorialPagos] = useState([]);
 
   // Planes disponibles en el gimnasio
@@ -107,12 +100,17 @@ export default function SocioMembresia() {
 
       if (data.socio) setSocio(data.socio);
       if (data.gimnasio) setGimnasio(data.gimnasio);
-      if (data.membresia) setMembresia(data.membresia);
+      if (data.membresia && data.membresia.tiene_membresia && data.membresia.id_membresia) {
+        setMembresia(data.membresia);
+      } else {
+        setMembresia(null);
+      }
       if (data.historial_pagos) setHistorialPagos(data.historial_pagos);
 
     } catch (err) {
-      console.warn('Usando valores de contingencia visual:', err.message);
+      console.warn('Error al cargar membresía del socio:', err.message);
       setErrorMsg(err.message);
+      setMembresia(null);
     } finally {
       setLoading(false);
     }
@@ -195,7 +193,14 @@ export default function SocioMembresia() {
       setLoadingPlanes(true);
       const data = await getPlanesDisponibles();
       if (data.planes) {
-        setPlanesDisponibles(data.planes);
+        // Filtrar estrictamente para que NO aparezcan planes pausados, inactivos, cancelados o eliminados
+        const planesActivos = (data.planes || []).filter(plan => {
+          const est = (plan.estado || '').toLowerCase().trim();
+          return (est === 'activo' || est === 'activa' || !est) && !ESTADOS_EXCLUIDOS.includes(est);
+        });
+        setPlanesDisponibles(planesActivos);
+      } else {
+        setPlanesDisponibles([]);
       }
     } catch (err) {
       console.error('Error al cargar planes disponibles:', err);
@@ -340,6 +345,14 @@ export default function SocioMembresia() {
     setModalComprobanteAbierto(true);
   };
 
+  // Determinar si el socio posee una membresía activa y visible
+  const tieneMembresiaActiva = Boolean(
+    membresia &&
+    membresia.tiene_membresia !== false &&
+    membresia.id_membresia &&
+    !ESTADOS_EXCLUIDOS.includes((membresia.estado || '').toLowerCase().trim())
+  );
+
   return (
     <div className="socio-membresia-page">
       <NavGlobal />
@@ -412,76 +425,107 @@ export default function SocioMembresia() {
           {/* Grid Superior: Tarjeta Membresía Actual + Tarjeta Mejorar Membresía */}
           <section className="socio-membresia-top-grid">
             {/* Card 1: Membresía Actual */}
-            <div className="membresia-card membresia-actual-card">
-              <div>
-                {/* Header del Plan Actual */}
-                <div className="membresia-plan-header">
-                  <div className="membresia-plan-left">
-                    <div className="membresia-crown-badge">
-                      <FaCrown />
+            <div className={`membresia-card ${tieneMembresiaActiva ? 'membresia-actual-card' : 'membresia-inactiva-card'}`}>
+              {tieneMembresiaActiva ? (
+                <div>
+                  {/* Header del Plan Actual */}
+                  <div className="membresia-plan-header">
+                    <div className="membresia-plan-left">
+                      <div className="membresia-crown-badge">
+                        <FaCrown />
+                      </div>
+                      <div className="membresia-plan-info">
+                        <h3>{membresia.nombre_plan || 'Plan Activo'}</h3>
+                        <p>
+                          {membresia.estado === 'activa'
+                            ? 'Membresía activa'
+                            : (membresia.estado === 'vencida' ? 'Membresía vencida' : 'Membresía')}
+                        </p>
+                      </div>
                     </div>
-                    <div className="membresia-plan-info">
-                      <h3>{membresia.nombre_plan || 'Plan Activo'}</h3>
-                      <p>
-                        {membresia.estado === 'activa'
-                          ? 'Membresía activa'
-                          : (membresia.estado === 'vencida' ? 'Membresía vencida' : 'Membresía')}
-                      </p>
+
+                    <span className={`membresia-status-badge status-${membresia.estado || 'activa'}`}>
+                      {membresia.estado_etiqueta || 'Activa'}
+                    </span>
+                  </div>
+
+                  {/* Precio Mensual */}
+                  <div className="membresia-precio-container">
+                    <span className="membresia-precio-val">
+                      {membresia.precio_formateado || '$0'}
+                    </span>
+                    <span className="membresia-precio-mes">/ mes</span>
+                  </div>
+
+                  {/* Métricas en 3 Columnas */}
+                  <div className="membresia-stats-row">
+                    <div className="membresia-stat-col">
+                      <span className="membresia-stat-label">INICIO</span>
+                      <span className="membresia-stat-val">
+                        <FaCalendarAlt className="stat-icon" />
+                        {membresia.fecha_inicio_formateada || '-'}
+                      </span>
+                    </div>
+
+                    <div className="membresia-stat-col">
+                      <span className="membresia-stat-label">VENCIMIENTO</span>
+                      <span className="membresia-stat-val">
+                        <FaCalendarAlt className="stat-icon" />
+                        {membresia.fecha_vencimiento_formateada || '-'}
+                      </span>
+                    </div>
+
+                    <div className="membresia-stat-col">
+                      <span className="membresia-stat-label">DÍAS RESTANTES</span>
+                      <span className="membresia-stat-val dias-resaltado">
+                        <FaRegClock className="stat-icon icon-verde" />
+                        {membresia.tiempo_restante_texto || '0 días'}
+                      </span>
                     </div>
                   </div>
 
-                  <span className={`membresia-status-badge status-${membresia.estado || 'activa'}`}>
-                    {membresia.estado_etiqueta || 'Activa'}
-                  </span>
+                  {/* Barra de Progreso de Vigencia */}
+                  <div className="membresia-progress-bar-wrapper">
+                    <div className="membresia-progress-track">
+                      <div
+                        className="membresia-progress-fill"
+                        style={{
+                          width: `${Math.min(100, Math.max(8, membresia.porcentaje_transcurrido || 0))}%`
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
-
-                {/* Precio Mensual */}
-                <div className="membresia-precio-container">
-                  <span className="membresia-precio-val">
-                    {membresia.precio_formateado || '$12.500'}
-                  </span>
-                  <span className="membresia-precio-mes">/ mes</span>
-                </div>
-
-                {/* Métricas en 3 Columnas */}
-                <div className="membresia-stats-row">
-                  <div className="membresia-stat-col">
-                    <span className="membresia-stat-label">INICIO</span>
-                    <span className="membresia-stat-val">
-                      <FaCalendarAlt className="stat-icon" />
-                      {membresia.fecha_inicio_formateada || '15 Dic 2025'}
+              ) : (
+                <div className="membresia-sin-activo-wrapper">
+                  <div className="membresia-sin-activo-header">
+                    <div className="membresia-sin-activo-badge-icon">
+                      <FaCreditCard />
+                    </div>
+                    <span className="membresia-status-badge status-sin_membresia">
+                      Sin Membresía Activa
                     </span>
                   </div>
 
-                  <div className="membresia-stat-col">
-                    <span className="membresia-stat-label">VENCIMIENTO</span>
-                    <span className="membresia-stat-val">
-                      <FaCalendarAlt className="stat-icon" />
-                      {membresia.fecha_vencimiento_formateada || '15 Jun 2026'}
-                    </span>
+                  <div className="membresia-sin-activo-content">
+                    <h3>No posees una membresía activa</h3>
+                    <p>
+                      Tu membresía no se encuentra disponible en este momento (ha sido pausada, cancelada o aún no posees un plan asignado).
+                    </p>
                   </div>
 
-                  <div className="membresia-stat-col">
-                    <span className="membresia-stat-label">DÍAS RESTANTES</span>
-                    <span className="membresia-stat-val dias-resaltado">
-                      <FaRegClock className="stat-icon icon-verde" />
-                      {membresia.tiempo_restante_texto || '120 días'}
-                    </span>
+                  <div className="membresia-sin-activo-footer">
+                    <button
+                      onClick={abrirModalPlanes}
+                      className="btn-ver-membresias"
+                      style={{ width: '100%', justifyContent: 'center' }}
+                    >
+                      <FaCrown style={{ fontSize: '13px' }} />
+                      <span>Ver membresías disponibles</span>
+                    </button>
                   </div>
                 </div>
-              </div>
-
-              {/* Barra de Progreso de Vigencia */}
-              <div className="membresia-progress-bar-wrapper">
-                <div className="membresia-progress-track">
-                  <div
-                    className="membresia-progress-fill"
-                    style={{
-                      width: `${Math.min(100, Math.max(8, membresia.porcentaje_transcurrido || 35))}%`
-                    }}
-                  />
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Card 2: ¿Querés mejorar tu membresía? */}
@@ -610,7 +654,7 @@ export default function SocioMembresia() {
 
             {loadingPlanes ? (
               <div className="loading-spinner"></div>
-            ) : (
+            ) : planesDisponibles.length > 0 ? (
               <div className="planes-modal-grid">
                 {planesDisponibles.map((plan) => (
                   <div
@@ -649,6 +693,14 @@ export default function SocioMembresia() {
                     </div>
                   </div>
                 ))}
+              </div>
+            ) : (
+              <div className="planes-empty-box">
+                <FaCrown style={{ fontSize: '38px', color: '#64748b', marginBottom: '10px' }} />
+                <h3>No hay membresías activas disponibles</h3>
+                <p>
+                  En este momento {gimnasio?.nombre || 'el gimnasio'} no posee membresías activas habilitadas para suscripción (pueden encontrarse pausadas temporalmente). Por favor, consulta directamente en recepción.
+                </p>
               </div>
             )}
           </div>

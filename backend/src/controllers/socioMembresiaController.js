@@ -43,11 +43,43 @@ function formatearPrecioARS(monto) {
   return `$${Number(monto).toLocaleString('es-AR')}`;
 }
 
+// Estados que representan que una membresía o plan está dado de baja, pausado o inactivo
+const ESTADOS_MEMBRESIA_INACTIVOS = [
+  'inactivo',
+  'inactiva',
+  'pausa',
+  'pausado',
+  'pausada',
+  'cancelado',
+  'cancelada',
+  'eliminado',
+  'eliminada',
+  'sin_membresia'
+];
+
 /**
  * Calcula métricas detalladas de vigencia, días restantes y progreso de membresía
  */
 function calcularMetricasMembresia(membresia) {
   if (!membresia || !membresia.fecha_vencimiento) {
+    return {
+      tiene_membresia: false,
+      estado_clave: 'sin_membresia',
+      estado_etiqueta: 'Sin Membresía',
+      dias_restantes: 0,
+      tiempo_restante_texto: '0 días',
+      porcentaje_transcurrido: 0,
+      esta_vencida: true,
+      fecha_inicio_formateada: '-',
+      fecha_vencimiento_formateada: '-'
+    };
+  }
+
+  const estadoClaveRaw = (membresia.estado || 'activo').toLowerCase().trim();
+  const estadoPlanRaw = (membresia.plan_membresia?.estado || '').toLowerCase().trim();
+
+  // Si la membresía o su plan asociado fueron pausados, cancelados o dejados inactivos
+  if (ESTADOS_MEMBRESIA_INACTIVOS.includes(estadoClaveRaw) || (estadoPlanRaw && ESTADOS_MEMBRESIA_INACTIVOS.includes(estadoPlanRaw))) {
     return {
       tiene_membresia: false,
       estado_clave: 'sin_membresia',
@@ -86,7 +118,7 @@ function calcularMetricasMembresia(membresia) {
     porcentajeTranscurrido = 100;
   }
 
-  let estadoClave = (membresia.estado || 'activo').toLowerCase();
+  let estadoClave = estadoClaveRaw;
   let estadoEtiqueta = 'Activa';
 
   if (estaVencida || estadoClave === 'vencido' || estadoClave === 'vencida') {
@@ -159,8 +191,8 @@ const getMiMembresia = async (req, res) => {
       return res.status(401).json({ error: 'Acceso no autorizado. No se identificó el perfil de socio.' });
     }
 
-    // 1. Obtener la membresía más reciente o activa
-    const { data: membresia, error: membErr } = await supabase
+    // 1. Obtener el listado de membresías del socio para buscar la membresía activa vigente
+    const { data: listaMembresias, error: membErr } = await supabase
       .from('membresia')
       .select(`
         id_membresia,
@@ -179,13 +211,22 @@ const getMiMembresia = async (req, res) => {
         )
       `)
       .eq('id_socio', socio.id_socio)
-      .order('fecha_vencimiento', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .order('fecha_vencimiento', { ascending: false });
 
     if (membErr) {
       return res.status(500).json({ error: 'Error al consultar la membresía: ' + membErr.message });
     }
+
+    // Filtrar estrictamente: si la membresía o su plan asociado fueron pausados, cancelados, inactivados o eliminados, NO deben aparecer
+    const membresia = (listaMembresias || []).find((m) => {
+      const estMemb = (m.estado || '').toLowerCase().trim();
+      const estPlan = (m.plan_membresia?.estado || '').toLowerCase().trim();
+
+      const esMembValida = estMemb && !ESTADOS_MEMBRESIA_INACTIVOS.includes(estMemb);
+      const esPlanValido = !m.plan_membresia || (!ESTADOS_MEMBRESIA_INACTIVOS.includes(estPlan));
+
+      return esMembValida && esPlanValido;
+    }) || null;
 
     // 2. Obtener datos del gimnasio
     let gimnasio = null;
@@ -280,7 +321,8 @@ const getMiMembresia = async (req, res) => {
         id_gimnasio: socio.id_gimnasio,
         nombre: 'GymTrack'
       },
-      membresia: membresia ? {
+      membresia: (membresia && metricas.tiene_membresia) ? {
+        tiene_membresia: true,
         id_membresia: membresia.id_membresia,
         id_plan_membresia: membresia.id_plan_membresia,
         nombre_plan: plan?.nombre || 'Plan Activo',
@@ -298,6 +340,7 @@ const getMiMembresia = async (req, res) => {
         estado_etiqueta: metricas.estado_etiqueta,
         esta_vencida: metricas.esta_vencida
       } : {
+        tiene_membresia: false,
         id_membresia: null,
         id_plan_membresia: null,
         nombre_plan: 'Sin Membresía Activa',
@@ -334,14 +377,18 @@ const getPlanesDisponibles = async (req, res) => {
       return res.status(401).json({ error: 'Acceso no autorizado. Perfil de socio no encontrado.' });
     }
 
-    // 1. Obtener la membresía actual para comparar y clasificar planes superiores
-    const { data: membActual } = await supabase
+    // 1. Obtener la membresía activa actual para comparar y clasificar planes superiores
+    const { data: listaMembresias } = await supabase
       .from('membresia')
-      .select('id_membresia, id_plan_membresia, precio, estado')
+      .select('id_membresia, id_plan_membresia, precio, estado, plan_membresia(estado)')
       .eq('id_socio', socio.id_socio)
-      .order('fecha_vencimiento', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .order('fecha_vencimiento', { ascending: false });
+
+    const membActual = (listaMembresias || []).find((m) => {
+      const estMemb = (m.estado || '').toLowerCase().trim();
+      const estPlan = (m.plan_membresia?.estado || '').toLowerCase().trim();
+      return estMemb && !ESTADOS_MEMBRESIA_INACTIVOS.includes(estMemb) && (!m.plan_membresia || !ESTADOS_MEMBRESIA_INACTIVOS.includes(estPlan));
+    }) || null;
 
     const planActualId = membActual?.id_plan_membresia || null;
     const precioActual = Number(membActual?.precio || 0);
@@ -357,20 +404,27 @@ const getPlanesDisponibles = async (req, res) => {
       return res.status(500).json({ error: 'Error al consultar planes disponibles: ' + error.message });
     }
 
-    // Si el gimnasio aún no tiene planes cargados, sembrar 3 planes predeterminados para dicho gimnasio
+    // Solo sembrar si el gimnasio NUNCA ha tenido ningún plan en el catálogo histórico
     if (!planes || planes.length === 0) {
-      const planesSemilla = [
-        { id_gimnasio: socio.id_gimnasio, nombre: 'Plan Básico', precio: 15000, duracion_dias: 30, estado: 'Activo' },
-        { id_gimnasio: socio.id_gimnasio, nombre: 'Plan Premium', precio: 22000, duracion_dias: 30, estado: 'Activo' },
-        { id_gimnasio: socio.id_gimnasio, nombre: 'Pase Libre Total', precio: 28000, duracion_dias: 30, estado: 'Activo' }
-      ];
-
-      const { data: insertados } = await supabase
+      const { count: totalPlanesHist } = await supabase
         .from('plan_membresia')
-        .insert(planesSemilla)
-        .select('*');
+        .select('id_plan_membresia', { count: 'exact', head: true })
+        .eq('id_gimnasio', socio.id_gimnasio);
 
-      planes = insertados || planesSemilla;
+      if (!totalPlanesHist || totalPlanesHist === 0) {
+        const planesSemilla = [
+          { id_gimnasio: socio.id_gimnasio, nombre: 'Plan Básico', precio: 15000, duracion_dias: 30, estado: 'activo' },
+          { id_gimnasio: socio.id_gimnasio, nombre: 'Plan Premium', precio: 22000, duracion_dias: 30, estado: 'activo' },
+          { id_gimnasio: socio.id_gimnasio, nombre: 'Pase Libre Total', precio: 28000, duracion_dias: 30, estado: 'activo' }
+        ];
+
+        const { data: insertados } = await supabase
+          .from('plan_membresia')
+          .insert(planesSemilla)
+          .select('*');
+
+        planes = insertados || planesSemilla;
+      }
     }
 
     // Beneficios sugeridos por nivel de plan para enriquecer la experiencia visual
@@ -402,9 +456,13 @@ const getPlanesDisponibles = async (req, res) => {
       ];
     };
 
-    // 3. Estructurar y clasificar planes
+    // 3. Estructurar y clasificar planes (EXCLUYENDO estrictamente planes pausados, inactivos, cancelados o eliminados)
     const planesFormateados = (planes || [])
-      .filter(p => !p.estado || p.estado.toLowerCase() === 'activo')
+      .filter((plan) => {
+        const est = (plan.estado || '').toLowerCase().trim();
+        // Solo permitir planes en estado activo que no estén en la lista de estados inactivos
+        return (est === 'activo' || est === 'activa' || !est) && !ESTADOS_MEMBRESIA_INACTIVOS.includes(est);
+      })
       .map((plan) => {
         const precioNum = Number(plan.precio);
         const esPlanActual = plan.id_plan_membresia === planActualId;
@@ -456,7 +514,7 @@ const solicitarActualizacion = async (req, res) => {
       return res.status(400).json({ error: 'Debes indicar el plan de membresía seleccionado.' });
     }
 
-    // Validar que el plan exista y corresponda al gimnasio del socio
+    // Validar que el plan exista, corresponda al gimnasio y esté activo (no pausado/inactivo)
     const { data: plan, error: planErr } = await supabase
       .from('plan_membresia')
       .select('*')
@@ -466,6 +524,11 @@ const solicitarActualizacion = async (req, res) => {
 
     if (planErr || !plan) {
       return res.status(404).json({ error: 'El plan seleccionado no pertenece a tu gimnasio o no existe.' });
+    }
+
+    const estadoPlan = (plan.estado || '').toLowerCase().trim();
+    if (ESTADOS_MEMBRESIA_INACTIVOS.includes(estadoPlan)) {
+      return res.status(400).json({ error: 'Este plan de membresía se encuentra en pausa o inactivo en este momento.' });
     }
 
     // Obtener membresía actual
@@ -531,7 +594,7 @@ const iniciarPago = async (req, res) => {
       return res.status(400).json({ error: 'El id_plan_membresia es requerido para iniciar el pago.' });
     }
 
-    // 1. Validar plan del gimnasio
+    // 1. Validar plan del gimnasio y que no esté en pausa o inactivo
     const { data: plan, error: planErr } = await supabase
       .from('plan_membresia')
       .select('*')
@@ -541,6 +604,11 @@ const iniciarPago = async (req, res) => {
 
     if (planErr || !plan) {
       return res.status(404).json({ error: 'El plan de membresía no pertenece a tu gimnasio.' });
+    }
+
+    const estadoPlan = (plan.estado || '').toLowerCase().trim();
+    if (ESTADOS_MEMBRESIA_INACTIVOS.includes(estadoPlan)) {
+      return res.status(400).json({ error: 'El plan de membresía seleccionado se encuentra pausado o inactivo y no admite nuevos pagos.' });
     }
 
     // 2. Obtener datos del gimnasio
