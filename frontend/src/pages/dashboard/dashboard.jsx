@@ -16,17 +16,13 @@
  * 
  * 2. PASO 2 (Formateadores Auxiliares):
  *    - `formatearDinero()`: Formatea importes en pesos argentinos (ARS) con `Intl.NumberFormat`.
- *    - `formatearHora()` y `formatearFecha()`: Adaptan timestamps ISO a formato local `es-AR`.
  * 
  * 3. PASO 3 (Visualización de Datos con Recharts):
  *    - Gráficos de Área (AreaChart): Evolución de ingresos en los últimos meses.
  *    - Gráficos de Barras (BarChart): Distribución de asistencias por franja horaria / día.
- *    - Gráficos de Pastel (PieChart): Proporción de socios por planes de membresía.
  * 
- * 4. PASO 4 (Acciones Rápidas y Tablas en Vivo):
- *    - Últimos socios registrados con badge de estado.
- *    - Últimos pagos cobrados con botón de acceso a caja.
- *    - Acceso a registro manual de asistencias e invitaciones.
+ * 4. PASO 4 (Acciones Rápidas):
+ *    - Acceso rápido a crear socio, registrar cobro, asistencia y rutinas.
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -47,9 +43,7 @@ import {
   FaArrowDown,
   FaChevronRight,
   FaBuilding,
-  FaClock,
-  FaCheckCircle,
-  FaHourglassHalf
+  FaClock
 } from "react-icons/fa";
 import {
   ResponsiveContainer,
@@ -57,17 +51,12 @@ import {
   Area,
   BarChart,
   Bar,
-  PieChart,
-  Pie,
-  Cell,
   XAxis,
   YAxis,
   Tooltip,
   CartesianGrid
 } from "recharts";
 import "./dashboard.css";
-
-const PIE_COLORS = ["#22c55e", "#0ea5e9", "#f59e0b", "#a855f7", "#ec4899", "#14b8a6"];
 
 
 function Dashboard() {
@@ -112,26 +101,6 @@ function Dashboard() {
     }).format(Number(val) || 0);
   };
 
-  const formatearHora = (isoStr) => {
-    if (!isoStr) return "";
-    try {
-      const d = new Date(isoStr);
-      return d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
-    } catch {
-      return isoStr;
-    }
-  };
-
-  const formatearFecha = (isoStr) => {
-    if (!isoStr) return "";
-    try {
-      const d = new Date(isoStr);
-      return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
-    } catch {
-      return isoStr;
-    }
-  };
-
   const nombreDuenio = usuario?.nombre
     ? `${usuario.nombre} ${usuario.apellido || ""}`.trim()
     : "Administrador";
@@ -142,21 +111,14 @@ function Dashboard() {
     socios: { total: 0, activos: 0, inactivos: 0, pendientes: 0, nuevosMes: 0 },
     ingresos: { mesActual: 0, mesAnterior: 0, variacionPorcentaje: 0, pagosRealizados: 0, pagosPendientes: 0, pagosVencidos: 0 },
     asistencias: { hoy: 0, mesActual: 0, mesAnterior: 0, variacionPorcentaje: 0 },
-    membresiasPorVencer: 0
+    membresiasPorVencer: 0,
+    membresiasVencidas: 0
   };
 
   const graficos = data?.graficos || {
     ingresosMensuales: [],
-    asistenciasPorDia: [],
-    distribucionPlanes: []
+    asistenciasPorDia: []
   };
-
-  const actividad = data?.actividadReciente || {
-    asistencias: [],
-    pagos: []
-  };
-
-  const vencimientos = data?.proximosVencimientos || [];
 
   return (
     <div className="Caja-admin-dashboard">
@@ -343,16 +305,30 @@ function Dashboard() {
                 <span className="kpi-badge-warning">Atención</span>
               </div>
               <div className="kpi-card-main">
-                <h3 className="kpi-card-valor">{kpis.membresiasPorVencer + kpis.ingresos.pagosPendientes}</h3>
+                <h3 className="kpi-card-valor">
+                  {(kpis.membresiasVencidas || 0) + (kpis.membresiasPorVencer || 0) + (kpis.ingresos?.pagosPendientes || 0) + (kpis.ingresos?.pagosVencidos || 0)}
+                </h3>
                 <span className="kpi-card-label">Cuotas a Cobrar / Por Vencer</span>
               </div>
               <div className="kpi-card-footer">
-                <div className="kpi-pill-warning">
-                  <b>{kpis.ingresos.pagosPendientes}</b> pendientes
-                </div>
-                {kpis.ingresos.pagosVencidos > 0 && (
+                {((kpis.membresiasVencidas || 0) + (kpis.ingresos?.pagosVencidos || 0)) > 0 && (
                   <div className="kpi-pill-danger">
-                    <b>{kpis.ingresos.pagosVencidos}</b> vencidos
+                    <b>{(kpis.membresiasVencidas || 0) + (kpis.ingresos?.pagosVencidos || 0)}</b> {((kpis.membresiasVencidas || 0) + (kpis.ingresos?.pagosVencidos || 0)) === 1 ? "vencida" : "vencidas"}
+                  </div>
+                )}
+                {(kpis.membresiasPorVencer || 0) > 0 && (
+                  <div className="kpi-pill-warning">
+                    <b>{kpis.membresiasPorVencer}</b> por vencer
+                  </div>
+                )}
+                {(kpis.ingresos?.pagosPendientes || 0) > 0 && (
+                  <div className="kpi-pill-warning">
+                    <b>{kpis.ingresos.pagosPendientes}</b> pendientes
+                  </div>
+                )}
+                {((kpis.membresiasVencidas || 0) === 0 && (kpis.ingresos?.pagosVencidos || 0) === 0 && (kpis.membresiasPorVencer || 0) === 0 && (kpis.ingresos?.pagosPendientes || 0) === 0) && (
+                  <div className="kpi-pill-success">
+                    <span className="pill-dot"></span> Al día
                   </div>
                 )}
               </div>
@@ -450,188 +426,7 @@ function Dashboard() {
             </div>
           </section>
 
-          {/* =========================================================
-              SEGUNDA FILA DE CONTENIDO: PLANES Y VENCIMIENTOS
-             ========================================================= */}
-          <section className="admin-dash-middle-grid">
-            {/* Distribución por Planes */}
-            <div className="admin-chart-box">
-              <div className="admin-chart-header">
-                <div>
-                  <h3 className="admin-chart-title">Membresías por Plan</h3>
-                  <p className="admin-chart-subtitle">Distribución activa de socios por categoría</p>
-                </div>
-              </div>
-              <div className="admin-pie-layout">
-                <div className="admin-pie-chart-wrap">
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie
-                        data={graficos.distribucionPlanes}
-                        innerRadius={55}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {graficos.distribucionPlanes.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#15181e",
-                          borderColor: "#262c37",
-                          borderRadius: "8px",
-                          color: "#fff"
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="admin-pie-legend">
-                  {graficos.distribucionPlanes.map((item, idx) => (
-                    <div key={idx} className="admin-legend-item">
-                      <span
-                        className="admin-legend-dot"
-                        style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }}
-                      ></span>
-                      <span className="admin-legend-label">{item.name}</span>
-                      <span className="admin-legend-val">{item.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
 
-            {/* Alerta de Vencimientos Próximos */}
-            <div className="admin-dash-table-card">
-              <div className="dash-table-header">
-                <div>
-                  <h3 className="dash-table-title">Vencimientos Próximos (7 días)</h3>
-                  <p className="dash-table-subtitle">Socios cuyas membresías están por caducar</p>
-                </div>
-                <Link to="/pagos-dueño" className="dash-view-all-link">
-                  Gestionar cuotas <FaChevronRight />
-                </Link>
-              </div>
-
-              <div className="dash-table-body">
-                {vencimientos.length === 0 ? (
-                  <div className="dash-empty-state">
-                    <FaCheckCircle className="dash-empty-icon text-success" />
-                    <p>No hay cuotas por vencer en los próximos 7 días.</p>
-                  </div>
-                ) : (
-                  <div className="dash-vencimientos-list">
-                    {vencimientos.map((item) => (
-                      <div key={item.id_membresia} className="dash-vencimiento-item">
-                        <div className="dash-venc-avatar">
-                          {item.socio.nombre?.slice(0, 2).toUpperCase() || "SO"}
-                        </div>
-                        <div className="dash-venc-info">
-                          <strong>{item.socio.nombre}</strong>
-                          <span>DNI: {item.socio.dni || "S/D"} • {item.plan}</span>
-                        </div>
-                        <div className="dash-venc-date-tag">
-                          <FaHourglassHalf />
-                          <span>Vence: {formatearFecha(item.fecha_fin)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-
-          {/* =========================================================
-              ACTIVIDAD RECIENTE EN VIVO: ASISTENCIAS Y PAGOS
-             ========================================================= */}
-          <section className="admin-dash-feed-grid">
-            {/* Feed 1: Últimas Asistencias */}
-            <div className="admin-dash-table-card">
-              <div className="dash-table-header">
-                <div>
-                  <h3 className="dash-table-title">Últimos Ingresos Registrados</h3>
-                  <p className="dash-table-subtitle">Socios que ingresaron recientemente al gimnasio</p>
-                </div>
-                <Link to="/asistencias-dueño" className="dash-view-all-link">
-                  Ver todas <FaChevronRight />
-                </Link>
-              </div>
-
-              <div className="dash-feed-list">
-                {actividad.asistencias.length === 0 ? (
-                  <div className="dash-empty-state">
-                    <p>No hay ingresos recientes registrados hoy.</p>
-                  </div>
-                ) : (
-                  actividad.asistencias.map((asist, idx) => (
-                    <div key={asist.id || idx} className="dash-feed-item">
-                      <div className="dash-feed-left">
-                        <div className="dash-feed-avatar avatar-asist">
-                          {asist.socio ? asist.socio[0].toUpperCase() : "S"}
-                        </div>
-                        <div className="dash-feed-text">
-                          <strong>{asist.socio}</strong>
-                          <span>DNI: {asist.dni}</span>
-                        </div>
-                      </div>
-                      <div className="dash-feed-right">
-                        <span className="dash-badge-hora">
-                          <FaClock /> {formatearHora(asist.hora)}
-                        </span>
-                        <span className="dash-badge-asist-status">Presente</span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Feed 2: Últimos Pagos Registrados */}
-            <div className="admin-dash-table-card">
-              <div className="dash-table-header">
-                <div>
-                  <h3 className="dash-table-title">Últimos Pagos Recibidos</h3>
-                  <p className="dash-table-subtitle">Cobranzas y registros financieros recientes</p>
-                </div>
-                <Link to="/pagos-dueño" className="dash-view-all-link">
-                  Ver todos <FaChevronRight />
-                </Link>
-              </div>
-
-              <div className="dash-feed-list">
-                {actividad.pagos.length === 0 ? (
-                  <div className="dash-empty-state">
-                    <p>No se han registrado pagos recientemente.</p>
-                  </div>
-                ) : (
-                  actividad.pagos.map((pago, idx) => (
-                    <div key={pago.id || idx} className="dash-feed-item">
-                      <div className="dash-feed-left">
-                        <div className="dash-feed-avatar avatar-pago">
-                          <FaMoneyBillWave />
-                        </div>
-                        <div className="dash-feed-text">
-                          <strong>{pago.socio}</strong>
-                          <span>{pago.plan} • {pago.metodo}</span>
-                        </div>
-                      </div>
-                      <div className="dash-feed-right">
-                        <strong className="dash-feed-monto">
-                          {formatearDinero(pago.monto)}
-                        </strong>
-                        <span className={`dash-badge-pago-estado estado-${pago.estado}`}>
-                          {pago.estado}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </section>
         </main>
       </div>
     </div>
