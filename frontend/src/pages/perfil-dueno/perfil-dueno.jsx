@@ -38,8 +38,8 @@ import {
   FaCheck
 } from 'react-icons/fa';
 import NavGlobal from '../../components/nav-global/nav-global';
-import Sidebar from '../../components/sidebar/sidebar';
-import Perfil from '../perfil/perfil';
+import Sidebar from '../../components/sidebar-dueno/sidebar';
+import Perfil from '../perfil-socio/perfil';
 import { getPerfilOwner, updatePerfilOwner } from '../../services/authService';
 import { actualizarMiGimnasio } from '../../services/gimnasioService';
 import './perfil-dueno.css';

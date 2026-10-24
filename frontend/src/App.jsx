@@ -34,33 +34,33 @@ import { Route, Routes } from 'react-router-dom'
 
 // Páginas Públicas y de Presentación
 import Landing from './pages/landing/landing'
-import Progress from './pages/progress/progress'
-import Precio from './pages/precio/precio'
-import Soporte from './pages/support/support'
-import Ejercicios from './pages/ejercicios/ejercicios'
+import Progress from './pages/progress-landing/progress'
+import Precio from './pages/precio-landing/precio'
+import Soporte from './pages/support-landing/support'
+import Ejercicios from './pages/ejercicios-landing/ejercicios'
 
 // Autenticación
-import Login from './pages/login/login'
+import Login from './pages/login-dueno/login'
 import LoginSocio from './pages/login-socio/login-socio'
-import Register from './pages/register/register'
+import Register from './pages/register-dueno/register'
 
 // Páginas del Rol Dueño / Administrador
-import Dashboard from './pages/dashboard/dashboard'
-import CrearGimnasio from './pages/crear-gimnasio/crear-gimnasio'
-import Socios from './pages/socios/socios'
-import Pagos from './pages/pagos/pagos'
-import MembresiaAdmin from './pages/membresia-admin/membresia-admin'
-import Asistencias from './pages/asistencias/asistencias'
-import Rutinas from './pages/rutinas/rutinas'
-import Perfil from './pages/perfil/perfil'
+import Dashboard from './pages/dashboard-dueno/dashboard'
+import CrearGimnasio from './pages/crear-gimnasio-dueno/crear-gimnasio'
+import Socios from './pages/socios-dueno/socios'
+import Pagos from './pages/pagos-dueno/pagos'
+import MembresiaAdmin from './pages/membresia-dueno/membresia-admin'
+import Asistencias from './pages/asistencias-dueno/asistencias'
+import Rutinas from './pages/rutinas-dueno/rutinas'
+import Perfil from './pages/perfil-socio/perfil'
 import PerfilDueno from './pages/perfil-dueno/perfil-dueno'
 
 // Páginas del Rol Socio / Alumno
 import DashboardSocio from './pages/dashboard-socio/dashboard-socio'
-import SocioMembresia from './pages/socio-membresia/socio-membresia'
+import SocioMembresia from './pages/membresia-socio/socio-membresia'
 import AsistenciaSocio from './pages/asistencia-socio/asistencia-socio'
-import SocioEjercicios from './pages/socio-ejercicios/socio-ejercicios'
-import SocioRutinas from './pages/socio-rutinas/socio-rutinas'
+import SocioEjercicios from './pages/ejercicios-socio/socio-ejercicios'
+import SocioRutinas from './pages/rutinas-socio/socio-rutinas'
 
 // Componente Guardián de Rutas y Estilos Generales
 import ProtectedRoute from './components/ProtectedRoute'

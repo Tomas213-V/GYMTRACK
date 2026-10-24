@@ -15,7 +15,7 @@
  */
 
 import { useState, useEffect } from "react";
-import "../sidebar/sidebar.css";
+import "../sidebar-dueno/sidebar.css";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
     FaCalendarCheck, 
