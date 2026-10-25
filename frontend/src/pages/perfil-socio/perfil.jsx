@@ -3,18 +3,24 @@
  * ARCHIVO: perfil.jsx
  * RUTA: frontend/src/pages/perfil-socio/perfil.jsx
  * PROYECTO: GYMTRACK - Frontend
- * DESCRIPCIÓN: Módulo de Perfil de Usuario, Credenciales, Datos Personales y Seguridad.
+ * DESCRIPCIÓN: Módulo Integral de Perfil de Usuario, Credenciales, Datos Personales y Seguridad.
  * =========================================================================================
  * 
- * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
- * 1. PASO 1 (Contexto Dual - Socio vs Dueño):
- *    - Si lo abre un socio (`esSocio = true`), muestra su ficha, membresía y opción de cambio de contraseña.
- *    - Si lo abre un administrador con parámetro `?id=...`, permite inspeccionar la ficha completa de un socio específico.
- * 2. PASO 2 (Pestañas de Navegación):
- *    - 'info': Datos personales (nombre, teléfono, email, DNI).
- *    - 'membresia': Detalle del plan y vencimientos.
- *    - 'seguridad': Cambio de contraseña con validación de requisitos.
- *    - 'historial': Registro de pagos y asistencias.
+ * GUÍA DE ARQUITECTURA PARA EL DESARROLLADOR:
+ * 1. CONTEXTO DUAL DE OPERACIÓN (Socio vs Dueño/Administrador):
+ *    - Vista de Alumno (`esSocio = true`): Permite al socio auto-gestionar su información de contacto,
+ *      consultar la vigencia y días restantes de su membresía actual, cambiar su contraseña y
+ *      revisar su historial completo de pagos y asistencias registradas.
+ *    - Vista de Administrador (`?id=...`): Permite al dueño o profesor inspeccionar la ficha
+ *      médica y administrativa de un alumno en particular, o seleccionar a otro socio del selector superior.
+ * 2. ESTRUCTURA DE PESTAÑAS (Tabs de Navegación):
+ *    - 'info': Datos personales básicos (Nombre, Apellido, DNI, Teléfono, Email, Fecha de Alta).
+ *    - 'membresia': Ficha del plan activo, fecha de inicio, vencimiento, días restantes y estado.
+ *    - 'seguridad': Cambio de contraseña con validación de contraseña actual y requisitos mínimos.
+ *    - 'historial': Registro cronológico de cobros/pagos y asistencias al gimnasio.
+ * 3. SEGURIDAD Y SINCRONIZACIÓN:
+ *    - Al guardar cambios, el servicio `updatePerfilSocio()` valida autorizaciones y encripta
+ *      contraseñas mediante bcrypt en el servidor.
  */
 
 import { useState, useEffect } from 'react';

@@ -6,14 +6,20 @@
  * DESCRIPCIÓN: Panel de Control de Asistencias, Entradas en Vivo y Métricas de Concurrencia.
  * =========================================================================================
  * 
- * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
- * 1. PASO 1 (Métricas de Concurrencia): Calcula el total de ingresos del mes actual comparado
- *    con el mes previo para identificar crecimiento o deserción en el gimnasio.
- * 2. PASO 2 (Registro Rápido en Recepción): Permite marcar el ingreso de un socio usando su
- *    DNI o seleccionándolo de una lista desplegable con auto-completado.
- * 3. PASO 3 (Historial y Búsqueda): Tabla interactiva con paginación, filtros por fecha y
- *    posibilidad de consultar el historial individual de cada socio (`fetchHistorialPorSocio`).
- * 4. PASO 4 (Exportación): Generación de reportes y opción de supresión de registros erróneos.
+ * GUÍA DE ARQUITECTURA OPERATIVA PARA EL DESARROLLADOR:
+ * 1. CHECK-IN EN VIVO EN MOSTRADOR / RECEPCIÓN:
+ *    - Permite al recepcionista o dueño ingresar el DNI del socio o buscarlo por nombre en el
+ *      selector predictivo para registrar su entrada instantáneamente (`registrarAsistencia()`).
+ *    - Feedback visual inmediato con tarjeta de confirmación del socio ingresado.
+ * 2. TELEMETRÍA Y MÉTRICAS DE CONCURRENCIA:
+ *    - `stats`: Compara el total de asistencias del mes actual contra el mes precedente.
+ *    - Calcula automáticamente el porcentaje de variación y tendencia (crecimiento / caída)
+ *      para medir el nivel de actividad y retención de alumnos en el gimnasio.
+ * 3. HISTORIAL, FILTRADO Y AUDITORÍA:
+ *    - Grilla paginada con filtrado dinámico por socio, texto libre o rangos temporales
+ *      ('Hoy', 'Esta semana', 'Mes actual', 'Histórico').
+ *    - Modal de Ficha Individual (`fetchHistorialPorSocio`) para ver días entrenados de un alumno.
+ *    - Eliminación supervisada de marcaciones duplicadas o accidentales (`deleteAsistencia`).
  */
 
 import { useState, useEffect, useRef } from 'react';

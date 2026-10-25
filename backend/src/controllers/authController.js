@@ -241,7 +241,26 @@ const login = async (req, res) => {
 };
 
 /**
- * Valida email, DNI y contraseña directamente en la tabla socio.
+ * ==============================================================================
+ * CONTROLADOR: loginSocio
+ * RUTA: POST /api/auth/login-socio
+ * ==============================================================================
+ * 
+ * GUÍA DE ARQUITECTURA DE AUTENTICACIÓN DEL SOCIO:
+ * 1. Factor de Doble Identificación:
+ *    - A diferencia del dueño, el alumno se identifica mediante Email + DNI para evitar
+ *      homónimos o registros duplicados entre gimnasios.
+ * 2. Validación de Estado y Habilitación:
+ *    - El socio debe figurar con `estado === 'activo'` para ingresar. Si fue suspendido o dado
+ *      de baja por la administración, el acceso se rechaza con HTTP 403.
+ * 3. Criptografía y Seguridad:
+ *    - Compara la contraseña provista contra el hash almacenado en Supabase utilizando `bcrypt.compare`.
+ * 4. Metadatos Institucionales:
+ *    - Obtiene la información del gimnasio al que pertenece el alumno (`gimnasio`) para
+ *      personalizar el branding y contexto en el frontend.
+ * 5. Generación del Token JWT:
+ *    - Firma el token con payload: `{ id_socio, id_gimnasio, dni, email, rol: 'socio' }`.
+ *    - Este token es verificado por `verifyToken` en todas las rutas protegidas de `/api/socio/...`.
  */
 const loginSocio = async (req, res) => {
   try {

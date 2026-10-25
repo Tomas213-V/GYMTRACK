@@ -578,8 +578,22 @@ const solicitarActualizacion = async (req, res) => {
 };
 
 /**
- * 4. INICIAR PAGO DIGITAL CON MERCADO PAGO O UALÁ
+ * ==============================================================================
+ * ENDPOINT 4: INICIAR PAGO DIGITAL (MERCADO PAGO / UALÁ)
  * POST /api/socio/pagos/iniciar
+ * ==============================================================================
+ * 
+ * GUÍA OPERATIVA DE MERCADO PAGO PARA ESTE ENDPOINT:
+ * 1. Autenticación: Identifica al socio desde el token JWT (`req.usuario`).
+ * 2. Validación de Plan: Comprueba que el `id_plan_membresia` solicitado pertenezca
+ *    estrictamente al gimnasio del alumno (`id_gimnasio`) y no esté pausado/inactivo.
+ * 3. Identificador de Correlación (`external_reference`):
+ *    - Sintaxis: `GYM-{id_gimnasio}-SOC-{id_socio}-PL-{id_plan}-{timestamp}`.
+ *    - Este ID garantiza trazabilidad total y permite al webhook o verificación por polling
+ *      saber con certeza a qué socio y plan imputar el pago aprobado.
+ * 4. Pasarela de Pago:
+ *    - Invoca `crearPreferenciaMercadoPago()` generando el `init_point` oficial o de sandbox.
+ *    - Retorna el link de checkout y código QR para que el socio complete la compra.
  */
 const iniciarPago = async (req, res) => {
   try {
@@ -594,7 +608,7 @@ const iniciarPago = async (req, res) => {
       return res.status(400).json({ error: 'El id_plan_membresia es requerido para iniciar el pago.' });
     }
 
-    // 1. Validar plan del gimnasio y que no esté en pausa o inactivo
+    // 1. Validar plan del gimnasio y verificar que no esté en pausa o inactivo
     const { data: plan, error: planErr } = await supabase
       .from('plan_membresia')
       .select('*')
@@ -676,8 +690,23 @@ const iniciarPago = async (req, res) => {
 };
 
 /**
- * 5. CONFIRMAR REGISTRO DE PAGO Y ACTUALIZAR MEMBRESÍA
+ * ==============================================================================
+ * ENDPOINT 5: CONFIRMAR REGISTRO DE PAGO Y ACTUALIZAR MEMBRESÍA
  * POST /api/socio/pagos/confirmar
+ * ==============================================================================
+ * 
+ * GUÍA OPERATIVA DEL CICLO DE VIDA DE LA MEMBRESÍA:
+ * 1. Validación de Plan: Corrobora que el plan adquirido pertenezca al gimnasio.
+ * 2. Lógica Matemática de Vigencia:
+ *    - Si el socio ya posee un plan vigente (`fecha_vencimiento > hoy`):
+ *      Se conserva `fecha_inicio` y se añade la duración del nuevo plan (`duracion_dias`)
+ *      a la fecha de vencimiento previa (extensión acumulativa, no pierde días).
+ *    - Si el plan estaba vencido o es su primera suscripción:
+ *      La fecha de inicio se fija en el día actual (`hoy`) y el vencimiento en `hoy + duracion_dias`.
+ * 3. Persistencia en Base de Datos:
+ *    - Tabla `membresia`: Actualiza o inserta la suscripción fijando `estado = 'activo'`.
+ *    - Tabla `pago`: Inserta el registro contable de cobro con método 'mercadopago' y comprobante.
+ *    - Tabla `socio`: Cambia el estado del alumno a `'activo'` para habilitar su acceso a molinetes/clases.
  */
 const confirmarPago = async (req, res) => {
   try {
@@ -853,8 +882,16 @@ const confirmarPago = async (req, res) => {
 };
 
 /**
- * 6. WEBHOOK DE NOTIFICACIONES IPN (MERCADO PAGO / UALÁ)
+ * ==============================================================================
+ * ENDPOINT 6: WEBHOOK DE NOTIFICACIONES IPN (MERCADO PAGO / UALÁ)
  * POST /api/socio/pagos/webhook
+ * ==============================================================================
+ * 
+ * GUÍA OPERATIVA DE NOTIFICACIONES ASÍNCRONAS:
+ * 1. Propósito: Escucha los eventos `payment.created`, `payment.updated` que Mercado Pago
+ *    emite de forma push cuando un usuario completa el pago en una pestaña externa o cajero.
+ * 2. Acuse de Recibo Inmediato: Responde HTTP 200 de inmediato a Mercado Pago para confirmar
+ *    la recepción del evento y evitar reintentos en bucle por timeout de red.
  */
 const webhookPago = async (req, res) => {
   try {
@@ -869,8 +906,22 @@ const webhookPago = async (req, res) => {
 };
 
 /**
- * 7. VERIFICAR ESTADO DE PAGO EN LA API DE MERCADO PAGO Y REGISTRAR AUTOMÁTICAMENTE
- * GET /api/socio/pagos/verificar-mp
+ * ==============================================================================
+ * ENDPOINT 7: VERIFICACIÓN ACTIVA DE PAGO EN MERCADO PAGO Y AUTO-ACREDITACIÓN
+ * GET /api/socio/pagos/verificar-mp?external_reference=...&payment_id=...
+ * ==============================================================================
+ * 
+ * GUÍA OPERATIVA DEL POLLING Y VALIDACIÓN DE MERCADO PAGO:
+ * 1. Polling Reactivo: Cuando el alumno abre el checkout o regresa a la aplicación desde `back_urls`,
+ *    el frontend llama a este endpoint para consultar el estado en tiempo real.
+ * 2. Consulta a la API de Mercado Pago (`/v1/payments/search` o `/v1/payments/:id`):
+ *    - Filtra por `external_reference` único para validar el importe y estado (`status === 'approved'`).
+ * 3. Idempotencia y Protección Contra Doble Imputación:
+ *    - Comprueba si el comprobante (`MP-{payment_id}`) ya fue asentado en la tabla `pago`.
+ *    - Si ya existe, responde inmediatamente `ya_registrado: true` sin duplicar transacciones.
+ * 4. Activación Automatizada:
+ *    - Si el pago es legítimo y no estaba registrado, invoca la renovación de la membresía,
+ *      crea el registro de caja en `pago` y habilita al socio (`estado = 'activo'`).
  */
 const verificarPagoMercadoPago = async (req, res) => {
   try {

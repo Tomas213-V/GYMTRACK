@@ -557,8 +557,29 @@ const deleteSocio = async (req, res) => {
 
 /**
  * 7. OBTENER PERFIL DEL SOCIO
+/**
+ * ==============================================================================
+ * ENDPOINT 7: CONSULTA INTEGRAL DE PERFIL DEL SOCIO
  * GET /api/socios/perfil
- * GET /api/socios/perfil?id=123 (para administradores)
+ * GET /api/socios/perfil?id=123 (Uso administrativo / Dueño)
+ * ==============================================================================
+ * 
+ * GUÍA DE ARQUITECTURA DE DATOS DEL PERFIL DEL SOCIO:
+ * 1. Acceso Dual y Seguridad:
+ *    - Si lo consulta un alumno autenticado (`rol === 'socio'`), recupera automáticamente
+ *      su propio `id_socio` desde el token JWT e impide espiar fichas ajenas (HTTP 403).
+ *    - Si lo consulta el dueño/administrador con `?id=...`, valida que el socio pertenezca
+ *      estrictamente a su gimnasio (`id_gimnasio`).
+ * 2. Agregación Multitabla (Supabase Relational Query):
+ *    - Ficha de Socio: Nombre, apellido, DNI, teléfono, email, fecha de alta, estado.
+ *    - Gimnasio: Razón social, dirección, contacto telefónico.
+ *    - Membresías: Historial de planes contratados, vencimientos y estado.
+ *    - Asistencias: Entradas registradas ordenadas cronológicamente.
+ *    - Pagos: Últimos comprobantes y facturación emitida a nombre del socio.
+ * 3. Telemetría y Métricas:
+ *    - Calcula días restantes de vigencia de la suscripción actual.
+ *    - Si quien consulta es el dueño, provee el listado completo de socios (`sociosDisponibles`)
+ *      para permitirle alternar rápidamente entre fichas de alumnos desde la UI.
  */
 const getPerfilSocio = async (req, res) => {
   try {
@@ -727,8 +748,21 @@ const getPerfilSocio = async (req, res) => {
 };
 
 /**
- * 8. ACTUALIZAR PERFIL DEL SOCIO
+ * ==============================================================================
+ * ENDPOINT 8: ACTUALIZACIÓN DE PERFIL DEL SOCIO
  * PUT /api/socios/perfil
+ * ==============================================================================
+ * 
+ * GUÍA OPERATIVA DE ACTUALIZACIÓN Y SEGURIDAD:
+ * 1. Autorización:
+ *    - Un socio solo puede editar sus propios datos (`id_socio === req.usuario.id_socio`).
+ *    - Un dueño puede editar los datos de cualquier socio de su gimnasio (`id_gimnasio`).
+ * 2. Validación de Contraseña con Bcrypt:
+ *    - Si se solicita cambio de contraseña, se exige la `contrasena_actual` previa y se valida
+ *      mediante `bcrypt.compare`.
+ *    - La nueva clave se encripta con `bcrypt.hash(..., 10)` antes de persistirla.
+ * 3. Restricción de DNI Único:
+ *    - Si el DNI cambia, valida que ningún otro socio del mismo gimnasio tenga ese DNI registrado.
  */
 const updatePerfilSocio = async (req, res) => {
   try {

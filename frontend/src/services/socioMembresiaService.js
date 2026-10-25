@@ -7,9 +7,15 @@
  * 
  * GUÍA PASO A PASO PARA EL DESARROLLADOR:
  * 1. Consulta de Membresía Actual: `getMiMembresia()` devuelve el estado de la suscripción,
- *    días restantes de vigencia y el historial de pagos realizados por el alumno.
+ *    días restantes de vigencia, porcentaje transcurrido y el historial de pagos realizados.
  * 2. Renovación y Planes: `getPlanesDisponibles()` lista los planes que su gimnasio ofrece,
  *    permitiendo al alumno seleccionar y adquirir un plan nuevo mediante la pasarela de pagos.
+ * 3. Integración con Mercado Pago:
+ *    - `iniciarPagoMembresia()`: Solicita al backend la creación de la preferencia en Mercado Pago
+ *      obteniendo la URL de Checkout Pro (`init_point`), el código QR y la `external_reference`.
+ *    - `verificarPagoMercadoPago()`: Efectúa polling reactivo mientras el checkout esté en curso
+ *      o valida el retorno desde `back_urls` (`?pago_status=approved`) para acreditar la membresía.
+ *    - `confirmarPagoMembresia()`: Asienta la transacción contable y renueva la membresía en la base de datos.
  */
 
 const API_URL = import.meta.env.VITE_API_URL 
@@ -17,7 +23,8 @@ const API_URL = import.meta.env.VITE_API_URL
   : 'http://localhost:3000/api/socio';
 
 /**
- * Obtener headers comunes con token JWT
+ * Obtener headers comunes con token JWT.
+ * Incluye la cabecera `Authorization: Bearer <token>` para autenticar las peticiones del socio.
  */
 function getHeaders() {
   const token = localStorage.getItem('token');

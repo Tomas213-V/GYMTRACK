@@ -3,18 +3,24 @@
  * ARCHIVO: rutinas.jsx
  * RUTA: frontend/src/pages/rutinas-dueno/rutinas.jsx
  * PROYECTO: GYMTRACK - Frontend
- * DESCRIPCIÓN: Panel Administrativo para la Creación, Edición y Asignación de Rutinas.
+ * DESCRIPCIÓN: Panel Administrativo para la Creación, Edición y Asignación de Rutinas de Entrenamiento.
  * =========================================================================================
  * 
- * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
- * 1. PASO 1 (Catálogos Requeridos):
- *    - `sociosList`: Socios del gimnasio para asociar el plan de entrenamiento.
- *    - `catalogoEjercicios`: Base de datos de ejercicios por grupo muscular (pecho, espalda, pierna, etc.).
- * 2. PASO 2 (Diseñador de Rutinas):
- *    - Permite estructurar entrenamientos divididos por días (Lunes: Pecho/Tríceps, Miércoles: Piernas, etc.).
- *    - Configuración por ejercicio de series, repeticiones, peso sugerido y descansos entre series.
- * 3. PASO 3 (Gestión de Estados):
- *    - Rutinas activas, pausadas o archivadas.
+ * GUÍA DE ARQUITECTURA DE ENTRENAMIENTO PARA EL DESARROLLADOR:
+ * 1. ADAPTACIÓN AL ROL DE USUARIO:
+ *    - Detecta el rol (`esSocio` vs `dueño/entrenador`) para ajustar las capacidades de edición.
+ *    - El dueño puede crear, editar, reasignar o archivar rutinas para cualquier socio de su establecimiento.
+ * 2. DISEÑADOR MODULAR DE ENTRENAMIENTOS (Routine Builder):
+ *    - Metadatos de la Rutina: Nombre descriptivo, tipo ('Full Body', 'Hipertrofia', 'Fuerza', etc.),
+ *      frecuencia semanal ('Lunes, Miércoles, Viernes'), dificultad y recomendaciones técnicas.
+ *    - Asignación de Alumno: Selector vinculado a la base de datos de socios del gimnasio (`sociosList`).
+ * 3. COMPOSICIÓN DINÁMICA DE EJERCICIOS:
+ *    - Catálogo Filtrable: Búsqueda rápida y filtrado por grupo muscular (Pecho, Espalda, Piernas, etc.).
+ *    - Ajuste por Ejercicio: Configura series, repeticiones, carga sugerida (kg) y tiempo de descanso (segundos).
+ *    - Creación Rápida de Ejercicio: Submodal para dar de alta nuevos ejercicios personalizados (`createEjercicioPersonalizado`)
+ *      sin abandonar la pantalla de diseño.
+ * 4. GESTIÓN DE ESTADOS Y TARJETAS:
+ *    - Paginación interactiva (6 rutinas por vista) y filtros combinados por socio y estado ('asignada', 'activa', 'pausada').
  */
 
 import React, { useState, useEffect, useRef } from 'react';

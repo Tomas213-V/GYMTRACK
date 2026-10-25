@@ -3,20 +3,26 @@
  * ARCHIVO: pagos.jsx
  * RUTA: frontend/src/pages/pagos-dueno/pagos.jsx
  * PROYECTO: GYMTRACK - Frontend
- * DESCRIPCIÓN: Módulo de Caja, Facturación e Historial de Cobros del Administrador.
+ * DESCRIPCIÓN: Módulo de Caja, Facturación e Historial de Cobros del Dueño / Administrador.
  * =========================================================================================
  * 
- * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
- * 1. PASO 1 (Estados de Negocio):
- *    - `pagos`: Lista de cobros registrados asociados al gimnasio activo.
- *    - `resumen`: Tarjetas con métricas agregadas (total recaudado en ARS, cobros realizados, pendientes, vencidos).
- *    - `busqueda`, `filtroEstado`, `fechaDesde`, `fechaHasta`: Panel de filtros cruzados.
- * 2. PASO 2 (Modales y Flujos):
- *    - `modalAbierto`: Despliega `<PagosModal />` para cobrar manualmente una membresía a un socio.
- *    - `modalDetalleAbierto`: Despliega `<PagosDetalleModal />` para anular, emitir comprobante o cambiar estado.
- * 3. PASO 3 (Normalización de Datos):
- *    - Aplica `formatearFecha()` y normaliza la información anidada del socio (`item.membresia.socio`)
- *      para exhibirla ordenadamente en la tabla interactiva `<PagosTabla />`.
+ * GUÍA DE ARQUITECTURA FINANCIERA PARA EL DESARROLLADOR:
+ * 1. MÉTRICAS DE CAJA Y FACTURACIÓN:
+ *    - `resumen`: Tarjetas consolidadas de KPI que calculan en tiempo real:
+ *      * Total Recaudado (en pesos argentinos ARS).
+ *      * Cobros Realizados / Pagados exitosamente.
+ *      * Cobros Pendientes (en proceso de acreditación o esperando transferencia).
+ *      * Cobros Vencidos (cuotas impagas que requieren reclamo o suspensión preventiva).
+ * 2. FLUJOS MODULARES Y MODALES:
+ *    - `<PagosModal />`: Modal de cobro en mostrador / recepción. Permite seleccionar un socio,
+ *      asignarle un plan de membresía, definir el medio de pago (efectivo, transferencia, débito)
+ *      y registrar el pago instantáneamente actualizando la caja del gimnasio.
+ *    - `<PagosDetalleModal />`: Inspección exhaustiva de cada transacción, visor de comprobante,
+ *      cambio ágil de estado (`pagado` <-> `pendiente` <-> `vencido`) y anulación/baja del registro.
+ * 3. NORMALIZACIÓN Y FILTROS:
+ *    - Transforma las relaciones de base de datos (`pago -> membresia -> socio`) en objetos planos
+ *      para alimentar la grilla paginada `<PagosTabla />`.
+ *    - Soporta búsqueda reactiva por nombre/DNI y filtros combinados por rango de fechas y estado.
  */
 
 import { useState, useEffect, useCallback } from "react";

@@ -3,17 +3,25 @@
  * ARCHIVO: socio-membresia.jsx
  * RUTA: frontend/src/pages/membresia-socio/socio-membresia.jsx
  * PROYECTO: GYMTRACK - Frontend
- * DESCRIPCIÓN: Módulo de Gestión de Membresías, Pagos y Facturación del Socio.
+ * DESCRIPCIÓN: Módulo de Gestión de Membresías, Pagos Digitales y Facturación del Socio.
  * =========================================================================================
  * 
- * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
- * 1. PASO 1 (Métricas de Suscripción): Exhibe plan contratado, porcentaje de tiempo transcurrido,
- *    días restantes de acceso y estado actual (activa/por vencer/vencida).
- * 2. PASO 2 (Pasarela de Cobros):
- *    - Integra opciones de renovación con pasarelas digitales (Mercado Pago, transferencia bancaria).
- *    - Validación de comprobantes y confirmación de cobro.
- * 3. PASO 3 (Historial de Pagos y Recibos):
- *    - Lista de cuotas abonadas con fecha, importe en pesos y número de factura/recibo descargable.
+ * GUÍA DE ARQUITECTURA Y MERCADO PAGO PARA EL DESARROLLADOR:
+ * 1. MÉTRICAS DE SUSCRIPCIÓN (Telemetría de Acceso):
+ *    - Calcula vigencia en días, barra porcentual transcurrida y semáforo visual:
+ *      'activa' (verde), 'por vencer' (amarillo <= 7 días) o 'vencida' (rojo).
+ * 2. INTEGRACIÓN COMPLETA CON MERCADO PAGO:
+ *    - Creación de Preferencia: `iniciarPagoMembresia()` solicita al backend la preferencia
+ *      de Checkout Pro en la API de Mercado Pago, obteniendo `init_point`, `sandbox_init_point` y QR.
+ *    - Modal Interactivo: Muestra código QR dinámico de Mercado Pago para escanear desde la app
+ *      o botón para abrir el Checkout oficial en pestaña segura.
+ *    - Polling Reactivo en Tiempo Real: Mientras el modal de Mercado Pago esté abierto, un
+ *      `useEffect` sondea cada 3.5s (`verificarPagoMercadoPago`) buscando aprobación del pago.
+ *    - Retorno Automático (Back URLs): Si el usuario paga en la pestaña de Mercado Pago y es
+ *      redirigido con `?pago_status=approved&ref=...`, el componente detecta el query param
+ *      al montar, acredita la membresía, limpia la URL con `window.history.replaceState` y notifica.
+ * 3. HISTORIAL CONTABLE Y COMPROBANTES:
+ *    - Lista de cuotas abonadas con fecha, importe en ARS formateado y visor de recibo imprimible.
  */
 
 import { useState, useEffect } from 'react';
