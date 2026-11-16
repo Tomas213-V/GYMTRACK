@@ -21,7 +21,7 @@
   color: var(--se-text-primary);
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .se-body {

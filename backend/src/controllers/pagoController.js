@@ -151,7 +151,7 @@ const getMembresias = async (req, res) => {
         : (s.membresia ? [s.membresia] : []);
 
       const membresiaActiva = membList.length > 0
-        ? (membList.find(m => m.estado === 'activo') || membList[0])
+        ? (membList.find((m) => ['activo', 'activa'].includes((m.estado || '').toLowerCase())) || membList[0])
         : null;
 
       return {

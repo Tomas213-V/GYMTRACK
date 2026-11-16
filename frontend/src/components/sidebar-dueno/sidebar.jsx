@@ -24,6 +24,7 @@ import {
     FaUsers, 
     FaCalendarCheck, 
     FaDumbbell, 
+    FaRunning,
     FaUser, 
     FaCreditCard, 
     FaSignOutAlt, 
@@ -61,6 +62,7 @@ function Sidebar() {
         { ruta: "/membresia-dueño", nombre: "Membresías", icono: <FaCreditCard />, alias: ["/membresias-dueño", "/membresia-admin", "/membresias", "/membresias-admin", "/membresia-dueno", "/membresias-dueno"] },
         { ruta: "/asistencias-dueño", nombre: "Asistencias", icono: <FaCalendarCheck />, alias: ["/asistencias", "/asistencias-dueno"] },
         { ruta: "/rutinas-dueño", nombre: "Rutinas", icono: <FaDumbbell />, alias: ["/rutinas", "/rutinas-dueno"] },
+        { ruta: "/ejercicios-dueño", nombre: "Ejercicios", icono: <FaRunning />, alias: ["/ejercicios-dueno", "/ejercicios"] },
         { ruta: "/pagos-dueño", nombre: "Pagos", icono: <FaMoneyBill />, alias: ["/pagos", "/pagos-dueno"] },
         { ruta: "/perfil-dueño", nombre: "Mi Perfil", icono: <FaUser />, alias: ["/perfil", "/perfil-dueno"] },
         { ruta: "/support-dueño", nombre: "Soporte", icono: <FaHeadset />, alias: ["/support", "/support-dueno", "/soporte-dueño", "/soporte-dueno"] }

@@ -138,12 +138,25 @@ const getEjercicios = async (req, res) => {
 
     const offset = (page - 1) * limit;
 
+    let gymId = usuario?.id_gimnasio;
+    if (!gymId && usuario?.id_usuario) {
+      const { data: gymData } = await supabase
+        .from('gimnasio')
+        .select('id_gimnasio')
+        .eq('id_usuario', usuario.id_usuario)
+        .maybeSingle();
+      if (gymData?.id_gimnasio) {
+        gymId = gymData.id_gimnasio;
+      }
+    }
+
     let query = supabase
       .from('ejercicio')
-      .select('*', { count: 'exact' });
+      .select('*', { count: 'exact' })
+      .is('id_socio', null);
 
-    if (usuario?.id_gimnasio) {
-      query = query.or(`id_gimnasio.eq.${usuario.id_gimnasio},id_gimnasio.is.null`);
+    if (gymId) {
+      query = query.or(`id_gimnasio.eq.${gymId},id_gimnasio.is.null`);
     }
 
     if (grupo_muscular && grupo_muscular !== 'todos') {
@@ -305,6 +318,23 @@ const crearEjercicio = async (req, res) => {
     }
 
     let gymId = id_gimnasio ? Number(id_gimnasio) : usuario?.id_gimnasio;
+
+    if (!gymId && usuario?.id_usuario) {
+      const { data: gymData } = await supabase
+        .from('gimnasio')
+        .select('id_gimnasio')
+        .eq('id_usuario', usuario.id_usuario)
+        .maybeSingle();
+      if (gymData?.id_gimnasio) {
+        gymId = gymData.id_gimnasio;
+      }
+    }
+
+    if (!gymId) {
+      return res.status(400).json({
+        error: 'No se pudo identificar el gimnasio del dueño para asignar el ejercicio.'
+      });
+    }
 
     const { data, error } = await supabase
       .from('ejercicio')

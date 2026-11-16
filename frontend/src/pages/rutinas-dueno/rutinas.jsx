@@ -36,6 +36,7 @@ import {
   updateEjercicioEnRutina,
   removeEjercicioFromRutina,
   fetchCatalogoEjercicios,
+  createEjercicio,
   createEjercicioPersonalizado
 } from '../../services/rutinaService';
 import { fetchSocios } from '../../services/socioService';
@@ -364,6 +365,11 @@ export default function Rutinas() {
 
     const targetSocio = rutinaFormData.id_socio ? Number(rutinaFormData.id_socio) : (socioIdActual ? Number(socioIdActual) : null);
 
+    if (!esSocio && !targetSocio) {
+      alert('Debes seleccionar un socio para asignar la rutina.');
+      return;
+    }
+
     const payload = {
       nombre: rutinaFormData.nombre.trim(),
       id_socio: targetSocio,
@@ -452,13 +458,21 @@ export default function Rutinas() {
 
     setGuardandoCustomEj(true);
     try {
-      const nuevoEjercicio = await createEjercicioPersonalizado({
-        nombre: customEjFormData.nombre.trim(),
-        grupo_muscular: customEjFormData.grupo_muscular,
-        dificultad: customEjFormData.dificultad,
-        descripcion: customEjFormData.descripcion ? customEjFormData.descripcion.trim() : null,
-        id_socio: socioIdActual ? Number(socioIdActual) : undefined
-      });
+      const nuevoEjercicio = esSocio
+        ? await createEjercicioPersonalizado({
+            nombre: customEjFormData.nombre.trim(),
+            grupo_muscular: customEjFormData.grupo_muscular,
+            dificultad: customEjFormData.dificultad,
+            descripcion: customEjFormData.descripcion ? customEjFormData.descripcion.trim() : null,
+            id_socio: socioIdActual ? Number(socioIdActual) : undefined
+          })
+        : await createEjercicio({
+            nombre: customEjFormData.nombre.trim(),
+            grupo_muscular: customEjFormData.grupo_muscular,
+            dificultad: customEjFormData.dificultad,
+            descripcion: customEjFormData.descripcion ? customEjFormData.descripcion.trim() : null,
+            id_gimnasio: usuarioLocal?.id_gimnasio ? Number(usuarioLocal.id_gimnasio) : undefined
+          });
 
       setShowCustomEjModal(false);
 
@@ -467,12 +481,13 @@ export default function Rutinas() {
 
       // Si el modal de rutina está abierto, seleccionarlo automáticamente
       if (showRutinaModal && nuevoEjercicio?.id_ejercicio) {
+        const esPropio = Boolean(nuevoEjercicio.es_propio ?? esSocio);
         const itemParaModal = {
           id_ejercicio: nuevoEjercicio.id_ejercicio,
           nombre: nuevoEjercicio.nombre,
           grupo_muscular: nuevoEjercicio.grupo_muscular || 'General',
-          origen: 'Mi ejercicio',
-          es_propio: true,
+          origen: nuevoEjercicio.origen || (esPropio ? 'Mi ejercicio' : 'Gimnasio'),
+          es_propio: esPropio,
           series: 4,
           repeticiones: 12,
           peso: 0,
@@ -490,9 +505,9 @@ export default function Rutinas() {
         }));
       }
 
-      alert('¡Ejercicio personalizado creado con éxito!');
+      alert(esSocio ? '¡Ejercicio personalizado creado con éxito!' : '¡Ejercicio del gimnasio creado con éxito!');
     } catch (err) {
-      alert(err.message || 'Error al crear el ejercicio personalizado.');
+      alert(err.message || (esSocio ? 'Error al crear el ejercicio personalizado.' : 'Error al crear el ejercicio del gimnasio.'));
     } finally {
       setGuardandoCustomEj(false);
     }
@@ -632,9 +647,9 @@ export default function Rutinas() {
                   type="button"
                   className="rut-btn-create-custom-ej"
                   onClick={handleOpenCrearEjercicioPersonalizado}
-                  title="Crear un ejercicio propio para usar en tus rutinas"
+                  title={esSocio ? 'Crear un ejercicio propio para usar en tus rutinas' : 'Crear un ejercicio oficial asignado a tu gimnasio'}
                 >
-                  <FaPlus /> Crear mi ejercicio
+                  <FaPlus /> {esSocio ? 'Crear mi ejercicio' : 'Crear ejercicio del gimnasio'}
                 </button>
 
                 <button type="button" className="rut-btn-primary" onClick={handleOpenNuevaRutina}>
@@ -973,7 +988,7 @@ export default function Rutinas() {
                           className="rut-btn-create-custom-ej"
                           onClick={handleOpenCrearEjercicioPersonalizado}
                         >
-                          <FaPlus /> Crear mi ejercicio
+                          <FaPlus /> {esSocio ? 'Crear mi ejercicio' : 'Crear ejercicio del gimnasio'}
                         </button>
 
                         <button type="button" className="rut-btn-primary" onClick={handleOpenAddEjercicio}>
@@ -1121,13 +1136,14 @@ export default function Rutinas() {
 
                 {!esSocio && (
                   <div className="rut-form-field">
-                    <label>Socio Asignado</label>
+                    <label>Socio Asignado *</label>
                     <select
                       className="rut-form-select"
                       value={rutinaFormData.id_socio}
                       onChange={(e) => setRutinaFormData({ ...rutinaFormData, id_socio: e.target.value })}
+                      required
                     >
-                      <option value="">-- Sin socio asignado --</option>
+                      <option value="">-- Seleccionar un socio --</option>
                       {sociosList.map((s) => (
                         <option key={s.id_socio} value={s.id_socio}>
                           {s.nombre} {s.apellido} ({s.dni})
@@ -1183,7 +1199,7 @@ export default function Rutinas() {
                       className="rut-btn-create-custom-ej"
                       onClick={handleOpenCrearEjercicioPersonalizado}
                     >
-                      <FaPlus /> + Crear ejercicio personalizado
+                      <FaPlus /> {esSocio ? '+ Crear ejercicio personalizado' : '+ Crear ejercicio del gimnasio'}
                     </button>
                   </div>
 
@@ -1381,7 +1397,7 @@ export default function Rutinas() {
                         }}
                         onClick={handleOpenCrearEjercicioPersonalizado}
                       >
-                        + Crear mi ejercicio
+                        {esSocio ? '+ Crear mi ejercicio' : '+ Crear ejercicio del gimnasio'}
                       </button>
                     </div>
 
@@ -1498,8 +1514,10 @@ export default function Rutinas() {
           <div className="rut-modal-card" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
             <div className="rut-modal-header">
               <h3>
-                <FaUser style={{ color: '#a3e635', marginRight: '6px' }} />
-                Crear Ejercicio Personalizado
+                {esSocio
+                  ? <FaUser style={{ color: '#a3e635', marginRight: '6px' }} />
+                  : <FaBuilding style={{ color: '#a3e635', marginRight: '6px' }} />}
+                {esSocio ? 'Crear Ejercicio Personalizado' : 'Crear Ejercicio del Gimnasio'}
               </h3>
               <button type="button" className="rut-modal-close-btn" onClick={() => setShowCustomEjModal(false)}>
                 <FaTimes />
@@ -1513,7 +1531,7 @@ export default function Rutinas() {
                   <input
                     type="text"
                     className="rut-form-input"
-                    placeholder="Ej: Curl martillo personalizado"
+                    placeholder={esSocio ? 'Ej: Curl martillo personalizado' : 'Ej: Press inclinado con mancuernas'}
                     value={customEjFormData.nombre}
                     onChange={(e) => setCustomEjFormData({ ...customEjFormData, nombre: e.target.value })}
                     required
@@ -1570,7 +1588,7 @@ export default function Rutinas() {
                   Cancelar
                 </button>
                 <button type="submit" className="rut-btn-primary" disabled={guardandoCustomEj}>
-                  <FaCheck /> {guardandoCustomEj ? 'Guardando...' : 'Crear mi ejercicio'}
+                  <FaCheck /> {guardandoCustomEj ? 'Guardando...' : (esSocio ? 'Crear mi ejercicio' : 'Crear ejercicio del gimnasio')}
                 </button>
               </div>
             </form>

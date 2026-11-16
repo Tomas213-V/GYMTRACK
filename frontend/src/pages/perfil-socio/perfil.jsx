@@ -50,6 +50,7 @@ import {
 import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar-dueno/sidebar';
 import { getPerfilSocio, updatePerfilSocio } from '../../services/socioService';
+import { formatFechaArgentina, formatHoraArgentina } from '../../utils/dateUtils';
 import './perfil.css';
 
 function Perfil() {
@@ -276,12 +277,11 @@ function Perfil() {
     return (n + a).toUpperCase() || 'GT';
   };
 
-  // Formatear fechas YYYY-MM-DD a formato amigable
+  // Formatear fechas YYYY-MM-DD o timestamps UTC a formato amigable (horario Argentina)
   const formatearFecha = (fechaStr) => {
     if (!fechaStr) return 'No registrado';
     try {
-      const f = new Date(fechaStr.split('T')[0] + 'T00:00:00');
-      return f.toLocaleDateString('es-AR', {
+      return formatFechaArgentina(fechaStr, {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
@@ -291,13 +291,11 @@ function Perfil() {
     }
   };
 
-  // Formatear hora de asistencia HH:MM
+  // Formatear hora de asistencia HH:MM (horario Argentina)
   const formatearHora = (fechaHoraStr) => {
     if (!fechaHoraStr) return 'Presente';
     try {
-      const f = new Date(fechaHoraStr);
-      if (isNaN(f.getTime())) return fechaHoraStr;
-      return f.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+      return formatHoraArgentina(fechaHoraStr);
     } catch {
       return 'Presente';
     }

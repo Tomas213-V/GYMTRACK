@@ -10,7 +10,7 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .sr-body-container {
@@ -233,11 +233,11 @@
 }
 
 /* --------------------------------------------------------------------------
-   MÉTRICAS (4 CARDS EN FILA)
+   MÉTRICAS (3 CARDS EN FILA)
    -------------------------------------------------------------------------- */
 .sr-metrics-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   margin-bottom: 24px;
 }

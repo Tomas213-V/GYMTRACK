@@ -18,9 +18,98 @@
  *    - `confirmarPagoMembresia()`: Asienta la transacción contable y renueva la membresía en la base de datos.
  */
 
+import { formatFechaArgentina } from '../utils/dateUtils';
+
 const API_URL = import.meta.env.VITE_API_URL 
   ? `${import.meta.env.VITE_API_URL}/socio` 
   : 'http://localhost:3000/api/socio';
+
+const METODO_PAGO_ETIQUETAS = [
+  { match: (m) => m.includes('mercadopago') || m === 'mp' || m.includes('mercado pago'), label: 'Mercado Pago' },
+  { match: (m) => m.includes('uala') || m.includes('ualá'), label: 'Ualá' },
+  { match: (m) => m.includes('efectivo') || m.includes('cash'), label: 'Efectivo' },
+  { match: (m) => m.includes('transferencia'), label: 'Transferencia' },
+  { match: (m) => m.includes('debito') || m.includes('débito'), label: 'Tarjeta de Débito' },
+  { match: (m) => m.includes('credito') || m.includes('crédito') || m.includes('tarjeta'), label: 'Tarjeta de Crédito' }
+];
+
+const ESTADOS_PAGO_PAGADOS = ['pagado', 'aprobado', 'completado', 'accredited'];
+
+function formatearPrecioARS(monto) {
+  if (monto === null || monto === undefined || monto === '' || Number.isNaN(Number(monto))) {
+    return '$0';
+  }
+  return `$${Number(monto).toLocaleString('es-AR')}`;
+}
+
+function obtenerEtiquetaMetodoPago(metodoPago) {
+  const mNorm = String(metodoPago || '').toLowerCase().trim();
+  if (!mNorm) return 'No especificado';
+
+  const found = METODO_PAGO_ETIQUETAS.find((item) => item.match(mNorm));
+  return found ? found.label : String(metodoPago).trim();
+}
+
+function obtenerEtiquetaEstadoPago(estado) {
+  const eNorm = String(estado || 'pagado').toLowerCase().trim();
+  if (ESTADOS_PAGO_PAGADOS.includes(eNorm)) return 'Pagado';
+  if (eNorm === 'vencido' || eNorm === 'rechazado' || eNorm === 'cancelado') {
+    return eNorm.charAt(0).toUpperCase() + eNorm.slice(1);
+  }
+  return 'Pendiente';
+}
+
+function resolverNombrePlanPago(pago, data) {
+  const directo =
+    pago?.plan_nombre ||
+    pago?.membresia?.plan_membresia?.nombre ||
+    pago?.membresia?.plan?.nombre ||
+    pago?.plan?.nombre;
+  if (directo) return directo;
+
+  const planes = Array.isArray(data?.planes_disponibles) ? data.planes_disponibles : [];
+  const idPlanPago = pago?.id_plan_membresia || pago?.membresia?.id_plan_membresia;
+  if (idPlanPago) {
+    const planPorId = planes.find((p) => String(p.id_plan_membresia) === String(idPlanPago));
+    if (planPorId?.nombre) return planPorId.nombre;
+  }
+
+  const membresiaActual = data?.membresia;
+  const mismoPlanQueMembresia =
+    membresiaActual?.nombre_plan &&
+    membresiaActual.nombre_plan !== 'Sin Membresía Activa' &&
+    (!pago?.id_membresia || !membresiaActual?.id_membresia || String(pago.id_membresia) === String(membresiaActual.id_membresia));
+
+  if (pago?.monto !== null && pago?.monto !== undefined) {
+    const montoNum = Number(pago.monto);
+    const planPorMonto = planes.find((p) => Number(p.precio) === montoNum);
+    if (planPorMonto?.nombre) return planPorMonto.nombre;
+  }
+
+  if (mismoPlanQueMembresia) return membresiaActual.nombre_plan;
+
+  return 'Plan de Membresía';
+}
+
+/**
+ * Normaliza un registro de pago asegurando campos formateados compatibles
+ * con respuestas de backend Node y backend Python.
+ */
+export function normalizarPagoHistorial(pago, data = {}) {
+  const estadoNorm = String(pago?.estado || 'pagado').toLowerCase().trim();
+  const esPagado = ESTADOS_PAGO_PAGADOS.includes(estadoNorm);
+
+  return {
+    ...pago,
+    monto_formateado: pago?.monto_formateado || formatearPrecioARS(pago?.monto),
+    fecha_formateada: pago?.fecha_formateada || (pago?.fecha_pago ? formatFechaArgentina(pago.fecha_pago) : 'Sin fecha'),
+    metodo_pago_etiqueta: pago?.metodo_pago_etiqueta || obtenerEtiquetaMetodoPago(pago?.metodo_pago),
+    plan_nombre: resolverNombrePlanPago(pago, data),
+    categoria: pago?.categoria || 'Membresía',
+    estado: esPagado ? 'pagado' : 'pendiente',
+    estado_etiqueta: pago?.estado_etiqueta || obtenerEtiquetaEstadoPago(estadoNorm)
+  };
+}
 
 /**
  * Obtener headers comunes con token JWT.
@@ -50,7 +139,27 @@ export async function getMiMembresia() {
     if (!res.ok) {
       throw new Error(data.error || 'Error al obtener la membresía del socio.');
     }
-    return data;
+
+    const rawPagos = Array.isArray(data.historial_pagos)
+      ? data.historial_pagos
+      : (Array.isArray(data.pagos) ? data.pagos : []);
+
+    const historialPagosNormalizado = rawPagos.map((pago) => normalizarPagoHistorial(pago, data));
+
+    const socioNormalizado = data.socio
+      ? {
+          ...data.socio,
+          nombre_completo:
+            data.socio.nombre_completo ||
+            `${data.socio.nombre || ''} ${data.socio.apellido || ''}`.trim()
+        }
+      : data.socio;
+
+    return {
+      ...data,
+      socio: socioNormalizado,
+      historial_pagos: historialPagosNormalizado
+    };
   } catch (error) {
     console.error('Error en getMiMembresia:', error);
     throw error;

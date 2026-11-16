@@ -954,7 +954,12 @@ export default function SocioMembresia() {
               </div>
 
               <div className="comprobante-total-box">
-                <span>Estado: <strong style={{ color: '#22c55e' }}>Aprobado</strong></span>
+                <span>
+                  Estado:{' '}
+                  <strong style={{ color: pagoSeleccionado.estado === 'pagado' ? '#22c55e' : '#f59e0b' }}>
+                    {pagoSeleccionado.estado === 'pagado' ? 'Aprobado' : (pagoSeleccionado.estado_etiqueta || 'Pendiente')}
+                  </strong>
+                </span>
                 <span>{pagoSeleccionado.monto_formateado}</span>
               </div>
             </div>

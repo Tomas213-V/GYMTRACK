@@ -52,6 +52,7 @@ import Pagos from './pages/pagos-dueno/pagos'
 import MembresiaAdmin from './pages/membresia-dueno/membresia-admin'
 import Asistencias from './pages/asistencias-dueno/asistencias'
 import Rutinas from './pages/rutinas-dueno/rutinas'
+import EjerciciosDueno from './pages/ejercicios-dueno/ejercicios-dueno'
 import Perfil from './pages/perfil-socio/perfil'
 import PerfilDueno from './pages/perfil-dueno/perfil-dueno'
 
@@ -270,6 +271,23 @@ function App() {
         />
 
         <Route
+          path="/ejercicios-dueño"
+          element={
+            <ProtectedRoute rolRequerido="dueño">
+              <EjerciciosDueno />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ejercicios-dueno"
+          element={
+            <ProtectedRoute rolRequerido="dueño">
+              <EjerciciosDueno />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/pagos-dueño"
           element={
             <ProtectedRoute rolRequerido="dueño">
@@ -468,6 +486,10 @@ function App() {
             localStorage.getItem('rol') === 'socio' || Boolean(localStorage.getItem('socio')) ? (
               <ProtectedRoute rolRequerido="socio">
                 <SocioEjercicios />
+              </ProtectedRoute>
+            ) : localStorage.getItem('token') ? (
+              <ProtectedRoute rolRequerido="dueño">
+                <EjerciciosDueno />
               </ProtectedRoute>
             ) : (
               <Ejercicios />

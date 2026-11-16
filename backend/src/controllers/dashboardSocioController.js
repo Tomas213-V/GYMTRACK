@@ -83,7 +83,6 @@ const getDashboardSocio = async (req, res) => {
           plan_membresia (
             id_plan_membresia,
             nombre,
-            descripcion,
             precio,
             duracion_dias,
             estado
@@ -102,7 +101,6 @@ const getDashboardSocio = async (req, res) => {
           metodo_pago,
           estado,
           comprobante,
-          referencia_pago,
           membresia!inner (
             id_socio
           )
@@ -158,7 +156,7 @@ const getDashboardSocio = async (req, res) => {
           nombre,
           descripcion,
           estado,
-          fecha_creacion,
+          fecha_inicio,
           rutina_ejercicio (
             id_rutina_ejercicio,
             series,
@@ -175,7 +173,7 @@ const getDashboardSocio = async (req, res) => {
           )
         `)
         .eq('id_socio', idSocio)
-        .eq('estado', 'activa')
+        .in('estado', ['activa', 'asignada'])
         .order('id_rutina', { ascending: false })
         .limit(1)
         .maybeSingle()

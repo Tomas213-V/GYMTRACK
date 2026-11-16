@@ -27,7 +27,7 @@
   flex-direction: column;
   font-family: 'Nunito Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   box-sizing: border-box;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* Encabezado alternativo para portal de socios (si no usa NavGlobal común) */

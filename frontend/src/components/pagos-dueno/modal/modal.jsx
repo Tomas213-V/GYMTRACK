@@ -1,7 +1,62 @@
 import { useState, useEffect } from "react";
 import { FaPlus, FaTimes, FaUserCheck, FaUserPlus } from "react-icons/fa";
 import { getMembresias, getPlanes } from "../../../services/pagoService";
+import { getFechaArgentinaISO } from "../../../utils/dateUtils";
 import "./modal.css";
+
+function extraerDatosSocio(s, planesDisponibles = []) {
+  if (!s) return null;
+
+  const nombreCompleto = s.nombre
+    ? `${s.nombre} ${s.apellido || ''}`.trim()
+    : (s.socio?.nombre
+        ? `${s.socio.nombre} ${s.socio.apellido || ''}`.trim()
+        : (s.socio?.usuario?.nombre
+            ? `${s.socio.usuario.nombre} ${s.socio.usuario.apellido || ''}`.trim()
+            : 'Socio'));
+
+  const dni = s.dni || s.socio?.dni || '';
+
+  const membList = Array.isArray(s.membresia)
+    ? s.membresia
+    : (s.membresia ? [s.membresia] : []);
+
+  const membActiva =
+    s.membresia_activa ||
+    membList.find((m) => ['activo', 'activa'].includes((m.estado || '').toLowerCase())) ||
+    membList[0] ||
+    null;
+
+  const idMembresia = s.id_membresia || membActiva?.id_membresia || '';
+  const idPlan =
+    s.id_plan_membresia ||
+    membActiva?.id_plan_membresia ||
+    membActiva?.plan_membresia?.id_plan_membresia ||
+    '';
+
+  const planObjPorId = idPlan
+    ? planesDisponibles.find((p) => String(p.id_plan_membresia) === String(idPlan))
+    : null;
+
+  const planObj =
+    s.plan_membresia ||
+    membActiva?.plan_membresia ||
+    planObjPorId ||
+    null;
+
+  const planNombre = planObj?.nombre || null;
+  const precio = s.precio ?? membActiva?.precio ?? planObj?.precio ?? null;
+
+  return {
+    id_socio: s.id_socio,
+    nombreCompleto,
+    dni,
+    id_membresia: idMembresia,
+    id_plan_membresia: idPlan,
+    planNombre,
+    precio
+  };
+}
 
 function PagosModal({ abierto, onCerrar, onGuardarPago, gymId }) {
   const [sociosDisponibles, setSociosDisponibles] = useState([]);
@@ -18,7 +73,7 @@ function PagosModal({ abierto, onCerrar, onGuardarPago, gymId }) {
     monto: "18000",
     metodo_pago: "efectivo",
     estado: "pagado",
-    fecha_pago: new Date().toISOString().split("T")[0]
+    fecha_pago: getFechaArgentinaISO()
   });
 
   const [mensajeExito, setMensajeExito] = useState("");
@@ -56,32 +111,35 @@ function PagosModal({ abierto, onCerrar, onGuardarPago, gymId }) {
         const sociosValidos = Array.isArray(socios) ? socios : [];
         setSociosDisponibles(sociosValidos);
 
-        if (sociosValidos.length > 0) {
-          const primero = sociosValidos[0];
-          const nombreCompleto = primero.nombre
-            ? `${primero.nombre} ${primero.apellido || ''}`.trim()
-            : (primero.socio?.nombre
-                ? `${primero.socio.nombre} ${primero.socio.apellido || ''}`.trim()
-                : (primero.socio?.usuario?.nombre
-                    ? `${primero.socio.usuario.nombre} ${primero.socio.usuario.apellido || ''}`.trim()
-                    : 'Socio'));
-          const planNombre = primero.plan_membresia?.nombre || (planesValidos[0]?.nombre || 'Plan Premium');
-          const planMatch = planesValidos.find((p) => p.nombre === planNombre) || planesValidos[0];
-          const precioMonto = primero.precio != null
-            ? String(primero.precio)
-            : (planMatch?.precio != null ? String(planMatch.precio) : '18000');
+        const aplicarSocioEnFormulario = (socioRaw, planesList, fechaOverride) => {
+          const info = extraerDatosSocio(socioRaw, planesList);
+          const planMatch =
+            (info.id_plan_membresia &&
+              planesList.find((p) => String(p.id_plan_membresia) === String(info.id_plan_membresia))) ||
+            (info.planNombre && planesList.find((p) => p.nombre === info.planNombre)) ||
+            planesList[0];
+
+          const planFinal = info.planNombre || planMatch?.nombre || 'Plan Premium';
+          const precioFinal =
+            info.precio != null
+              ? String(info.precio)
+              : (planMatch?.precio != null ? String(planMatch.precio) : '18000');
 
           setFormulario((prev) => ({
             ...prev,
-            id_socio: primero.id_socio,
-            id_membresia: primero.id_membresia || "",
-            id_plan_membresia: primero.id_plan_membresia || planMatch?.id_plan_membresia || "",
-            nombreSocio: nombreCompleto,
-            dniSocio: primero.socio?.dni || primero.dni || '',
-            plan: planMatch?.nombre || planNombre,
-            monto: precioMonto,
-            fecha_pago: new Date().toISOString().split("T")[0]
+            id_socio: info.id_socio,
+            id_membresia: info.id_membresia || "",
+            id_plan_membresia: info.id_plan_membresia || planMatch?.id_plan_membresia || "",
+            nombreSocio: info.nombreCompleto,
+            dniSocio: info.dni,
+            plan: planFinal,
+            monto: precioFinal,
+            ...(fechaOverride ? { fecha_pago: fechaOverride } : {})
           }));
+        };
+
+        if (sociosValidos.length > 0) {
+          aplicarSocioEnFormulario(sociosValidos[0], planesValidos, getFechaArgentinaISO());
           setModoSeleccion("existente");
         } else {
           setModoSeleccion("nuevo");
@@ -95,7 +153,7 @@ function PagosModal({ abierto, onCerrar, onGuardarPago, gymId }) {
             dniSocio: "",
             plan: defaultPlan?.nombre || "Plan Premium",
             monto: defaultPlan?.precio != null ? String(defaultPlan.precio) : "18000",
-            fecha_pago: new Date().toISOString().split("T")[0]
+            fecha_pago: getFechaArgentinaISO()
           }));
         }
       } catch (err) {
@@ -112,37 +170,39 @@ function PagosModal({ abierto, onCerrar, onGuardarPago, gymId }) {
 
   if (!abierto) return null;
 
+  const seleccionarSocio = (socio) => {
+    const info = extraerDatosSocio(socio, planesDisponibles);
+    if (!info) return;
+
+    const planObj =
+      (info.id_plan_membresia &&
+        planesDisponibles.find((p) => String(p.id_plan_membresia) === String(info.id_plan_membresia))) ||
+      (info.planNombre && planesDisponibles.find((p) => p.nombre === info.planNombre)) ||
+      planesDisponibles[0];
+
+    const planFinal = info.planNombre || planObj?.nombre || formulario.plan;
+    const precioMonto =
+      info.precio != null
+        ? String(info.precio)
+        : (planObj?.precio != null ? String(planObj.precio) : formulario.monto);
+
+    setModoSeleccion("existente");
+    setFormulario((prev) => ({
+      ...prev,
+      id_socio: info.id_socio,
+      id_membresia: info.id_membresia || "",
+      id_plan_membresia: info.id_plan_membresia || planObj?.id_plan_membresia || "",
+      nombreSocio: info.nombreCompleto,
+      dniSocio: info.dni,
+      plan: planFinal,
+      monto: precioMonto
+    }));
+  };
+
   const handleSeleccionarSocioExistente = (e) => {
     const socioId = e.target.value;
     const socio = sociosDisponibles.find((s) => String(s.id_socio) === String(socioId));
-
-    if (socio) {
-      const nombreCompleto = socio.nombre
-        ? `${socio.nombre} ${socio.apellido || ''}`.trim()
-        : (socio.socio?.nombre
-            ? `${socio.socio.nombre} ${socio.socio.apellido || ''}`.trim()
-            : (socio.socio?.usuario?.nombre
-                ? `${socio.socio.usuario.nombre} ${socio.socio.usuario.apellido || ''}`.trim()
-                : 'Socio'));
-      const planNombre = socio.plan_membresia?.nombre || formulario.plan;
-      const planObj = planesDisponibles.find((p) => p.nombre === planNombre) || planesDisponibles[0];
-
-      const precioMonto = socio.precio != null
-        ? String(socio.precio)
-        : (planObj?.precio != null ? String(planObj.precio) : formulario.monto);
-
-      setModoSeleccion("existente");
-      setFormulario((prev) => ({
-        ...prev,
-        id_socio: socio.id_socio,
-        id_membresia: socio.id_membresia || "",
-        id_plan_membresia: socio.id_plan_membresia || planObj?.id_plan_membresia || "",
-        nombreSocio: nombreCompleto,
-        dniSocio: socio.socio?.dni || socio.dni || '',
-        plan: planObj?.nombre || planNombre,
-        monto: precioMonto
-      }));
-    }
+    if (socio) seleccionarSocio(socio);
   };
 
   const handleCambiarAModoNuevo = () => {
@@ -162,27 +222,7 @@ function PagosModal({ abierto, onCerrar, onGuardarPago, gymId }) {
 
   const handleCambiarAModoExistente = () => {
     if (sociosDisponibles.length === 0) return;
-    const primero = sociosDisponibles[0];
-    const nombreCompleto = primero.nombre
-      ? `${primero.nombre} ${primero.apellido || ''}`.trim()
-      : (primero.socio?.nombre
-          ? `${primero.socio.nombre} ${primero.socio.apellido || ''}`.trim()
-          : (primero.socio?.usuario?.nombre
-              ? `${primero.socio.usuario.nombre} ${primero.socio.usuario.apellido || ''}`.trim()
-              : 'Socio'));
-    const planObj = planesDisponibles.find((p) => p.nombre === primero.plan_membresia?.nombre) || planesDisponibles[0];
-
-    setModoSeleccion("existente");
-    setFormulario((prev) => ({
-      ...prev,
-      id_socio: primero.id_socio,
-      id_membresia: primero.id_membresia || "",
-      id_plan_membresia: primero.id_plan_membresia || planObj?.id_plan_membresia || "",
-      nombreSocio: nombreCompleto,
-      dniSocio: primero.socio?.dni || primero.dni || '',
-      plan: planObj?.nombre || prev.plan,
-      monto: primero.precio != null ? String(primero.precio) : (planObj?.precio != null ? String(planObj.precio) : prev.monto)
-    }));
+    seleccionarSocio(sociosDisponibles[0]);
   };
 
   const handleInputChange = (e) => {
@@ -292,17 +332,11 @@ function PagosModal({ abierto, onCerrar, onGuardarPago, gymId }) {
                 onChange={handleSeleccionarSocioExistente}
               >
                 {sociosDisponibles.map((s) => {
-                  const nombre = s.nombre
-                    ? `${s.nombre} ${s.apellido || ''}`.trim()
-                    : (s.socio?.nombre
-                        ? `${s.socio.nombre} ${s.socio.apellido || ''}`.trim()
-                        : (s.socio?.usuario?.nombre
-                            ? `${s.socio.usuario.nombre} ${s.socio.usuario.apellido || ''}`.trim()
-                            : 'Socio'));
-                  const planDesc = s.plan_membresia?.nombre || (s.id_membresia ? 'Membresía activa' : 'Sin membresía previa');
+                  const info = extraerDatosSocio(s, planesDisponibles);
+                  const planDesc = info?.planNombre || (info?.id_membresia ? 'Membresía activa' : 'Sin membresía previa');
                   return (
                     <option key={s.id_socio} value={s.id_socio}>
-                      {nombre} (DNI: {s.dni || s.socio?.dni || 'S/D'}) — {planDesc}
+                      {info?.nombreCompleto || 'Socio'} (DNI: {info?.dni || 'S/D'}) — {planDesc}
                     </option>
                   );
                 })}
@@ -359,11 +393,16 @@ function PagosModal({ abierto, onCerrar, onGuardarPago, gymId }) {
                 onChange={handleInputChange}
               >
                 {planesDisponibles.length > 0 ? (
-                  planesDisponibles.map((p) => (
-                    <option key={p.id_plan_membresia} value={p.nombre}>
-                      {p.nombre} {p.precio ? `($${p.precio})` : ''}
-                    </option>
-                  ))
+                  <>
+                    {formulario.plan && !planesDisponibles.some((p) => p.nombre === formulario.plan) && (
+                      <option value={formulario.plan}>{formulario.plan}</option>
+                    )}
+                    {planesDisponibles.map((p) => (
+                      <option key={p.id_plan_membresia} value={p.nombre}>
+                        {p.nombre} {p.precio ? `($${p.precio})` : ''}
+                      </option>
+                    ))}
+                  </>
                 ) : (
                   <>
                     <option value="Plan Premium">Plan Premium</option>

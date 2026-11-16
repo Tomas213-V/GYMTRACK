@@ -44,14 +44,16 @@ import {
 } from 'react-icons/fa';
 
 import './asistencia-socio.css';
+import {
+  parseFechaUTC,
+  getFechaArgentinaISO,
+  formatFechaArgentina,
+  formatHoraArgentina
+} from '../../utils/dateUtils';
 
-// Helper para obtener fecha local en formato YYYY-MM-DD
+// Helper para obtener fecha local en formato YYYY-MM-DD (horario Argentina)
 const getFechaLocalISO = (fecha = new Date()) => {
-  const d = new Date(fecha);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return getFechaArgentinaISO(fecha);
 };
 
 // Formato de DNI con separador de miles
@@ -188,15 +190,12 @@ export default function AsistenciaSocio() {
       return getFechaLocalISO(a.hora_ingreso) === hoyISO;
     });
 
-    // 2. Contar asistencias del mes actual
-    const ahora = new Date();
-    const mesActual = ahora.getMonth();
-    const anioActual = ahora.getFullYear();
+    // 2. Contar asistencias del mes actual (en horario Argentina)
+    const mesActualPrefix = hoyISO.slice(0, 7); // YYYY-MM
 
     const asistenciasMes = asistencias.filter((a) => {
       if (!a.hora_ingreso) return false;
-      const d = new Date(a.hora_ingreso);
-      return d.getMonth() === mesActual && d.getFullYear() === anioActual;
+      return getFechaLocalISO(a.hora_ingreso).startsWith(mesActualPrefix);
     }).length;
 
     // 3. Racha de días consecutivos
@@ -234,6 +233,7 @@ export default function AsistenciaSocio() {
     }
 
     // 4. Tracker de los 7 días de la semana actual (Lun - Dom)
+    const ahora = new Date();
     const diaHoyIdx = ahora.getDay(); // 0 es Domingo
     const diffAlLunes = diaHoyIdx === 0 ? -6 : 1 - diaHoyIdx;
     const lunes = new Date(ahora);
@@ -278,31 +278,23 @@ export default function AsistenciaSocio() {
   // --------------------------------------------------------------------------
   const asistenciasFiltradas = useMemo(() => {
     let lista = [...asistencias];
-    const ahora = new Date();
+    const hoyArgISO = getFechaLocalISO(new Date());
 
     // Filtro por período
     if (filtroPeriodo === 'mes_actual') {
-      const mesActual = ahora.getMonth();
-      const anioActual = ahora.getFullYear();
-      lista = lista.filter((a) => {
-        if (!a.hora_ingreso) return false;
-        const d = new Date(a.hora_ingreso);
-        return d.getMonth() === mesActual && d.getFullYear() === anioActual;
-      });
+      const mesPrefix = hoyArgISO.slice(0, 7); // YYYY-MM
+      lista = lista.filter((a) => a.hora_ingreso && getFechaLocalISO(a.hora_ingreso).startsWith(mesPrefix));
     } else if (filtroPeriodo === 'ultimos_30') {
       const limite = new Date();
       limite.setDate(limite.getDate() - 30);
-      lista = lista.filter((a) => a.hora_ingreso && new Date(a.hora_ingreso) >= limite);
+      lista = lista.filter((a) => a.hora_ingreso && parseFechaUTC(a.hora_ingreso) >= limite);
     } else if (filtroPeriodo === 'ultimos_90') {
       const limite = new Date();
       limite.setDate(limite.getDate() - 90);
-      lista = lista.filter((a) => a.hora_ingreso && new Date(a.hora_ingreso) >= limite);
+      lista = lista.filter((a) => a.hora_ingreso && parseFechaUTC(a.hora_ingreso) >= limite);
     } else if (filtroPeriodo === 'anio_actual') {
-      const anioActual = ahora.getFullYear();
-      lista = lista.filter((a) => {
-        if (!a.hora_ingreso) return false;
-        return new Date(a.hora_ingreso).getFullYear() === anioActual;
-      });
+      const anioPrefix = hoyArgISO.slice(0, 4); // YYYY
+      lista = lista.filter((a) => a.hora_ingreso && getFechaLocalISO(a.hora_ingreso).startsWith(anioPrefix));
     }
 
     // Buscador
@@ -310,14 +302,13 @@ export default function AsistenciaSocio() {
       const query = busqueda.toLowerCase().trim();
       lista = lista.filter((a) => {
         if (!a.hora_ingreso) return false;
-        const d = new Date(a.hora_ingreso);
-        const fechaStr = d.toLocaleDateString('es-AR', {
+        const fechaStr = formatFechaArgentina(a.hora_ingreso, {
           weekday: 'long',
           day: 'numeric',
           month: 'long',
           year: 'numeric'
         }).toLowerCase();
-        const horaStr = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }).toLowerCase();
+        const horaStr = formatHoraArgentina(a.hora_ingreso).toLowerCase();
         const estadoStr = (a.estado || '').toLowerCase();
 
         return fechaStr.includes(query) || horaStr.includes(query) || estadoStr.includes(query);
@@ -350,19 +341,17 @@ export default function AsistenciaSocio() {
       const data = await registrarAsistencia({ id_socio: idSocio, dni });
 
       // Modal con confirmación visual
-      const horaIngresoDate = data.asistencia?.hora_ingreso
-        ? new Date(data.asistencia.hora_ingreso)
-        : new Date();
+      const rawHora = data.asistencia?.hora_ingreso;
 
       setModalConfirmacion({
         mensaje: data.mensaje || '¡Tu asistencia se registró exitosamente!',
-        fecha: horaIngresoDate.toLocaleDateString('es-AR', {
+        fecha: formatFechaArgentina(rawHora, {
           weekday: 'long',
           day: 'numeric',
           month: 'long',
           year: 'numeric'
         }),
-        hora: horaIngresoDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
+        hora: formatHoraArgentina(rawHora),
         id_asistencia: data.asistencia?.id_asistencia || Math.floor(1000 + Math.random() * 9000)
       });
 
@@ -391,10 +380,9 @@ export default function AsistenciaSocio() {
 
     const headers = ['ID Asistencia', 'Fecha', 'Hora de Ingreso', 'Día', 'Estado', 'Socio', 'DNI'];
     const rows = asistencias.map((a) => {
-      const d = a.hora_ingreso ? new Date(a.hora_ingreso) : new Date();
-      const fecha = d.toLocaleDateString('es-AR');
-      const hora = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-      const dia = d.toLocaleDateString('es-AR', { weekday: 'long' });
+      const fecha = formatFechaArgentina(a.hora_ingreso);
+      const hora = formatHoraArgentina(a.hora_ingreso);
+      const dia = formatFechaArgentina(a.hora_ingreso, { weekday: 'long' });
       const nombreCompleto = socio ? `${socio.nombre || ''} ${socio.apellido || ''}`.trim() : 'Socio';
       const dni = socio?.dni || '-';
       const estado = a.estado || 'Presente';
@@ -569,13 +557,13 @@ export default function AsistenciaSocio() {
               <div className="asist-socio-kpi-value-row">
                 <span className="asist-socio-kpi-subnumber">
                   {ultimaAsistenciaGeneral?.hora_ingreso
-                    ? new Date(ultimaAsistenciaGeneral.hora_ingreso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs'
+                    ? formatHoraArgentina(ultimaAsistenciaGeneral.hora_ingreso) + ' hs'
                     : 'Sin registros'}
                 </span>
               </div>
               <div className="asist-socio-kpi-tag-sub">
                 {ultimaAsistenciaGeneral?.hora_ingreso
-                  ? new Date(ultimaAsistenciaGeneral.hora_ingreso).toLocaleDateString('es-AR', {
+                  ? formatFechaArgentina(ultimaAsistenciaGeneral.hora_ingreso, {
                       weekday: 'short',
                       day: 'numeric',
                       month: 'short'
@@ -627,7 +615,7 @@ export default function AsistenciaSocio() {
                       Marcaste tu ingreso hoy a las{' '}
                       <strong>
                         {ultimaAsistenciaHoy?.hora_ingreso
-                          ? new Date(ultimaAsistenciaHoy.hora_ingreso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+                          ? formatHoraArgentina(ultimaAsistenciaHoy.hora_ingreso)
                           : 'horario confirmado'} hs
                       </strong>
                     </p>
@@ -825,17 +813,13 @@ export default function AsistenciaSocio() {
                     </tr>
                   ) : (
                     asistenciasPaginadas.map((item, index) => {
-                      const dateObj = item.hora_ingreso ? new Date(item.hora_ingreso) : new Date();
-                      const fechaFormateada = dateObj.toLocaleDateString('es-AR', {
+                      const fechaFormateada = formatFechaArgentina(item.hora_ingreso, {
                         day: '2-digit',
                         month: 'long',
                         year: 'numeric'
                       });
-                      const horaFormateada = dateObj.toLocaleTimeString('es-AR', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      });
-                      const diaSemanaNombre = dateObj.toLocaleDateString('es-AR', { weekday: 'long' });
+                      const horaFormateada = formatHoraArgentina(item.hora_ingreso);
+                      const diaSemanaNombre = formatFechaArgentina(item.hora_ingreso, { weekday: 'long' });
 
                       return (
                         <tr key={item.id_asistencia || index}>

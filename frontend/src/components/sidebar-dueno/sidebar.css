@@ -2,10 +2,15 @@
 
 /* Sidebar en Desktop */
 .Caja-sidebar {
+    position: sticky;
+    top: 70px;
+    align-self: flex-start;
     border-right: 1px solid rgba(255, 255, 255, 0.08);
     width: 240px;
-    height: 100%;
-    min-height: calc(100vh - 70px);
+    height: calc(100vh - 70px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -14,7 +19,6 @@
     user-select: none;
     flex-shrink: 0;
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
-   
 }
 
 .Caja-sidebar-mobile-header {

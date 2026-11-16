@@ -34,6 +34,11 @@ import {
   deleteAsistencia
 } from '../../services/asistenciaService';
 import { fetchSocios } from '../../services/socioService';
+import {
+  formatFechaArgentina,
+  formatHoraArgentina,
+  getFechaArgentinaISO
+} from '../../utils/dateUtils';
 
 import {
   FaCalendarAlt,
@@ -257,29 +262,32 @@ export default function Asistencias() {
     }
   };
 
-  // Rango de fechas predefinidos
+  // Rango de fechas predefinidos (en horario de Argentina GMT-3)
   const aplicarRangoFecha = (tipo) => {
-    const hoy = new Date();
-    let desde;
-    let hasta;
+    const hoyArgStr = getFechaArgentinaISO(new Date());
+    const [anioStr, mesStr] = hoyArgStr.split('-');
+    const anio = Number(anioStr);
+    const mes = Number(mesStr); // 1-12
+    let desde = '';
+    let hasta = '';
     let label;
 
     if (tipo === 'mes_actual') {
-      const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-      const ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
-      desde = primerDia.toISOString().split('T')[0];
-      hasta = ultimoDia.toISOString().split('T')[0];
-      label = `01/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()} - ${String(ultimoDia.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
+      const ultimoDiaNum = new Date(anio, mes, 0).getDate();
+      const primerDiaStr = `${anioStr}-${mesStr}-01`;
+      const ultimoDiaStr = `${anioStr}-${mesStr}-${String(ultimoDiaNum).padStart(2, '0')}`;
+      desde = new Date(`${primerDiaStr}T00:00:00-03:00`).toISOString();
+      hasta = new Date(`${ultimoDiaStr}T23:59:59.999-03:00`).toISOString();
+      label = `01/${mesStr}/${anioStr} - ${String(ultimoDiaNum).padStart(2, '0')}/${mesStr}/${anioStr}`;
     } else if (tipo === 'hoy') {
-      const hoyStr = hoy.toISOString().split('T')[0];
-      desde = hoyStr;
-      hasta = hoyStr;
+      desde = new Date(`${hoyArgStr}T00:00:00-03:00`).toISOString();
+      hasta = new Date(`${hoyArgStr}T23:59:59.999-03:00`).toISOString();
       label = 'Hoy';
     } else if (tipo === '7_dias') {
-      const hace7Dias = new Date();
-      hace7Dias.setDate(hoy.getDate() - 7);
-      desde = hace7Dias.toISOString().split('T')[0];
-      hasta = hoy.toISOString().split('T')[0];
+      const hace7Dias = new Date(`${hoyArgStr}T00:00:00-03:00`);
+      hace7Dias.setDate(hace7Dias.getDate() - 7);
+      desde = hace7Dias.toISOString();
+      hasta = new Date(`${hoyArgStr}T23:59:59.999-03:00`).toISOString();
       label = 'Últimos 7 días';
     } else {
       desde = '';
@@ -303,9 +311,8 @@ export default function Asistencias() {
 
     const headers = ['ID Asistencia', 'Fecha', 'Hora', 'Socio', 'DNI', 'Estado'];
     const rows = asistencias.map((a) => {
-      const d = a.hora_ingreso ? new Date(a.hora_ingreso) : new Date();
-      const fecha = d.toLocaleDateString('es-AR');
-      const hora = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+      const fecha = formatFechaArgentina(a.hora_ingreso);
+      const hora = formatHoraArgentina(a.hora_ingreso);
       const socioNombre = a.socio ? `${a.socio.nombre || ''} ${a.socio.apellido || ''}`.trim() : 'N/A';
       const dni = a.socio?.dni || 'N/A';
       const estado = a.estado || 'Registrada';
@@ -316,7 +323,7 @@ export default function Asistencias() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `asistencias_gymtrack_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `asistencias_gymtrack_${getFechaArgentinaISO()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -667,16 +674,8 @@ export default function Asistencias() {
                       </tr>
                     ) : (
                       asistencias.map((item) => {
-                        const dateObj = item.hora_ingreso ? new Date(item.hora_ingreso) : new Date();
-                        const fechaStr = dateObj.toLocaleDateString('es-AR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric'
-                        });
-                        const horaStr = dateObj.toLocaleTimeString('es-AR', {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        });
+                        const fechaStr = formatFechaArgentina(item.hora_ingreso);
+                        const horaStr = formatHoraArgentina(item.hora_ingreso);
 
                         return (
                           <tr key={item.id_asistencia}>
@@ -829,11 +828,10 @@ export default function Asistencias() {
               ) : (
                 <div className="asist-modal-timeline">
                   {historialSocio.map((h) => {
-                    const d = h.hora_ingreso ? new Date(h.hora_ingreso) : new Date();
                     return (
                       <div key={h.id_asistencia} className="asist-timeline-item">
                         <span className="asist-timeline-date">
-                          {d.toLocaleDateString('es-AR', {
+                          {formatFechaArgentina(h.hora_ingreso, {
                             weekday: 'short',
                             day: 'numeric',
                             month: 'short',
@@ -841,7 +839,7 @@ export default function Asistencias() {
                           })}
                         </span>
                         <span className="asist-timeline-time">
-                          {d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} hs
+                          {formatHoraArgentina(h.hora_ingreso)} hs
                         </span>
                         <span className="asist-badge-status">
                           {h.estado ? h.estado.charAt(0).toUpperCase() + h.estado.slice(1) : 'Registrada'}

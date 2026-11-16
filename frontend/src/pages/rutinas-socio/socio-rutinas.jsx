@@ -31,8 +31,6 @@ import {
   removeEjercicioFromRutina,
   fetchCatalogoEjercicios,
   createEjercicioPersonalizado,
-  fetchRutinasOfrecidasGym,
-  adoptarRutinaGym,
   activarRutina
 } from '../../services/rutinaService';
 
@@ -46,8 +44,6 @@ import {
   FaTimes,
   FaPlay,
   FaStar,
-  FaBuilding,
-  FaUser,
   FaClock,
   FaCalendarAlt,
   FaInfoCircle,
@@ -55,10 +51,8 @@ import {
   FaBolt,
   FaLayerGroup,
   FaCrown,
-  FaCheckCircle,
   FaListUl,
-  FaStopwatch,
-  FaTrophy
+  FaStopwatch
 } from 'react-icons/fa';
 
 import './socio-rutinas.css';
@@ -77,16 +71,10 @@ export default function SocioRutinas() {
 
   const socioIdActual = socioLocal?.id_socio || 1;
 
-  // Estados de navegación y pestañas principales
-  // 'mis_rutinas' | 'gym_ofrecidas'
-  const [activeTab, setActiveTab] = useState('mis_rutinas');
-
   // Estados de datos
   const [misRutinas, setMisRutinas] = useState([]);
-  const [rutinasGym, setRutinasGym] = useState([]);
   const [catalogoEjercicios, setCatalogoEjercicios] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadingGym, setLoadingGym] = useState(false);
   const [notificacion, setNotificacion] = useState('');
 
   // Rutina seleccionada para vista de detalle en "Mis Rutinas"
@@ -95,8 +83,6 @@ export default function SocioRutinas() {
   // Filtros
   const [searchMisRutinas, setSearchMisRutinas] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todos'); // 'todos' | 'activa' | 'asignada'
-  const [filtroDificultadGym, setFiltroDificultadGym] = useState('todos');
-  const [searchGym, setSearchGym] = useState('');
 
   // --------------------------------------------------------------------------
   // Modales
@@ -149,9 +135,6 @@ export default function SocioRutinas() {
   const [workoutTimerSeconds, setWorkoutTimerSeconds] = useState(0);
   const [restTimerSeconds, setRestTimerSeconds] = useState(null);
   const [timerActivo, setTimerActivo] = useState(false);
-
-  // 5. Modal de Detalle de Programa del Gym
-  const [detalleGymModal, setDetalleGymModal] = useState(null);
 
   // --------------------------------------------------------------------------
   // Carga de Datos
@@ -229,19 +212,6 @@ export default function SocioRutinas() {
     }
   };
 
-  // Cargar rutinas que ofrece el gym
-  const loadRutinasGym = async () => {
-    try {
-      setLoadingGym(true);
-      const data = await fetchRutinasOfrecidasGym();
-      setRutinasGym(data || []);
-    } catch (err) {
-      console.error('Error cargando rutinas ofrecidas por el gym:', err);
-    } finally {
-      setLoadingGym(false);
-    }
-  };
-
   // Cargar catálogo de ejercicios para modales
   const loadCatalogo = async () => {
     try {
@@ -254,7 +224,6 @@ export default function SocioRutinas() {
 
   useEffect(() => {
     loadMisRutinas();
-    loadRutinasGym();
     loadCatalogo();
   }, [searchMisRutinas, filtroEstado]);
 
@@ -318,28 +287,6 @@ export default function SocioRutinas() {
       await loadMisRutinas(rutinaId);
     } catch (err) {
       alert(err.message || 'Error al activar la rutina.');
-    }
-  };
-
-  // Adoptar una rutina que ofrece el gimnasio
-  const handleAdoptarRutinaGym = async (plantilla) => {
-    if (!window.confirm(`¿Querés comenzar el programa "${plantilla.nombre}"? Se agregará a tus rutinas y se establecerá como tu rutina activa hoy.`)) {
-      return;
-    }
-
-    try {
-      const nueva = await adoptarRutinaGym({
-        plantilla: plantilla,
-        id_socio: socioIdActual,
-        nombre_personalizado: `${plantilla.nombre}`
-      });
-
-      showToast(`¡Excelente! Adoptaste "${plantilla.nombre}". Ya está activa en tus rutinas.`);
-      setActiveTab('mis_rutinas');
-      setDetalleGymModal(null);
-      await loadMisRutinas(nueva?.id_rutina);
-    } catch (err) {
-      alert(err.message || 'Error al adoptar la rutina del gimnasio.');
     }
   };
 
@@ -643,11 +590,16 @@ export default function SocioRutinas() {
     setRestTimerSeconds(null);
   };
 
-  const toggleEjercicioCompletado = (idRe) => {
+  const toggleEjercicioCompletado = (idRe, descansoSegundos = 60) => {
+    const estaCompletado = Boolean(ejerciciosCompletados[idRe]);
     setEjerciciosCompletados((prev) => ({
       ...prev,
-      [idRe]: !prev[idRe]
+      [idRe]: !estaCompletado
     }));
+
+    if (!estaCompletado) {
+      iniciarTimerDescanso(Number(descansoSegundos) || 60);
+    }
   };
 
   // Formato para segundos en reloj
@@ -667,19 +619,6 @@ export default function SocioRutinas() {
       const matchName = ej.nombre?.toLowerCase().includes(q);
       const matchGroup = ej.grupo_muscular?.toLowerCase().includes(q);
       if (!matchName && !matchGroup) return false;
-    }
-    return true;
-  });
-
-  // Filtros de rutinas que ofrece el gym
-  const rutinasGymFiltradas = rutinasGym.filter((prog) => {
-    if (filtroDificultadGym !== 'todos' && prog.dificultad !== filtroDificultadGym) return false;
-    if (searchGym.trim()) {
-      const q = searchGym.toLowerCase();
-      const matchName = prog.nombre?.toLowerCase().includes(q);
-      const matchTipo = prog.tipo?.toLowerCase().includes(q);
-      const matchObj = prog.objetivo?.toLowerCase().includes(q);
-      if (!matchName && !matchTipo && !matchObj) return false;
     }
     return true;
   });
@@ -720,7 +659,7 @@ export default function SocioRutinas() {
                 <div>
                   <h1>Panel de Rutinas de Entrenamiento</h1>
                   <p>
-                    Creá tus rutinas a medida, explorá los programas recomendados por el gimnasio y llevá el registro de cada entrenamiento.
+                    Gestioná las rutinas asignadas por tu gimnasio o creá tus propias rutinas a medida y llevá el registro de cada entrenamiento.
                   </p>
                 </div>
               </div>
@@ -770,16 +709,6 @@ export default function SocioRutinas() {
               </div>
 
               <div className="sr-metric-card">
-                <div className="sr-metric-icon-wrap" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
-                  <FaBuilding />
-                </div>
-                <div className="sr-metric-data">
-                  <h3>{rutinasGym.length}</h3>
-                  <p>Programas Oficiales del Gym</p>
-                </div>
-              </div>
-
-              <div className="sr-metric-card">
                 <div className="sr-metric-icon-wrap" style={{ background: 'rgba(192, 132, 252, 0.15)', color: '#c084fc' }}>
                   <FaLayerGroup />
                 </div>
@@ -789,36 +718,12 @@ export default function SocioRutinas() {
                 </div>
               </div>
             </div>
-
-            {/* PESTAÑAS PRINCIPALES */}
-            <div className="sr-tabs-bar">
-              <button
-                type="button"
-                className={`sr-tab-btn ${activeTab === 'mis_rutinas' ? 'active' : ''}`}
-                onClick={() => setActiveTab('mis_rutinas')}
-              >
-                <FaUser />
-                <span>Mis Rutinas ({misRutinas.length})</span>
-              </button>
-
-              <button
-                type="button"
-                className={`sr-tab-btn ${activeTab === 'gym_ofrecidas' ? 'active' : ''}`}
-                onClick={() => setActiveTab('gym_ofrecidas')}
-              >
-                <FaBuilding />
-                <span>Rutinas que Ofrece el Gimnasio ({rutinasGym.length})</span>
-              </button>
-            </div>
           </section>
 
           {/* ================================================================
-              2. CONTENIDO SEGÚN PESTAÑA
+              2. MIS RUTINAS (ASIGNADAS POR EL GIMNASIO Y PROPIAS)
               ================================================================ */}
-
-          {/* PESTAÑA 1: MIS RUTINAS */}
-          {activeTab === 'mis_rutinas' && (
-            <div className="sr-tab-content">
+          <div className="sr-tab-content">
               {/* Barra de Filtros para Mis Rutinas */}
               <div className="sr-filters-bar">
                 <div className="sr-search-box">
@@ -873,18 +778,11 @@ export default function SocioRutinas() {
                       <FaDumbbell style={{ fontSize: '42px', opacity: 0.3, marginBottom: '12px' }} />
                       <h3>No tenés rutinas registradas aún</h3>
                       <p>
-                        Podés armar tu propia rutina personalizada o elegir una de las rutinas recomendadas que ofrece el gimnasio.
+                        Cuando tu gimnasio te asigne una rutina o cuando crees una propia, aparecerá aquí.
                       </p>
                       <div style={{ display: 'flex', gap: '10px', marginTop: '16px', justifyContent: 'center' }}>
                         <button type="button" className="sr-btn-primary" onClick={handleOpenCrearRutina}>
                           <FaPlus /> Crear mi primera rutina
-                        </button>
-                        <button
-                          type="button"
-                          className="sr-btn-secondary"
-                          onClick={() => setActiveTab('gym_ofrecidas')}
-                        >
-                          Ver rutinas del gym
                         </button>
                       </div>
                     </div>
@@ -1174,147 +1072,6 @@ export default function SocioRutinas() {
 
               </div>
             </div>
-          )}
-
-          {/* PESTAÑA 2: RUTINAS OFRECIDAS POR EL GIMNASIO */}
-          {activeTab === 'gym_ofrecidas' && (
-            <div className="sr-tab-content">
-              {/* Banner Informativo */}
-              <div className="sr-gym-hero-banner">
-                <div className="sr-gym-hero-left">
-                  <div className="sr-gym-hero-icon">
-                    <FaTrophy />
-                  </div>
-                  <div>
-                    <h2>Programas Oficiales Diseñados por el Gimnasio</h2>
-                    <p>
-                      Planes de entrenamiento armados por preparadores físicos certificados. Podés revisar el plan de ejercicios de cada uno y adoptarlo a tus rutinas con un solo clic para empezar a entrenar de inmediato.
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className="sr-btn-outline-white"
-                  onClick={loadRutinasGym}
-                  title="Actualizar programas"
-                >
-                  <FaSyncAlt />
-                </button>
-              </div>
-
-              {/* Filtros de Programas del Gym */}
-              <div className="sr-filters-bar">
-                <div className="sr-search-box">
-                  <FaSearch style={{ color: '#64748b' }} />
-                  <input
-                    type="text"
-                    placeholder="Buscar por nombre, tipo o enfoque..."
-                    value={searchGym}
-                    onChange={(e) => setSearchGym(e.target.value)}
-                  />
-                </div>
-
-                <div className="sr-filter-select-wrap">
-                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>Dificultad:</span>
-                  <select
-                    value={filtroDificultadGym}
-                    onChange={(e) => setFiltroDificultadGym(e.target.value)}
-                    className="sr-select-filter"
-                  >
-                    <option value="todos">Todos los niveles</option>
-                    <option value="Principiante">Principiante</option>
-                    <option value="Intermedia">Intermedia</option>
-                    <option value="Avanzada">Avanzada</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Grid de Programas Oficiales */}
-              {loadingGym ? (
-                <div style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8' }}>
-                  <p>Cargando programas del gimnasio...</p>
-                </div>
-              ) : rutinasGymFiltradas.length === 0 ? (
-                <div className="sr-empty-card">
-                  <FaBuilding style={{ fontSize: '42px', opacity: 0.3, marginBottom: '12px' }} />
-                  <h3>No se encontraron programas con ese criterio</h3>
-                  <p>Probá ajustando la búsqueda o el filtro de dificultad.</p>
-                </div>
-              ) : (
-                <div className="sr-gym-programs-grid">
-                  {rutinasGymFiltradas.map((prog) => {
-                    const cantEj = prog.ejercicios?.length || 0;
-
-                    return (
-                      <div key={prog.id_plantilla} className="sr-gym-program-card">
-                        <div className="sr-gym-card-header">
-                          <div className="sr-gym-card-badge-row">
-                            <span className="sr-badge-level">{prog.nivel_badge || prog.dificultad}</span>
-                            <span className="sr-badge-type">{prog.tipo}</span>
-                          </div>
-                          <h3 className="sr-gym-card-title">{prog.nombre}</h3>
-                          <p className="sr-gym-card-objective">{prog.objetivo}</p>
-                        </div>
-
-                        <div className="sr-gym-card-meta">
-                          <div className="sr-gym-meta-item">
-                            <FaCalendarAlt style={{ color: '#22c55e' }} />
-                            <span>{prog.dias}</span>
-                          </div>
-                          <div className="sr-gym-meta-item">
-                            <FaClock style={{ color: '#38bdf8' }} />
-                            <span>{prog.duracion} por sesión</span>
-                          </div>
-                          <div className="sr-gym-meta-item">
-                            <FaListUl style={{ color: '#c084fc' }} />
-                            <span>{cantEj} ejercicios estructurados</span>
-                          </div>
-                        </div>
-
-                        {/* Previsualización rápida de ejercicios */}
-                        <div className="sr-gym-card-exercises-preview">
-                          <span className="preview-label">Ejercicios incluidos:</span>
-                          <div className="preview-tags-row">
-                            {prog.ejercicios?.slice(0, 4).map((ej, idx) => (
-                              <span key={idx} className="preview-exercise-tag">
-                                {ej.nombre}
-                              </span>
-                            ))}
-                            {cantEj > 4 && (
-                              <span className="preview-exercise-tag more">
-                                +{cantEj - 4} más
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="sr-gym-card-footer">
-                          <button
-                            type="button"
-                            className="sr-btn-secondary"
-                            onClick={() => setDetalleGymModal(prog)}
-                            style={{ flex: '1 1 auto', fontSize: '13px' }}
-                          >
-                            Ver detalle
-                          </button>
-
-                          <button
-                            type="button"
-                            className="sr-btn-primary"
-                            onClick={() => handleAdoptarRutinaGym(prog)}
-                            style={{ flex: '1 1 auto', fontSize: '13px' }}
-                          >
-                            <FaCheckCircle /> Adoptar Rutina
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
         </main>
       </div>
 
@@ -1821,7 +1578,7 @@ export default function SocioRutinas() {
                   <div
                     key={item.id_rutina_ejercicio || idx}
                     className={`sr-workout-row ${isChecked ? 'completed' : ''}`}
-                    onClick={() => toggleEjercicioCompletado(item.id_rutina_ejercicio || idx)}
+                    onClick={() => toggleEjercicioCompletado(item.id_rutina_ejercicio || idx, item.descanso || 60)}
                   >
                     <div className="sr-workout-checkbox">
                       {isChecked && <FaCheck />}
@@ -1860,97 +1617,6 @@ export default function SocioRutinas() {
         </div>
       )}
 
-      {/* ================================================================
-          MODAL 5: DETALLE DE PROGRAMA OFICIAL DEL GIMNASIO
-          ================================================================ */}
-      {detalleGymModal && (
-        <div className="sr-modal-overlay" onClick={() => setDetalleGymModal(null)}>
-          <div className="sr-modal-card large" onClick={(e) => e.stopPropagation()}>
-            <div className="sr-modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <FaBuilding style={{ color: '#38bdf8' }} />
-                <h3>{detalleGymModal.nombre}</h3>
-              </div>
-              <button type="button" className="sr-modal-close-btn" onClick={() => setDetalleGymModal(null)}>
-                <FaTimes />
-              </button>
-            </div>
-
-            <div className="sr-modal-body">
-              <div className="sr-gym-modal-hero">
-                <div className="sr-gym-card-badge-row">
-                  <span className="sr-badge-level">{detalleGymModal.nivel_badge || detalleGymModal.dificultad}</span>
-                  <span className="sr-badge-type">{detalleGymModal.tipo}</span>
-                </div>
-                <p style={{ color: '#e2e8f0', margin: '8px 0', fontSize: '14px' }}>
-                  {detalleGymModal.objetivo}
-                </p>
-
-                <div className="sr-detail-pills-row" style={{ marginTop: '12px' }}>
-                  <span className="sr-meta-pill">
-                    <FaCalendarAlt style={{ color: '#22c55e', marginRight: '6px' }} />
-                    {detalleGymModal.dias}
-                  </span>
-                  <span className="sr-meta-pill">
-                    <FaClock style={{ color: '#38bdf8', marginRight: '6px' }} />
-                    {detalleGymModal.duracion}
-                  </span>
-                </div>
-
-                {detalleGymModal.notas && (
-                  <div className="sr-detail-notes-box" style={{ marginTop: '14px' }}>
-                    <FaInfoCircle style={{ color: '#38bdf8', flexShrink: 0 }} />
-                    <span>{detalleGymModal.notas}</span>
-                  </div>
-                )}
-              </div>
-
-              <h4 style={{ margin: '20px 0 10px 0', color: '#ffffff', fontSize: '15px' }}>
-                Ejercicios Estructurados en este Programa ({detalleGymModal.ejercicios?.length || 0}):
-              </h4>
-
-              <div className="sr-exercise-items-list" style={{ maxHeight: '320px', overflowY: 'auto' }}>
-                {detalleGymModal.ejercicios?.map((ej, idx) => (
-                  <div key={idx} className="sr-exercise-item-card">
-                    <div className="sr-exercise-order-badge">{idx + 1}</div>
-                    <div className="sr-exercise-item-info">
-                      <h4>{ej.nombre}</h4>
-                      <p className="sr-exercise-item-muscle">{ej.grupo_muscular} • {ej.dificultad}</p>
-                    </div>
-                    <div className="sr-exercise-stats-box">
-                      <div className="sr-stat-col">
-                        <span className="label">Series × Reps</span>
-                        <span className="value">{ej.series} × {ej.repeticiones}</span>
-                      </div>
-                      <div className="sr-stat-col">
-                        <span className="label">Carga</span>
-                        <span className="value">{ej.peso && ej.peso > 0 ? `${ej.peso} kg` : 'Corporal'}</span>
-                      </div>
-                      <div className="sr-stat-col">
-                        <span className="label">Descanso</span>
-                        <span className="value">{ej.descanso}s</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="sr-modal-footer">
-              <button type="button" className="sr-btn-cancel" onClick={() => setDetalleGymModal(null)}>
-                Cerrar
-              </button>
-              <button
-                type="button"
-                className="sr-btn-primary"
-                onClick={() => handleAdoptarRutinaGym(detalleGymModal)}
-              >
-                <FaCheckCircle /> Adoptar y Comenzar este Plan
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -15,6 +15,8 @@
  *      que la interfaz nunca quede en blanco o bloqueada.
  */
 
+import { getFechaArgentinaISO } from '../utils/dateUtils';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 function getHeaders() {
@@ -122,8 +124,10 @@ async function compilarFallbackDashboard(gymId) {
     const sociosInactivos = listaSocios.filter(s => (s.estado || '').toLowerCase() === 'inactivo').length;
     const sociosPendientes = listaSocios.filter(s => (s.estado || '').toLowerCase() === 'pendiente').length;
 
-    const hoyStr = new Date().toISOString().split('T')[0];
-    const asistenciasHoy = listaAsistencias.filter(a => (a.hora_ingreso || '').startsWith(hoyStr)).length;
+    const hoyStr = getFechaArgentinaISO(new Date());
+    const asistenciasHoy = listaAsistencias.filter(
+      (a) => a.hora_ingreso && getFechaArgentinaISO(a.hora_ingreso) === hoyStr
+    ).length;
 
     return {
       gimnasio: {

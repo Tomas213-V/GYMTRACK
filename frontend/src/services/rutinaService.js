@@ -67,8 +67,8 @@ export async function createRutina(rutinaData) {
     body: JSON.stringify(rutinaData)
   });
 
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al crear la rutina.');
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || data.detail || data.message || 'Error al crear la rutina.');
   return data;
 }
 
@@ -82,8 +82,8 @@ export async function updateRutina(id, rutinaData) {
     body: JSON.stringify(rutinaData)
   });
 
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al actualizar la rutina.');
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || data.detail || data.message || 'Error al actualizar la rutina.');
   return data;
 }
 
@@ -185,6 +185,21 @@ export async function fetchCatalogoEjercicios({ id_socio = '', origen = 'todos',
 }
 
 /**
+ * Crear un ejercicio oficial asignado al gimnasio (para dueño / administrador)
+ */
+export async function createEjercicio(ejercicioData) {
+  const response = await fetch(`${API_URL}/ejercicios`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(ejercicioData)
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || data.detail || data.message || 'Error al crear el ejercicio del gimnasio.');
+  return data.ejercicio || data;
+}
+
+/**
  * Crear un ejercicio personalizado propio para el socio
  */
 export async function createEjercicioPersonalizado(ejercicioData) {
@@ -194,8 +209,8 @@ export async function createEjercicioPersonalizado(ejercicioData) {
     body: JSON.stringify(ejercicioData)
   });
 
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al crear el ejercicio personalizado.');
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || data.detail || data.message || 'Error al crear el ejercicio personalizado.');
   return data.ejercicio || data;
 }
 

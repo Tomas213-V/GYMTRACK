@@ -4,7 +4,7 @@
   min-height: 100vh;
   background-color: #0d0d0d;
   color: #ffffff;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .socios-main-wrapper {
