@@ -26,7 +26,7 @@ import Subtitulo from "../../components/landing/subtitulo-landing/subtitulo"
 import Botones from "../../components/landing/botones-landing/botones"
 import Calificaciones from "../../components/landing/calificaciones/calificaciones"
 import Caracteristicas from "../../components/landing/caracteristicas/caracteristicas"
-import Foother from "../../components/Foother/foother"
+import Foother from "../../components/foother-landing/foother"
 
 function Landing() {
 

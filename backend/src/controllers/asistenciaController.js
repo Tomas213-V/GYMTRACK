@@ -1,5 +1,22 @@
 const supabase = require('../config/supabase');
 
+const normalizarTimestampUTC = (valor) => {
+  if (!valor || typeof valor !== 'string') return valor;
+  const trimmed = valor.trim();
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(trimmed)) return trimmed;
+  const iso = trimmed.includes(' ') && !trimmed.includes('T') ? trimmed.replace(' ', 'T') : trimmed;
+  return `${iso}Z`;
+};
+
+const normalizarAsistencia = (asistencia) => {
+  if (!asistencia) return asistencia;
+  return {
+    ...asistencia,
+    hora_ingreso: normalizarTimestampUTC(asistencia.hora_ingreso),
+    hora_salida: normalizarTimestampUTC(asistencia.hora_salida)
+  };
+};
+
 /**
  * 1. OBTENER ASISTENCIAS
  * Soporta paginación, búsqueda por nombre/apellido/DNI, rango de fechas y filtro por socio
@@ -68,7 +85,7 @@ const getAsistencias = async (req, res) => {
       page: Number(page),
       totalPages: Math.ceil((count || 0) / Number(limit)) || 1,
       limit: Number(limit),
-      asistencias: asistencias || []
+      asistencias: (asistencias || []).map(normalizarAsistencia)
     });
 
   } catch (error) {
@@ -148,7 +165,7 @@ const registrarAsistencia = async (req, res) => {
     }
 
     const asistenciaCompleta = {
-      ...nuevaAsistencia,
+      ...normalizarAsistencia(nuevaAsistencia),
       socio: {
         id_socio: socio.id_socio,
         nombre: socio.nombre,
@@ -264,7 +281,7 @@ const getAsistenciasPorSocio = async (req, res) => {
     return res.status(200).json({
       id_socio: Number(id_socio),
       total: asistencias ? asistencias.length : 0,
-      asistencias: asistencias || []
+      asistencias: (asistencias || []).map(normalizarAsistencia)
     });
 
   } catch (error) {
@@ -360,7 +377,7 @@ const checkoutAsistencia = async (req, res) => {
 
     return res.status(200).json({
       mensaje: 'Salida registrada correctamente.',
-      asistencia: asistenciaActualizada
+      asistencia: normalizarAsistencia(asistenciaActualizada)
     });
 
   } catch (error) {

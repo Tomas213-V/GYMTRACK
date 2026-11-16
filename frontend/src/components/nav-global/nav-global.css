@@ -4,7 +4,8 @@
 
 .Caja-nav-global {
   display: flex;
-  position: relative;
+  position: sticky;
+  top: 0;
   width: 100%;
   height: 70px;
   background-color: #151719;

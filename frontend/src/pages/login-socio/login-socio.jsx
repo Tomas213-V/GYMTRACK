@@ -22,7 +22,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { loginSocio } from '../../services/authService.js'
 import logoImg from '../../assets/logo_verde.jpg'
 import PasswordInput from '../../components/PasswordInput/PasswordInput'
-import '../login/login.css'
+import '../login-dueno/login.css'
 
 function LoginSocio() {
   const navigate = useNavigate()

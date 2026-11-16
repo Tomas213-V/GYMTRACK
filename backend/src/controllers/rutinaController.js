@@ -206,8 +206,20 @@ exports.createRutina = async (req, res) => {
       socioAsignado = usuario.id_socio;
     }
 
-    // Si tenemos el socio, obtener su gimnasio
+    if (!socioAsignado) {
+      return res.status(400).json({ error: 'Debes seleccionar un socio para asignar la rutina.' });
+    }
+
+    // Si tenemos el socio o el usuario, obtener su gimnasio
     let gymId = usuario?.id_gimnasio || null;
+    if (!gymId && usuario?.id_usuario) {
+      const { data: gymData } = await supabase
+        .from('gimnasio')
+        .select('id_gimnasio')
+        .eq('id_usuario', usuario.id_usuario)
+        .maybeSingle();
+      if (gymData?.id_gimnasio) gymId = gymData.id_gimnasio;
+    }
     if (socioAsignado && !gymId) {
       const { data: socioData } = await supabase
         .from('socio')
@@ -248,7 +260,14 @@ exports.createRutina = async (req, res) => {
       `)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === '23502' && String(error.message).includes('id_socio')) {
+        return res.status(400).json({
+          error: 'La tabla rutina en Supabase aún exige id_socio NOT NULL. Ejecutá: ALTER TABLE rutina ALTER COLUMN id_socio DROP NOT NULL;'
+        });
+      }
+      throw error;
+    }
     return res.status(201).json({
       ...data,
       rutina_ejercicio: []
@@ -777,7 +796,82 @@ exports.getRutinasOfrecidasGym = async (req, res) => {
       };
     });
 
-    return res.status(200).json(programasCompletos);
+    // Consultar rutinas creadas por el dueño para este gimnasio (sin socio asignado)
+    let gymRutinasQuery = supabase
+      .from('rutina')
+      .select(`
+        id_rutina,
+        nombre,
+        descripcion,
+        id_gimnasio,
+        estado,
+        rutina_ejercicio (
+          id_rutina_ejercicio,
+          id_ejercicio,
+          series,
+          repeticiones,
+          peso,
+          descanso,
+          orden,
+          ejercicio (
+            id_ejercicio,
+            nombre,
+            grupo_muscular,
+            dificultad,
+            descripcion
+          )
+        )
+      `)
+      .is('id_socio', null)
+      .order('id_rutina', { ascending: false });
+
+    if (gymId) {
+      gymRutinasQuery = gymRutinasQuery.eq('id_gimnasio', gymId);
+    }
+
+    const { data: rutinasDueno } = await gymRutinasQuery;
+    const programasDelDueno = (rutinasDueno || []).map((r) => {
+      let meta = {};
+      try {
+        meta = r.descripcion ? JSON.parse(r.descripcion) : {};
+      } catch {
+        meta = { notas: r.descripcion };
+      }
+      const ejerciciosOrdenados = [...(r.rutina_ejercicio || [])]
+        .sort((a, b) => (a.orden || 0) - (b.orden || 0))
+        .map((re, idx) => ({
+          id_ejercicio: re.id_ejercicio,
+          nombre: re.ejercicio?.nombre || 'Ejercicio',
+          grupo_muscular: re.ejercicio?.grupo_muscular || 'General',
+          dificultad: re.ejercicio?.dificultad || meta.dificultad || 'Intermedia',
+          descripcion: re.ejercicio?.descripcion || '',
+          series: re.series || 4,
+          repeticiones: re.repeticiones || 12,
+          peso: re.peso || 0,
+          descanso: re.descanso || 60,
+          orden: re.orden || idx + 1
+        }));
+
+      return {
+        id_plantilla: `gym-rutina-${r.id_rutina}`,
+        id_rutina_origen: r.id_rutina,
+        nombre: r.nombre,
+        tipo: meta.tipo || 'Full Body',
+        dificultad: meta.dificultad || 'Intermedia',
+        duracion: meta.duracion || '60 min',
+        dias: meta.dias || 'Lunes, Miércoles, Viernes',
+        objetivo: meta.objetivo || meta.notas || 'Rutina diseñada por tu gimnasio.',
+        notas: meta.notas || 'Rutina oficial creada por el gimnasio.',
+        nivel_badge: meta.dificultad || 'Intermedia',
+        frecuencia: meta.dias || 'Semanal',
+        es_ofrecida_gym: true,
+        creada_por_dueno: true,
+        total_ejercicios: ejerciciosOrdenados.length,
+        ejercicios: ejerciciosOrdenados
+      };
+    });
+
+    return res.status(200).json([...programasDelDueno, ...programasCompletos]);
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

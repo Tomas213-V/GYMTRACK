@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FaTimes, FaCalendarAlt, FaClock, FaCalendarDay } from 'react-icons/fa';
 import { fetchHistorialPorSocio } from '../../../services/asistenciaService';
+import { formatFechaArgentina, formatHoraArgentina } from '../../../utils/dateUtils';
 import './modalAsistenciaSocio.css';
 
 function ModalHistorialAsistencias({ idSocio, onClose }) {
@@ -28,12 +29,11 @@ function ModalHistorialAsistencias({ idSocio, onClose }) {
     }
   }, [idSocio]);
 
-  // DOCUMENTACIÓN: Formatear fecha a legible
+  // DOCUMENTACIÓN: Formatear fecha a legible (horario Argentina)
   const formatearFecha = (fechaStr) => {
     if (!fechaStr) return 'Fecha no disponible';
     try {
-      const f = new Date(fechaStr);
-      return f.toLocaleDateString('es-AR', {
+      return formatFechaArgentina(fechaStr, {
         weekday: 'short',
         day: '2-digit',
         month: 'short',
@@ -44,12 +44,11 @@ function ModalHistorialAsistencias({ idSocio, onClose }) {
     }
   };
 
-  // DOCUMENTACIÓN: Formatear hora a HH:MM
+  // DOCUMENTACIÓN: Formatear hora a HH:MM (horario Argentina)
   const formatearHora = (fechaStr) => {
     if (!fechaStr) return '--:--';
     try {
-      const f = new Date(fechaStr);
-      return f.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+      return formatHoraArgentina(fechaStr);
     } catch {
       return '--:--';
     }

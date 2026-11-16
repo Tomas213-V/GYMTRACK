@@ -93,7 +93,8 @@ export async function createSocio(socioData) {
   if (!response.ok) {
     const error = new Error(data.error || 'Error al crear socio.');
     error.status = response.status;
-    error.alertaVinculacion = data.alertaVinculacion || false;
+    error.alertaVinculacion = data.alertaVinculacion || data.bloqueadoPorOtroGimnasio || false;
+    error.bloqueadoPorOtroGimnasio = data.bloqueadoPorOtroGimnasio || false;
     error.gimnasioNombre = data.gimnasioNombre;
     error.socioNombre = data.socioNombre;
     error.dni = data.dni;

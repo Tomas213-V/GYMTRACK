@@ -5,80 +5,69 @@
  * PROYECTO: GYMTRACK - Frontend
  * DESCRIPCIÓN: Portal y Dashboard principal del Socio / Alumno del gimnasio.
  * =========================================================================================
- * 
- * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
- * 
- * Este componente brinda una experiencia integral para el entrenamiento del socio:
- * 
- * 1. PASO 1 (Membresía y Estado): Informa si la suscripción está activa o vencida,
- *    días restantes de vigencia, tipo de pase y botón de acceso rápido para renovar o pagar.
- * 
- * 2. PASO 2 (Check-in / Asistencia Digital):
- *    - Permite al socio confirmar su llegada mediante botón de autogestión (`realizarCheckinSocio()`).
- *    - Presenta un modal con confirmación visual de ingreso.
- * 
- * 3. PASO 3 (Entrenamiento del Día):
- *    - Visualiza la rutina asignada para hoy con sus ejercicios, series y repeticiones.
- *    - Permite marcar ejercicios completados mediante checkboxes interactivos guardados en el estado.
- * 
- * 4. PASO 4 (Evolución y Gráficos):
- *    - Despliega un gráfico interactivo (`AreaChart`) de peso corporal y evolución física.
- *    - Modal para registrar nuevas mediciones de peso con fecha y notas (`modalProgresoAbierto`).
  */
 
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import NavGlobal from '../../components/nav-global/nav-global';
 import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
-import { 
-  fetchDashboardSocio, 
-  realizarCheckinSocio, 
-  registrarProgresoSocio 
+import {
+  fetchDashboardSocio,
+  realizarCheckinSocio,
+  registrarProgresoSocio
 } from '../../services/dashboardSocioService';
+import { registrarAsistencia } from '../../services/asistenciaService';
+import { formatFechaArgentina, formatHoraArgentina } from '../../utils/dateUtils';
 
 import {
   FaCrown,
-  FaCreditCard,
   FaDumbbell,
   FaHeartbeat,
-  FaCalendarCheck,
   FaCalendarAlt,
   FaCheck,
   FaTimes,
   FaClock,
-  FaMapMarkerAlt,
-  FaPhone,
   FaArrowDown,
-  FaPlus,
+  FaArrowUp,
   FaBolt,
   FaFire,
   FaReceipt,
   FaSyncAlt,
   FaChevronRight,
-  FaUser,
-  FaRunning,
-  FaLightbulb
+  FaRunning
 } from 'react-icons/fa';
 
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip
-} from 'recharts';
-
 import './dashboard-socio.css';
+
+function leerSocioLocal() {
+  try {
+    const raw = localStorage.getItem('socio') || localStorage.getItem('usuario');
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed[0] || {}) : (parsed || {});
+  } catch {
+    return {};
+  }
+}
+
+function parsearDescripcionRutina(desc) {
+  if (!desc) return '';
+  const trimmed = String(desc).trim();
+  if (!trimmed.startsWith('{')) return trimmed;
+  try {
+    const meta = JSON.parse(trimmed);
+    const partes = [meta.tipo, meta.dificultad, meta.duracion, meta.dias].filter(Boolean);
+    return meta.objetivo || meta.notas || partes.join(' · ') || '';
+  } catch {
+    return trimmed;
+  }
+}
 
 export default function DashboardSocio() {
   const navigate = useNavigate();
 
-
-  // --------------------------------------------------------------------------
-  // Estados Locales y de Datos
-  // --------------------------------------------------------------------------
-  const [_loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [errorCarga, setErrorCarga] = useState('');
   const [notificacion, setNotificacion] = useState('');
   const [ejerciciosCompletados, setEjerciciosCompletados] = useState({});
 
@@ -90,29 +79,27 @@ export default function DashboardSocio() {
   const [guardandoCheckin, setGuardandoCheckin] = useState(false);
 
   // Formulario de progreso
-  const [nuevoPeso, setNuevoPeso] = useState('78.0');
+  const [nuevoPeso, setNuevoPeso] = useState('');
   const [notasProgreso, setNotasProgreso] = useState('');
 
-  // Datos consolidados con fallbacks fieles a los datos provistos
+  const socioInicial = useMemo(() => leerSocioLocal(), []);
+
   const [dashboardData, setDashboardData] = useState({
     socio: {
-      id_socio: 1,
-      nombre: 'Luciano',
-      apellido: 'Pérez',
-      dni: '42.189.340',
-      email: 'luciano@gymtrack.com',
-      telefono: '+54 11 4829-1029'
+      id_socio: socioInicial.id_socio || socioInicial.id || null,
+      nombre: socioInicial.nombre || '',
+      apellido: socioInicial.apellido || '',
+      dni: socioInicial.dni || '',
+      email: socioInicial.email || '',
+      telefono: socioInicial.telefono || '',
+      estado: socioInicial.estado || 'activo'
     },
     gimnasio: {
-      nombre: 'GymTrack Fitness Center',
-      direccion: 'Av. Corrientes 3421, CABA',
-      telefono: '+54 11 5555-8888',
-      horario: 'Lun a Vie 07:00 a 22:30 | Sáb 09:00 a 18:00'
+      nombre: socioInicial.gimnasio?.nombre || ''
     },
     membresia: {
       id_membresia: null,
       plan: 'Sin Membresía Activa',
-      descripcion_plan: '',
       estado: 'sin_membresia',
       fecha_inicio: null,
       fecha_vencimiento: null,
@@ -121,134 +108,79 @@ export default function DashboardSocio() {
       porcentaje_transcurrido: 0,
       expirada: true
     },
-    ultimo_pago: {
-      id_pago: 104,
-      monto: 12500,
-      fecha_pago: '15 May 2026',
-      metodo_pago: 'Mercado Pago',
-      estado: 'aprobado',
-      comprobante: 'MP-89218491'
-    },
+    ultimo_pago: null,
     progreso: {
-      peso_actual: 78.0,
-      variacion_mes: -2.5,
-      fecha_ultimo_registro: '01 Oct 2026',
-      observaciones: 'Buen rendimiento en sentadillas y fondos.',
-      historial: [
-        { fecha: '10 Ago', peso: 81.2 },
-        { fecha: '25 Ago', peso: 80.5 },
-        { fecha: '08 Sep', peso: 79.8 },
-        { fecha: '20 Sep', peso: 79.0 },
-        { fecha: '28 Sep', peso: 78.4 },
-        { fecha: '04 Oct', peso: 78.0 }
-      ]
+      peso_actual: null,
+      variacion_mes: null,
+      fecha_ultimo_registro: null,
+      observaciones: null,
+      historial: []
     },
     entrenamientos: {
-      total_asistencias: 24,
-      asistencias_mes: 24,
+      total_asistencias: 0,
+      asistencias_mes: 0,
       recientes: []
     },
-    rutina_activa: {
-      id_rutina: 1,
-      nombre: 'Fuerza & Hipertrofia: Tren Superior',
-      descripcion: 'Enfoque en press de banca, dominadas y empujes pesados con técnica estricta.',
-      ejercicios: [
-        {
-          id_rutina_ejercicio: 1,
-          ejercicio: { nombre: 'Press de Banca Plano con Barra', grupo_muscular: 'Pectoral', dificultad: 'Media' },
-          series: 4,
-          repeticiones: 10,
-          peso: 70,
-          descanso: 90
-        },
-        {
-          id_rutina_ejercicio: 2,
-          ejercicio: { nombre: 'Dominadas Pronas con Peso Corporal', grupo_muscular: 'Espalda', dificultad: 'Alta' },
-          series: 4,
-          repeticiones: 8,
-          peso: 0,
-          descanso: 90
-        },
-        {
-          id_rutina_ejercicio: 3,
-          ejercicio: { nombre: 'Press Militar con Mancuernas', grupo_muscular: 'Hombros', dificultad: 'Media' },
-          series: 3,
-          repeticiones: 12,
-          peso: 22,
-          descanso: 60
-        },
-        {
-          id_rutina_ejercicio: 4,
-          ejercicio: { nombre: 'Fondos en Paralelas (Tríceps)', grupo_muscular: 'Tríceps', dificultad: 'Media' },
-          series: 3,
-          repeticiones: 12,
-          peso: 0,
-          descanso: 60
-        },
-        {
-          id_rutina_ejercicio: 5,
-          ejercicio: { nombre: 'Elevaciones Laterales en Polea', grupo_muscular: 'Hombros', dificultad: 'Baja' },
-          series: 4,
-          repeticiones: 15,
-          peso: 10,
-          descanso: 45
-        }
-      ]
-    }
+    rutina_activa: null
   });
 
   // --------------------------------------------------------------------------
-  // Cargar Información Consolidada desde Backend
+  // Cargar Información Consolidada desde Backend (sin datos falsos)
   // --------------------------------------------------------------------------
   const cargarDatos = async () => {
     try {
       setLoading(true);
-
-      // Intentar leer socio guardado en localStorage para nombre inmediato
-      const socioLocal = (() => {
-        try {
-          return JSON.parse(localStorage.getItem('socio') || localStorage.getItem('usuario') || '{}');
-        } catch {
-          return {};
-        }
-      })();
-
+      setErrorCarga('');
+      const socioLocal = leerSocioLocal();
       const data = await fetchDashboardSocio();
 
       if (data) {
-        setDashboardData(prev => ({
-          ...prev,
-          socio: data.socio ? { ...prev.socio, ...data.socio } : (socioLocal.nombre ? { ...prev.socio, ...socioLocal } : prev.socio),
-          gimnasio: data.gimnasio ? { ...prev.gimnasio, ...data.gimnasio } : prev.gimnasio,
-          membresia: data.membresia && data.membresia.estado !== 'sin_membresia' ? { ...prev.membresia, ...data.membresia } : prev.membresia,
-          ultimo_pago: data.ultimo_pago ? { ...prev.ultimo_pago, ...data.ultimo_pago } : prev.ultimo_pago,
+        const pesoActual = data.progreso?.peso_actual ?? null;
+        if (pesoActual != null) {
+          setNuevoPeso(String(pesoActual));
+        }
+
+        setDashboardData({
+          socio: data.socio || {
+            id_socio: socioLocal.id_socio || socioLocal.id || null,
+            nombre: socioLocal.nombre || '',
+            apellido: socioLocal.apellido || '',
+            dni: socioLocal.dni || '',
+            email: socioLocal.email || '',
+            telefono: socioLocal.telefono || '',
+            estado: socioLocal.estado || 'activo'
+          },
+          gimnasio: data.gimnasio || { nombre: '' },
+          membresia: data.membresia || {
+            id_membresia: null,
+            plan: 'Sin Membresía Activa',
+            estado: 'sin_membresia',
+            fecha_inicio: null,
+            fecha_vencimiento: null,
+            precio: 0,
+            dias_restantes: 0,
+            porcentaje_transcurrido: 0,
+            expirada: true
+          },
+          ultimo_pago: data.ultimo_pago || null,
           progreso: {
-            ...prev.progreso,
-            peso_actual: data.progreso?.peso_actual || prev.progreso.peso_actual,
-            variacion_mes: data.progreso?.variacion_mes !== null && data.progreso?.variacion_mes !== undefined ? data.progreso.variacion_mes : prev.progreso.variacion_mes,
-            fecha_ultimo_registro: data.progreso?.fecha_ultimo_registro || prev.progreso.fecha_ultimo_registro,
-            observaciones: data.progreso?.observaciones || prev.progreso.observaciones,
-            historial: data.progreso?.historial && data.progreso.historial.length > 0 
-              ? data.progreso.historial.map(item => ({
-                  fecha: item.fecha ? item.fecha.slice(5) : 'Reg',
-                  peso: Number(item.peso)
-                })).reverse()
-              : prev.progreso.historial
+            peso_actual: pesoActual,
+            variacion_mes: data.progreso?.variacion_mes ?? null,
+            fecha_ultimo_registro: data.progreso?.fecha_ultimo_registro || null,
+            observaciones: data.progreso?.observaciones || null,
+            historial: Array.isArray(data.progreso?.historial) ? data.progreso.historial : []
           },
           entrenamientos: {
-            total_asistencias: data.entrenamientos?.total_asistencias || prev.entrenamientos.total_asistencias,
-            asistencias_mes: data.entrenamientos?.asistencias_mes || prev.entrenamientos.asistencias_mes,
-            recientes: data.entrenamientos?.recientes || []
+            total_asistencias: data.entrenamientos?.total_asistencias ?? 0,
+            asistencias_mes: data.entrenamientos?.asistencias_mes ?? 0,
+            recientes: Array.isArray(data.entrenamientos?.recientes) ? data.entrenamientos.recientes : []
           },
-          rutina_activa: data.rutina_activa?.nombre ? {
-            ...prev.rutina_activa,
-            ...data.rutina_activa,
-            ejercicios: data.rutina_activa.ejercicios?.length > 0 ? data.rutina_activa.ejercicios : prev.rutina_activa.ejercicios
-          } : prev.rutina_activa
-        }));
+          rutina_activa: data.rutina_activa || null
+        });
       }
     } catch (err) {
-      console.warn('Dashboard cargado con valores preestablecidos:', err.message);
+      console.error('Error cargando dashboard del socio:', err);
+      setErrorCarga(err.message || 'No se pudieron obtener tus datos actualizados.');
     } finally {
       setLoading(false);
     }
@@ -259,35 +191,10 @@ export default function DashboardSocio() {
   }, []);
 
   // --------------------------------------------------------------------------
-  // Cálculo de los 7 Días de la Semana Actual para el Monitor de Asistencias
-  // --------------------------------------------------------------------------
-  const diasSemana = useMemo(() => {
-    const nombres = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-    const hoy = new Date();
-    const diaHoyIndex = (hoy.getDay() + 6) % 7; // Convertir: Domingo=6, Lunes=0
-
-    // Generar los 7 días de la semana actual
-    return nombres.map((nombre, i) => {
-      const fecha = new Date(hoy);
-      fecha.setDate(hoy.getDate() - diaHoyIndex + i);
-      const esHoy = i === diaHoyIndex;
-      // Simulamos que los días pasados de la semana y hoy tienen asistencia marcada
-      const asistido = i <= diaHoyIndex && i !== 2; // ejemplo visual realista
-
-      return {
-        nombre,
-        num: fecha.getDate(),
-        esHoy,
-        asistido
-      };
-    });
-  }, []);
-
-  // --------------------------------------------------------------------------
   // Manejador para Completar Ejercicios de Hoy
   // --------------------------------------------------------------------------
   const toggleEjercicio = (id) => {
-    setEjerciciosCompletados(prev => ({
+    setEjerciciosCompletados((prev) => ({
       ...prev,
       [id]: !prev[id]
     }));
@@ -299,33 +206,23 @@ export default function DashboardSocio() {
   const handleCheckin = async () => {
     try {
       setGuardandoCheckin(true);
-      const res = await realizarCheckinSocio();
-      setNotificacion(res.mensaje || '¡Check-in realizado! Asistencia registrada para hoy.');
+      let res;
+      try {
+        res = await realizarCheckinSocio();
+      } catch {
+        const idSocio = dashboardData.socio?.id_socio;
+        const dni = dashboardData.socio?.dni;
+        if (!idSocio && !dni) throw new Error('No se pudo identificar tu perfil de socio.');
+        res = await registrarAsistencia({ id_socio: idSocio, dni });
+      }
+
+      setNotificacion(res?.mensaje || '¡Check-in realizado! Asistencia registrada para hoy.');
       setModalCheckinAbierto(false);
-      // Incrementar contador visual
-      setDashboardData(prev => ({
-        ...prev,
-        entrenamientos: {
-          ...prev.entrenamientos,
-          total_asistencias: prev.entrenamientos.total_asistencias + 1,
-          asistencias_mes: prev.entrenamientos.asistencias_mes + 1
-        }
-      }));
+      await cargarDatos();
       setTimeout(() => setNotificacion(''), 6000);
     } catch (err) {
-      console.debug('Fallo checkin remoto, activando confirmación local:', err);
-      // Si falla llamada de red, aplicar confirmación local para no bloquear la experiencia
-      setNotificacion('¡Check-in registrado con éxito! Que tengas un gran entrenamiento 💪');
+      setErrorCarga(err.message || 'No se pudo registrar la asistencia.');
       setModalCheckinAbierto(false);
-      setDashboardData(prev => ({
-        ...prev,
-        entrenamientos: {
-          ...prev.entrenamientos,
-          total_asistencias: prev.entrenamientos.total_asistencias + 1,
-          asistencias_mes: prev.entrenamientos.asistencias_mes + 1
-        }
-      }));
-      setTimeout(() => setNotificacion(''), 6000);
     } finally {
       setGuardandoCheckin(false);
     }
@@ -346,44 +243,13 @@ export default function DashboardSocio() {
         observaciones: notasProgreso
       });
 
-      const anterior = dashboardData.progreso.peso_actual;
-      const diff = anterior ? Number((pesoNum - anterior).toFixed(1)) : null;
-
-      setDashboardData(prev => ({
-        ...prev,
-        progreso: {
-          ...prev.progreso,
-          peso_actual: pesoNum,
-          variacion_mes: diff !== null ? diff : prev.progreso.variacion_mes,
-          fecha_ultimo_registro: 'Hoy',
-          observaciones: notasProgreso || prev.progreso.observaciones,
-          historial: [
-            ...prev.progreso.historial,
-            { fecha: 'Hoy', peso: pesoNum }
-          ]
-        }
-      }));
-
       setNotificacion('¡Nuevo registro de peso guardado correctamente!');
       setModalProgresoAbierto(false);
       setNotasProgreso('');
+      await cargarDatos();
       setTimeout(() => setNotificacion(''), 5000);
     } catch (err) {
-      console.debug('Fallo guardado de peso remoto, aplicando contingencia local:', err);
-      // Contingencia visual suave
-      const pesoNum = Number(nuevoPeso);
-      setDashboardData(prev => ({
-        ...prev,
-        progreso: {
-          ...prev.progreso,
-          peso_actual: pesoNum,
-          fecha_ultimo_registro: 'Hoy',
-          observaciones: notasProgreso || prev.progreso.observaciones
-        }
-      }));
-      setNotificacion('¡Peso registrado en tu panel!');
-      setModalProgresoAbierto(false);
-      setTimeout(() => setNotificacion(''), 5000);
+      setErrorCarga(err.message || 'No se pudo guardar el registro de peso.');
     } finally {
       setGuardandoProgreso(false);
     }
@@ -407,18 +273,26 @@ export default function DashboardSocio() {
     rutinaActiva: dashboardData.rutina_activa
   };
 
+  const asistenciasMes = entrenamientos.asistencias_mes ?? 0;
+  const objetivoMensual = 20;
+  const porcentajeObjetivo = Math.min(100, Math.round((asistenciasMes / objetivoMensual) * 100));
+
+  const tieneMembresiaActiva = Boolean(
+    membresia &&
+    membresia.id_membresia &&
+    !['sin_membresia', 'inactivo', 'inactiva', 'pausa', 'pausado', 'pausada', 'cancelado', 'cancelada'].includes(
+      (membresia.estado || '').toLowerCase().trim()
+    )
+  );
+
   return (
     <div className="socio-pc-page">
-      {/* Barra de Navegación Global */}
       <NavGlobal />
 
       <div className="socio-pc-body">
-        {/* Barra Lateral Adaptada a Socio */}
         <SidebarSocio />
 
-        {/* Contenido Principal Desktop */}
         <main className="socio-pc-main">
-          
           {/* Banner de Feedback si hay notificación */}
           {notificacion && (
             <div className="socio-pc-alert-banner">
@@ -426,7 +300,7 @@ export default function DashboardSocio() {
                 <FaCheck />
                 <span>{notificacion}</span>
               </div>
-              <button 
+              <button
                 onClick={() => setNotificacion('')}
                 style={{ background: 'none', border: 'none', color: '#22c55e', cursor: 'pointer', fontSize: '16px' }}
               >
@@ -435,8 +309,28 @@ export default function DashboardSocio() {
             </div>
           )}
 
+          {/* Banner de error si falló la carga */}
+          {errorCarga && (
+            <div
+              className="socio-pc-alert-banner"
+              style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                borderColor: 'rgba(239, 68, 68, 0.35)',
+                color: '#fca5a5'
+              }}
+            >
+              <span>{errorCarga}</span>
+              <button
+                onClick={() => setErrorCarga('')}
+                style={{ background: 'none', border: 'none', color: '#fca5a5', cursor: 'pointer', fontSize: '16px' }}
+              >
+                <FaTimes />
+              </button>
+            </div>
+          )}
+
           {/* ================================================================
-              1. Hero Header para PC
+              1. Hero Header
               ================================================================ */}
           <section className="socio-pc-hero">
             <div className="socio-pc-hero-left">
@@ -445,12 +339,12 @@ export default function DashboardSocio() {
               </div>
               <div className="socio-pc-hero-text">
                 <h1>
-                  {saludoHora}, {socio.nombre || 'Luciano'}! 👏
+                  {saludoHora}, {socio.nombre || 'Socio'}! 👋
                 </h1>
                 <p>
-                  Bienvenido a tu panel de socio en <strong>{gimnasio.nombre || 'GymTrack'}</strong>
+                  Bienvenido a tu panel de socio{gimnasio?.nombre ? <> en <strong>{gimnasio.nombre}</strong></> : ''}
                   <span className="socio-pc-gym-badge">
-                    <FaCheck style={{ fontSize: '10px' }} /> Socio Activo
+                    <FaCheck style={{ fontSize: '10px' }} /> Socio {socio.estado ? socio.estado.charAt(0).toUpperCase() + socio.estado.slice(1) : 'Activo'}
                   </span>
                 </p>
               </div>
@@ -460,7 +354,7 @@ export default function DashboardSocio() {
               <div className="socio-pc-date-chip">
                 <FaCalendarAlt style={{ color: '#22c55e' }} />
                 <span>
-                  {new Date().toLocaleDateString('es-AR', {
+                  {formatFechaArgentina(new Date(), {
                     weekday: 'long',
                     day: 'numeric',
                     month: 'long',
@@ -469,7 +363,7 @@ export default function DashboardSocio() {
                 </span>
               </div>
 
-              <button 
+              <button
                 className="socio-pc-btn-checkin"
                 onClick={() => setModalCheckinAbierto(true)}
                 title="Marcar asistencia al gimnasio hoy"
@@ -478,10 +372,11 @@ export default function DashboardSocio() {
                 <span>Marcar Asistencia</span>
               </button>
 
-              <button 
+              <button
                 className="socio-pc-btn-outline"
                 onClick={cargarDatos}
                 title="Actualizar datos"
+                disabled={loading}
               >
                 <FaSyncAlt />
               </button>
@@ -492,66 +387,62 @@ export default function DashboardSocio() {
               2. Grid Superior de Métricas (4 KPIs en Fila Desktop)
               ================================================================ */}
           <section className="socio-pc-kpi-grid">
-            
             {/* KPI 1: Membresía */}
-            {(() => {
-              const tieneMembresiaActiva = Boolean(
-                dashboardData.membresia &&
-                dashboardData.membresia.id_membresia &&
-                !['sin_membresia', 'inactivo', 'inactiva', 'pausa', 'pausado', 'pausada', 'cancelado', 'cancelada'].includes((dashboardData.membresia.estado || '').toLowerCase().trim())
-              );
+            <div className="socio-pc-kpi-card">
+              <div>
+                <div className="socio-pc-kpi-top">
+                  <div
+                    className={`socio-pc-kpi-icon-wrap ${tieneMembresiaActiva ? 'icon-green' : 'icon-neutral'}`}
+                    style={!tieneMembresiaActiva ? { background: 'rgba(148, 163, 184, 0.1)', color: '#94a3b8' } : {}}
+                  >
+                    <FaCrown />
+                  </div>
+                  <span className={`socio-pc-kpi-badge ${tieneMembresiaActiva ? 'badge-active-green' : 'badge-pill-neutral'}`}>
+                    ● {tieneMembresiaActiva ? (membresia.estado === 'activa' || membresia.estado === 'activo' ? 'Activa' : membresia.estado) : 'Sin Membresía'}
+                  </span>
+                </div>
+                <h3 className="socio-pc-kpi-title">Membresía</h3>
+                <div className="socio-pc-kpi-val" style={{ fontSize: '20px' }}>
+                  {tieneMembresiaActiva ? membresia.plan : 'Sin Membresía Activa'}
+                </div>
+                <p className="socio-pc-kpi-detail">
+                  {tieneMembresiaActiva && membresia.fecha_vencimiento
+                    ? <>Vence el <strong>{formatFechaArgentina(membresia.fecha_vencimiento)}</strong></>
+                    : <span>No posees un pase activo actualmente</span>}
+                </p>
 
-              return (
-                <div className="socio-pc-kpi-card">
-                  <div>
-                    <div className="socio-pc-kpi-top">
-                      <div className={`socio-pc-kpi-icon-wrap ${tieneMembresiaActiva ? 'icon-green' : 'icon-neutral'}`} style={!tieneMembresiaActiva ? { background: 'rgba(148, 163, 184, 0.1)', color: '#94a3b8' } : {}}>
-                        <FaCrown />
-                      </div>
-                      <span className={`socio-pc-kpi-badge ${tieneMembresiaActiva ? 'badge-active-green' : 'badge-pill-neutral'}`}>
-                        ● {tieneMembresiaActiva ? (dashboardData.membresia.estado === 'activa' ? 'Activa' : 'Vigente') : 'Sin Membresía'}
+                {tieneMembresiaActiva ? (
+                  <div className="socio-pc-kpi-progress">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#94a3b8', marginBottom: '5px' }}>
+                      <span>Vigencia</span>
+                      <span>
+                        {membresia.dias_restantes != null
+                          ? (membresia.dias_restantes >= 0 ? `${membresia.dias_restantes} días restantes` : 'Vencida')
+                          : 'Al día'}
                       </span>
                     </div>
-                    <h3 className="socio-pc-kpi-title">Membresía</h3>
-                    <div className="socio-pc-kpi-val" style={{ fontSize: '20px' }}>
-                      {tieneMembresiaActiva ? dashboardData.membresia.plan : 'Sin Membresía Activa'}
+                    <div className="socio-pc-progress-bar-bg">
+                      <div
+                        className="socio-pc-progress-bar-fill"
+                        style={{ width: `${Math.max(0, Math.min(100, 100 - (membresia.porcentaje_transcurrido || 0)))}%` }}
+                      />
                     </div>
-                    <p className="socio-pc-kpi-detail">
-                      {tieneMembresiaActiva 
-                        ? <>Vence el <strong>{dashboardData.membresia.fecha_vencimiento}</strong></>
-                        : <span>No posees un pase activo actualmente</span>}
-                    </p>
-
-                    {tieneMembresiaActiva ? (
-                      <div className="socio-pc-kpi-progress">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#94a3b8', marginBottom: '5px' }}>
-                          <span>Vigencia</span>
-                          <span>{dashboardData.membresia.dias_restantes ? `${dashboardData.membresia.dias_restantes} días restantes` : 'Al día'}</span>
-                        </div>
-                        <div className="socio-pc-progress-bar-bg">
-                          <div 
-                            className="socio-pc-progress-bar-fill" 
-                            style={{ width: `${100 - (dashboardData.membresia.porcentaje_transcurrido || 0)}%` }} 
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ marginTop: '14px', fontSize: '12px', color: '#94a3b8' }}>
-                        Consulta las opciones activas disponibles para activar tu acceso.
-                      </div>
-                    )}
                   </div>
+                ) : (
+                  <div style={{ marginTop: '14px', fontSize: '12px', color: '#94a3b8' }}>
+                    Consulta las opciones activas disponibles para activar tu acceso.
+                  </div>
+                )}
+              </div>
 
-                  <button 
-                    onClick={() => navigate('/membresia-socio')} 
-                    className="socio-pc-kpi-footer-link"
-                  >
-                    <span>{tieneMembresiaActiva ? 'Gestionar suscripción' : 'Ver membresías disponibles'}</span>
-                    <FaChevronRight style={{ fontSize: '11px' }} />
-                  </button>
-                </div>
-              );
-            })()}
+              <button
+                onClick={() => navigate('/membresia-socio')}
+                className="socio-pc-kpi-footer-link"
+              >
+                <span>{tieneMembresiaActiva ? 'Gestionar suscripción' : 'Ver membresías disponibles'}</span>
+                <FaChevronRight style={{ fontSize: '11px' }} />
+              </button>
+            </div>
 
             {/* KPI 2: Último Pago */}
             <div className="socio-pc-kpi-card">
@@ -561,32 +452,55 @@ export default function DashboardSocio() {
                     <FaReceipt />
                   </div>
                   <span className="socio-pc-kpi-badge badge-pill-neutral">
-                    {ultimoPago?.metodo_pago || 'Mercado Pago'}
+                    {ultimoPago?.metodo_pago ? ultimoPago.metodo_pago : 'Sin pagos'}
                   </span>
                 </div>
                 <h3 className="socio-pc-kpi-title">Último Pago</h3>
-                <div className="socio-pc-kpi-val">
-                  ${(ultimoPago?.monto || 12500).toLocaleString('es-AR')}
-                  <span className="unit">ARS</span>
-                </div>
-                <p className="socio-pc-kpi-detail">
-                  Abonado el <strong>{ultimoPago?.fecha_pago || '15 May'}</strong>
-                </p>
-
-                <div style={{ marginTop: '14px', fontSize: '12.5px', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <FaCheck style={{ fontSize: '11px' }} />
-                  <span>Comprobante validado y acreditado</span>
-                </div>
+                {ultimoPago ? (
+                  <>
+                    <div className="socio-pc-kpi-val">
+                      ${Number(ultimoPago.monto || 0).toLocaleString('es-AR')}
+                      <span className="unit">ARS</span>
+                    </div>
+                    <p className="socio-pc-kpi-detail">
+                      Abonado el <strong>{ultimoPago.fecha_pago ? formatFechaArgentina(ultimoPago.fecha_pago) : '—'}</strong>
+                    </p>
+                    <div style={{ marginTop: '14px', fontSize: '12.5px', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <FaCheck style={{ fontSize: '11px' }} />
+                      <span>Estado: {ultimoPago.estado || 'pagado'}</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="socio-pc-kpi-val" style={{ fontSize: '20px' }}>
+                      Sin registros
+                    </div>
+                    <p className="socio-pc-kpi-detail">
+                      Aún no tienes pagos registrados
+                    </p>
+                  </>
+                )}
               </div>
 
-              <button 
-                onClick={() => setModalReciboAbierto(true)} 
-                className="socio-pc-kpi-footer-link"
-                style={{ color: '#38bdf8' }}
-              >
-                <span>Ver comprobante</span>
-                <FaChevronRight style={{ fontSize: '11px' }} />
-              </button>
+              {ultimoPago ? (
+                <button
+                  onClick={() => setModalReciboAbierto(true)}
+                  className="socio-pc-kpi-footer-link"
+                  style={{ color: '#38bdf8' }}
+                >
+                  <span>Ver comprobante</span>
+                  <FaChevronRight style={{ fontSize: '11px' }} />
+                </button>
+              ) : (
+                <button
+                  onClick={() => navigate('/membresia-socio')}
+                  className="socio-pc-kpi-footer-link"
+                  style={{ color: '#38bdf8' }}
+                >
+                  <span>Ir a mis pagos</span>
+                  <FaChevronRight style={{ fontSize: '11px' }} />
+                </button>
+              )}
             </div>
 
             {/* KPI 3: Entrenamientos / Asistencias */}
@@ -597,34 +511,34 @@ export default function DashboardSocio() {
                     <FaFire />
                   </div>
                   <span className="socio-pc-kpi-badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' }}>
-                    🔥 Meta superada
+                    {asistenciasMes >= objetivoMensual ? '🔥 Meta superada' : `${entrenamientos.total_asistencias ?? 0} totales`}
                   </span>
                 </div>
                 <h3 className="socio-pc-kpi-title">Entrenamientos</h3>
                 <div className="socio-pc-kpi-val">
-                  {entrenamientos.asistencias_mes || 24}
+                  {asistenciasMes}
                   <span className="unit">este mes</span>
                 </div>
                 <p className="socio-pc-kpi-detail">
-                  Completados con éxito en <strong>{gimnasio.nombre || 'GymTrack'}</strong>
+                  Asistencias registradas{gimnasio?.nombre ? <> en <strong>{gimnasio.nombre}</strong></> : ''}
                 </p>
 
                 <div className="socio-pc-kpi-progress">
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#94a3b8', marginBottom: '5px' }}>
-                    <span>Objetivo mensual (20)</span>
-                    <span style={{ color: '#fbbf24', fontWeight: '700' }}>120%</span>
+                    <span>Objetivo mensual ({objetivoMensual})</span>
+                    <span style={{ color: '#fbbf24', fontWeight: '700' }}>{porcentajeObjetivo}%</span>
                   </div>
                   <div className="socio-pc-progress-bar-bg">
-                    <div 
-                      className="socio-pc-progress-bar-fill" 
-                      style={{ width: '100%', background: 'linear-gradient(90deg, #f59e0b, #fbbf24)' }} 
+                    <div
+                      className="socio-pc-progress-bar-fill"
+                      style={{ width: `${porcentajeObjetivo}%`, background: 'linear-gradient(90deg, #f59e0b, #fbbf24)' }}
                     />
                   </div>
                 </div>
               </div>
 
-              <button 
-                onClick={() => navigate('/asistencia-socio')} 
+              <button
+                onClick={() => navigate('/asistencia-socio')}
                 className="socio-pc-kpi-footer-link"
                 style={{ color: '#fbbf24' }}
               >
@@ -633,33 +547,47 @@ export default function DashboardSocio() {
               </button>
             </div>
 
-            {/* KPI 4: Progreso y Peso Actual */}
+            {/* KPI 4: Peso Actual */}
             <div className="socio-pc-kpi-card">
               <div>
                 <div className="socio-pc-kpi-top">
                   <div className="socio-pc-kpi-icon-wrap icon-purple">
                     <FaHeartbeat />
                   </div>
-                  <span className="socio-pc-kpi-badge" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e' }}>
-                    <FaArrowDown style={{ fontSize: '9px' }} /> {progreso.variacion_mes || -2.5} kg este mes
-                  </span>
+                  {progreso.variacion_mes != null ? (
+                    <span className="socio-pc-kpi-badge" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e' }}>
+                      {progreso.variacion_mes <= 0 ? <FaArrowDown style={{ fontSize: '9px' }} /> : <FaArrowUp style={{ fontSize: '9px' }} />}{' '}
+                      {progreso.variacion_mes > 0 ? `+${progreso.variacion_mes}` : progreso.variacion_mes} kg
+                    </span>
+                  ) : (
+                    <span className="socio-pc-kpi-badge badge-pill-neutral">Seguimiento</span>
+                  )}
                 </div>
                 <h3 className="socio-pc-kpi-title">Peso Actual</h3>
-                <div className="socio-pc-kpi-val">
-                  {progreso.peso_actual || 78}
-                  <span className="unit">kg</span>
-                </div>
-                <p className="socio-pc-kpi-detail">
-                  Último pesaje: <strong>{progreso.fecha_ultimo_registro || '01 Oct 2026'}</strong>
-                </p>
-
-                <div style={{ marginTop: '14px', fontSize: '12px', color: '#94a3b8' }}>
-                  Tendencia de peso saludable y en déficit controlado.
-                </div>
+                {progreso.peso_actual != null ? (
+                  <>
+                    <div className="socio-pc-kpi-val">
+                      {progreso.peso_actual}
+                      <span className="unit">kg</span>
+                    </div>
+                    <p className="socio-pc-kpi-detail">
+                      Último pesaje: <strong>{progreso.fecha_ultimo_registro ? formatFechaArgentina(progreso.fecha_ultimo_registro) : 'Reciente'}</strong>
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="socio-pc-kpi-val" style={{ fontSize: '20px' }}>
+                      Sin registro
+                    </div>
+                    <p className="socio-pc-kpi-detail">
+                      Aún no cargaste tu peso corporal
+                    </p>
+                  </>
+                )}
               </div>
 
-              <button 
-                onClick={() => setModalProgresoAbierto(true)} 
+              <button
+                onClick={() => setModalProgresoAbierto(true)}
                 className="socio-pc-kpi-footer-link"
                 style={{ color: '#c084fc' }}
               >
@@ -667,397 +595,152 @@ export default function DashboardSocio() {
                 <FaChevronRight style={{ fontSize: '11px' }} />
               </button>
             </div>
-
           </section>
 
           {/* ================================================================
-              3. Grid Principal en 2 Columnas para PC
+              3. Sección Principal: Mi Rutina Activa (Ancho completo)
               ================================================================ */}
-          <div className="socio-pc-main-grid">
-
-            {/* COLUMNA IZQUIERDA (62%): Rutina Activa, Ejercicios y Monitor */}
-            <div className="socio-pc-left-col">
-              
-              {/* Tarjeta: Mi Rutina Activa */}
-              <div className="socio-pc-card">
-                <div className="socio-pc-card-header">
-                  <div className="socio-pc-card-title-group">
-                    <span className="socio-pc-card-header-icon">
-                      <FaDumbbell />
-                    </span>
-                    <div>
-                      <h2 className="socio-pc-card-title">Mi Rutina Activa</h2>
-                      <p className="socio-pc-card-subtitle">
-                        Plan de entrenamiento asignado para hoy
-                      </p>
-                    </div>
-                  </div>
-
-                  <Link to="/rutinas-socio" className="socio-pc-card-action">
-                    <span>Ver todas mis rutinas</span>
-                    <FaChevronRight style={{ fontSize: '11px' }} />
-                  </Link>
-                </div>
-
-                {/* Banner de la Rutina */}
-                <div className="socio-pc-routine-banner">
+          <div className="socio-pc-main-grid socio-pc-main-grid-single">
+            <div className="socio-pc-card">
+              <div className="socio-pc-card-header">
+                <div className="socio-pc-card-title-group">
+                  <span className="socio-pc-card-header-icon">
+                    <FaDumbbell />
+                  </span>
                   <div>
-                    <h3 className="socio-pc-routine-name">
-                      {rutinaActiva.nombre}
-                    </h3>
-                    <p className="socio-pc-routine-desc">
-                      {rutinaActiva.descripcion}
+                    <h2 className="socio-pc-card-title">Mi Rutina Activa</h2>
+                    <p className="socio-pc-card-subtitle">
+                      Plan de entrenamiento asignado para hoy
                     </p>
                   </div>
-                  <span className="socio-pc-routine-badge">
-                    Rutina en curso
-                  </span>
                 </div>
 
-                {/* Lista / Tabla de Ejercicios */}
-                <table className="socio-pc-exercises-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: '40px' }}>Hecho</th>
-                      <th>Ejercicio</th>
-                      <th>Músculo</th>
-                      <th>Series × Reps</th>
-                      <th>Carga</th>
-                      <th>Descanso</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rutinaActiva.ejercicios?.map((item, idx) => {
-                      const isChecked = Boolean(ejerciciosCompletados[item.id_rutina_ejercicio || idx]);
-                      const ej = item.ejercicio || {};
-
-                      return (
-                        <tr key={idx} style={{ opacity: isChecked ? 0.6 : 1 }}>
-                          <td>
-                            <button
-                              onClick={() => toggleEjercicio(item.id_rutina_ejercicio || idx)}
-                              className={`socio-pc-exercise-check-btn ${isChecked ? 'checked' : ''}`}
-                              title={isChecked ? 'Marcar como pendiente' : 'Marcar como completado'}
-                            >
-                              <FaCheck />
-                            </button>
-                          </td>
-                          <td>
-                            <div className="socio-pc-exercise-row-name">
-                              <span style={{ textDecoration: isChecked ? 'line-through' : 'none' }}>
-                                {ej.nombre || 'Ejercicio personalizado'}
-                              </span>
-                            </div>
-                          </td>
-                          <td>
-                            <span className="socio-pc-exercise-muscle-tag">
-                              {ej.grupo_muscular || 'Musculación'}
-                            </span>
-                          </td>
-                          <td style={{ fontWeight: '700', color: '#ffffff' }}>
-                            {item.series || 4} × {item.repeticiones || 10}
-                          </td>
-                          <td>
-                            {item.peso && item.peso > 0 ? `${item.peso} kg` : 'Corporal'}
-                          </td>
-                          <td style={{ color: '#94a3b8' }}>
-                            <FaClock style={{ fontSize: '11px', marginRight: '5px' }} />
-                            {item.descanso || 60}s
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-
-                {/* Acciones de la Rutina */}
-                <div className="socio-pc-routine-footer-btns">
-                  <button 
-                    onClick={() => navigate('/rutinas-socio')}
-                    className="socio-pc-btn-primary"
-                    style={{ flex: '0 0 auto', padding: '10px 20px', fontSize: '13.5px' }}
-                  >
-                    <FaRunning />
-                    <span>Abrir Modo Entrenamiento</span>
-                  </button>
-
-                  <button 
-                    onClick={() => navigate('/ejercicios-socio')}
-                    className="socio-pc-btn-secondary"
-                    style={{ flex: '0 0 auto', padding: '10px 18px', fontSize: '13.5px' }}
-                  >
-                    <span>Explorar Catálogo de Ejercicios</span>
-                  </button>
-                </div>
+                <Link to="/rutinas-socio" className="socio-pc-card-action">
+                  <span>Ver todas mis rutinas</span>
+                  <FaChevronRight style={{ fontSize: '11px' }} />
+                </Link>
               </div>
 
-              {/* Tarjeta: Monitor Semanal de Asistencia */}
-              <div className="socio-pc-card">
-                <div className="socio-pc-card-header">
-                  <div className="socio-pc-card-title-group">
-                    <span className="socio-pc-card-header-icon" style={{ background: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b' }}>
-                      <FaCalendarCheck />
-                    </span>
+              {rutinaActiva ? (
+                <>
+                  <div className="socio-pc-routine-banner">
                     <div>
-                      <h2 className="socio-pc-card-title">Constancia y Asistencias Semanales</h2>
-                      <p className="socio-pc-card-subtitle">
-                        Seguimiento día a día de tus entrenamientos esta semana
-                      </p>
-                    </div>
-                  </div>
-
-                  <Link to="/asistencia-socio" className="socio-pc-card-action">
-                    <span>Ver asistencias</span>
-                    <FaChevronRight style={{ fontSize: '11px' }} />
-                  </Link>
-                </div>
-
-                {/* Grilla de los 7 días de la semana */}
-                <div className="socio-pc-week-tracker">
-                  {diasSemana.map((dia, idx) => (
-                    <div 
-                      key={idx} 
-                      className={`socio-pc-day-col ${dia.asistido ? 'attended' : ''} ${dia.esHoy ? 'today' : ''}`}
-                    >
-                      <span className="socio-pc-day-name">{dia.nombre}</span>
-                      <span className="socio-pc-day-num">{dia.num}</span>
-                      <div className="socio-pc-day-status-icon">
-                        {dia.asistido ? <FaCheck /> : <span style={{ fontSize: '10px' }}>—</span>}
-                      </div>
-                      {dia.esHoy && (
-                        <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: '700' }}>HOY</span>
+                      <h3 className="socio-pc-routine-name">{rutinaActiva.nombre}</h3>
+                      {parsearDescripcionRutina(rutinaActiva.descripcion) && (
+                        <p className="socio-pc-routine-desc">
+                          {parsearDescripcionRutina(rutinaActiva.descripcion)}
+                        </p>
                       )}
                     </div>
-                  ))}
-                </div>
-
-                <div className="socio-pc-streak-banner">
-                  <FaFire style={{ fontSize: '20px', color: '#f59e0b' }} />
-                  <span>
-                    <strong>¡Excelente ritmo, {socio.nombre}!</strong> Llevás una racha positiva esta semana. Mantené la constancia para alcanzar tus metas.
-                  </span>
-                </div>
-              </div>
-
-              {/* Tarjeta: Evolución Gráfica del Peso */}
-              <div className="socio-pc-card">
-                <div className="socio-pc-card-header">
-                  <div className="socio-pc-card-title-group">
-                    <span className="socio-pc-card-header-icon" style={{ background: 'rgba(168, 85, 247, 0.12)', color: '#c084fc' }}>
-                      <FaHeartbeat />
-                    </span>
-                    <div>
-                      <h2 className="socio-pc-card-title">Evolución de Peso (kg)</h2>
-                      <p className="socio-pc-card-subtitle">
-                        Progreso corporal registrado en las últimas semanas
-                      </p>
-                    </div>
+                    <span className="socio-pc-routine-badge">Rutina en curso</span>
                   </div>
 
-                  <button 
-                    onClick={() => setModalProgresoAbierto(true)}
-                    className="socio-pc-card-action"
-                    style={{ color: '#c084fc' }}
-                  >
-                    <FaPlus style={{ fontSize: '11px' }} />
-                    <span>Añadir peso</span>
-                  </button>
-                </div>
+                  {rutinaActiva.ejercicios && rutinaActiva.ejercicios.length > 0 ? (
+                    <table className="socio-pc-exercises-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: '40px' }}>Hecho</th>
+                          <th>Ejercicio</th>
+                          <th>Músculo</th>
+                          <th>Series × Reps</th>
+                          <th>Carga</th>
+                          <th>Descanso</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rutinaActiva.ejercicios.map((item, idx) => {
+                          const isChecked = Boolean(ejerciciosCompletados[item.id_rutina_ejercicio || idx]);
+                          const ej = item.ejercicio || {};
 
-                {/* Gráfico Recharts con Área Neon */}
-                <div style={{ width: '100%', height: 180, marginTop: '10px' }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={progreso.historial} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorPeso" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#22c55e" stopOpacity={0.4} />
-                          <stop offset="95%" stopColor="#22c55e" stopOpacity={0.0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="fecha" stroke="#64748b" fontSize={11} tickLine={false} />
-                      <YAxis domain={['dataMin - 1', 'dataMax + 1']} stroke="#64748b" fontSize={11} tickLine={false} />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: '#161e27', 
-                          border: '1px solid rgba(255,255,255,0.1)', 
-                          borderRadius: '8px',
-                          color: '#fff',
-                          fontSize: '12px'
-                        }} 
-                        formatter={(val) => [`${val} kg`, 'Peso']}
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey="peso" 
-                        stroke="#22c55e" 
-                        strokeWidth={2.5} 
-                        fillOpacity={1} 
-                        fill="url(#colorPeso)" 
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+                          return (
+                            <tr key={item.id_rutina_ejercicio || idx} style={{ opacity: isChecked ? 0.6 : 1 }}>
+                              <td>
+                                <button
+                                  onClick={() => toggleEjercicio(item.id_rutina_ejercicio || idx)}
+                                  className={`socio-pc-exercise-check-btn ${isChecked ? 'checked' : ''}`}
+                                  title={isChecked ? 'Marcar como pendiente' : 'Marcar como completado'}
+                                >
+                                  <FaCheck />
+                                </button>
+                              </td>
+                              <td>
+                                <div className="socio-pc-exercise-row-name">
+                                  <span style={{ textDecoration: isChecked ? 'line-through' : 'none' }}>
+                                    {ej.nombre || 'Ejercicio personalizado'}
+                                  </span>
+                                </div>
+                              </td>
+                              <td>
+                                <span className="socio-pc-exercise-muscle-tag">
+                                  {ej.grupo_muscular || 'Musculación'}
+                                </span>
+                              </td>
+                              <td style={{ fontWeight: '700', color: '#ffffff' }}>
+                                {item.series || 4} × {item.repeticiones || 10}
+                              </td>
+                              <td>{item.peso && item.peso > 0 ? `${item.peso} kg` : 'Corporal'}</td>
+                              <td style={{ color: '#94a3b8' }}>
+                                <FaClock style={{ fontSize: '11px', marginRight: '5px' }} />
+                                {item.descanso || 60}s
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p style={{ color: '#94a3b8', fontSize: '14px', margin: '12px 0' }}>
+                      Esta rutina todavía no tiene ejercicios cargados.
+                    </p>
+                  )}
 
-            </div>
-
-            {/* COLUMNA DERECHA (38%): Acciones Rápidas, Gimnasio y Consejos */}
-            <div className="socio-pc-right-col">
-              
-              {/* Tarjeta: Acciones Rápidas */}
-              <div className="socio-pc-card">
-                <div className="socio-pc-card-header" style={{ marginBottom: '16px' }}>
-                  <div className="socio-pc-card-title-group">
-                    <span className="socio-pc-card-header-icon">
-                      <FaBolt />
-                    </span>
-                    <div>
-                      <h2 className="socio-pc-card-title">Acciones Rápidas</h2>
-                      <p className="socio-pc-card-subtitle">
-                        Accesos directos a tus funciones
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="socio-pc-actions-grid">
-                  <Link to="/rutinas-socio" className="socio-pc-action-btn-card">
-                    <div className="socio-pc-action-icon-circle" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e' }}>
-                      <FaDumbbell />
-                    </div>
-                    <div>
-                      <h4 className="socio-pc-action-title">Mi Rutina</h4>
-                      <p className="socio-pc-action-sub">Ejercicios y series</p>
-                    </div>
-                  </Link>
-
-                  <Link to="/membresia-socio" className="socio-pc-action-btn-card">
-                    <div className="socio-pc-action-icon-circle" style={{ background: 'rgba(14, 165, 233, 0.15)', color: '#38bdf8' }}>
-                      <FaCreditCard />
-                    </div>
-                    <div>
-                      <h4 className="socio-pc-action-title">Membresía</h4>
-                      <p className="socio-pc-action-sub">Planes y pagos</p>
-                    </div>
-                  </Link>
-
-                  <Link to="/asistencia-socio" className="socio-pc-action-btn-card">
-                    <div className="socio-pc-action-icon-circle" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
-                      <FaCalendarCheck />
-                    </div>
-                    <div>
-                      <h4 className="socio-pc-action-title">Asistencias</h4>
-                      <p className="socio-pc-action-sub">Historial de visitas</p>
-                    </div>
-                  </Link>
-
-                  <Link to="/ejercicios-socio" className="socio-pc-action-btn-card">
-                    <div className="socio-pc-action-icon-circle" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc' }}>
+                  <div className="socio-pc-routine-footer-btns">
+                    <button
+                      onClick={() => navigate('/rutinas-socio')}
+                      className="socio-pc-btn-primary"
+                      style={{ flex: '0 0 auto', padding: '10px 20px', fontSize: '13.5px' }}
+                    >
                       <FaRunning />
-                    </div>
-                    <div>
-                      <h4 className="socio-pc-action-title">Ejercicios</h4>
-                      <p className="socio-pc-action-sub">Catálogo completo</p>
-                    </div>
-                  </Link>
+                      <span>Abrir Modo Entrenamiento</span>
+                    </button>
 
-                  <Link to="/perfil-socio" className="socio-pc-action-btn-card">
-                    <div className="socio-pc-action-icon-circle" style={{ background: 'rgba(255, 255, 255, 0.08)', color: '#e2e8f0' }}>
-                      <FaUser />
-                    </div>
-                    <div>
-                      <h4 className="socio-pc-action-title">Mi Perfil</h4>
-                      <p className="socio-pc-action-sub">Datos personales</p>
-                    </div>
-                  </Link>
-
-                  <div 
-                    onClick={() => setModalCheckinAbierto(true)} 
-                    className="socio-pc-action-btn-card"
-                    style={{ border: '1px solid rgba(34, 197, 94, 0.35)', background: 'rgba(34, 197, 94, 0.06)' }}
-                  >
-                    <div className="socio-pc-action-icon-circle" style={{ background: '#22c55e', color: '#0b0f12' }}>
-                      <FaBolt />
-                    </div>
-                    <div>
-                      <h4 className="socio-pc-action-title">Check-in</h4>
-                      <p className="socio-pc-action-sub">Registrar ingreso</p>
-                    </div>
+                    <button
+                      onClick={() => navigate('/ejercicios-socio')}
+                      className="socio-pc-btn-secondary"
+                      style={{ flex: '0 0 auto', padding: '10px 18px', fontSize: '13.5px' }}
+                    >
+                      <span>Explorar Catálogo de Ejercicios</span>
+                    </button>
                   </div>
-                </div>
-              </div>
-
-              {/* Tarjeta: Mi Gimnasio & Sede */}
-              <div className="socio-pc-card">
-                <div className="socio-pc-card-header" style={{ marginBottom: '14px' }}>
-                  <div className="socio-pc-card-title-group">
-                    <span className="socio-pc-card-header-icon" style={{ background: 'rgba(14, 165, 233, 0.12)', color: '#38bdf8' }}>
-                      <FaMapMarkerAlt />
-                    </span>
-                    <div>
-                      <h2 className="socio-pc-card-title">Mi Sede</h2>
-                      <p className="socio-pc-card-subtitle">
-                        {gimnasio.nombre || 'GymTrack'}
-                      </p>
+                </>
+              ) : (
+                <div style={{ padding: '24px 0', textAlign: 'center', color: '#94a3b8' }}>
+                  <p style={{ margin: '0 0 16px 0', fontSize: '15px' }}>
+                    {loading ? 'Cargando tu rutina...' : 'Todavía no tienes una rutina activa asignada.'}
+                  </p>
+                  {!loading && (
+                    <div className="socio-pc-routine-footer-btns" style={{ justifyContent: 'center' }}>
+                      <button
+                        onClick={() => navigate('/rutinas-socio')}
+                        className="socio-pc-btn-primary"
+                        style={{ flex: '0 0 auto', padding: '10px 20px', fontSize: '13.5px' }}
+                      >
+                        <FaDumbbell />
+                        <span>Explorar Rutinas</span>
+                      </button>
+                      <button
+                        onClick={() => navigate('/ejercicios-socio')}
+                        className="socio-pc-btn-secondary"
+                        style={{ flex: '0 0 auto', padding: '10px 18px', fontSize: '13.5px' }}
+                      >
+                        <span>Catálogo de Ejercicios</span>
+                      </button>
                     </div>
-                  </div>
-
-                  <span className="socio-pc-kpi-badge badge-active-green" style={{ fontSize: '11px' }}>
-                    ● Abierto ahora
-                  </span>
+                  )}
                 </div>
-
-                <div className="socio-pc-gym-info-list">
-                  <div className="socio-pc-gym-info-item">
-                    <FaMapMarkerAlt />
-                    <span>{gimnasio.direccion || 'Av. Corrientes 3421, CABA'}</span>
-                  </div>
-
-                  <div className="socio-pc-gym-info-item">
-                    <FaClock />
-                    <span>{gimnasio.horario || 'Lun a Vie: 07:00 a 22:30 hs'}</span>
-                  </div>
-
-                  <div className="socio-pc-gym-info-item">
-                    <FaPhone />
-                    <span>{gimnasio.telefono || '+54 11 5555-8888'}</span>
-                  </div>
-                </div>
-
-                {/* Beneficios incluidos en el plan */}
-                <div className="socio-pc-gym-perks-row">
-                  <span className="socio-pc-gym-perk-tag">
-                    <FaCheck /> Musculación libre
-                  </span>
-                  <span className="socio-pc-gym-perk-tag">
-                    <FaCheck /> Sector de cardio
-                  </span>
-                  <span className="socio-pc-gym-perk-tag">
-                    <FaCheck /> Vestuarios & duchas
-                  </span>
-                  <span className="socio-pc-gym-perk-tag">
-                    <FaCheck /> Wi-Fi del club
-                  </span>
-                </div>
-              </div>
-
-              {/* Tarjeta: Consejo del Día / Tip de Rendimiento */}
-              <div className="socio-pc-card" style={{ background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.06) 0%, rgba(18, 24, 31, 0.95) 100%)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                  <FaLightbulb style={{ color: '#22c55e', fontSize: '18px' }} />
-                  <h4 style={{ margin: 0, color: '#ffffff', fontSize: '15px', fontWeight: '700' }}>
-                    Consejo de Entrenamiento
-                  </h4>
-                </div>
-                <p style={{ margin: 0, color: '#94a3b8', fontSize: '13.5px', lineHeight: '1.5' }}>
-                  "Para optimizar la ganancia muscular y la recuperación, asegurate de descansar entre 60 y 90 segundos en series pesadas y mantener una hidratación de al menos 2.5 litros de agua al día."
-                </p>
-              </div>
-
+              )}
             </div>
-
           </div>
-
         </main>
       </div>
 
@@ -1066,7 +749,7 @@ export default function DashboardSocio() {
           ================================================================ */}
       {modalCheckinAbierto && (
         <div className="socio-pc-modal-backdrop" onClick={() => setModalCheckinAbierto(false)}>
-          <div className="socio-pc-modal-content" onClick={e => e.stopPropagation()}>
+          <div className="socio-pc-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="socio-pc-modal-header">
               <h3 className="socio-pc-modal-title">
                 <FaBolt style={{ color: '#22c55e' }} />
@@ -1084,23 +767,23 @@ export default function DashboardSocio() {
             <div style={{ background: 'rgba(255, 255, 255, 0.04)', padding: '14px', borderRadius: '10px', marginBottom: '20px' }}>
               <div style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '4px' }}>Socio:</div>
               <div style={{ fontSize: '15px', fontWeight: '700', color: '#ffffff' }}>
-                {socio.nombre} {socio.apellido} (DNI: {socio.dni})
+                {socio.nombre} {socio.apellido} {socio.dni ? `(DNI: ${socio.dni})` : ''}
               </div>
               <div style={{ fontSize: '13px', color: '#22c55e', marginTop: '6px' }}>
-                📍 {gimnasio.nombre || 'GymTrack'} • {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} hs
+                📍 {gimnasio?.nombre || 'GymTrack'} • {formatHoraArgentina(new Date())} hs
               </div>
             </div>
 
             <div className="socio-pc-modal-actions">
-              <button 
-                className="socio-pc-btn-secondary" 
+              <button
+                className="socio-pc-btn-secondary"
                 onClick={() => setModalCheckinAbierto(false)}
                 disabled={guardandoCheckin}
               >
                 Cancelar
               </button>
-              <button 
-                className="socio-pc-btn-primary" 
+              <button
+                className="socio-pc-btn-primary"
                 onClick={handleCheckin}
                 disabled={guardandoCheckin}
               >
@@ -1116,7 +799,7 @@ export default function DashboardSocio() {
           ================================================================ */}
       {modalProgresoAbierto && (
         <div className="socio-pc-modal-backdrop" onClick={() => setModalProgresoAbierto(false)}>
-          <div className="socio-pc-modal-content" onClick={e => e.stopPropagation()}>
+          <div className="socio-pc-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="socio-pc-modal-header">
               <h3 className="socio-pc-modal-title">
                 <FaHeartbeat style={{ color: '#c084fc' }} />
@@ -1130,11 +813,11 @@ export default function DashboardSocio() {
             <form onSubmit={handleGuardarProgreso}>
               <div className="socio-pc-form-group">
                 <label>Peso Actual (kg):</label>
-                <input 
-                  type="number" 
-                  step="0.1" 
+                <input
+                  type="number"
+                  step="0.1"
                   value={nuevoPeso}
-                  onChange={e => setNuevoPeso(e.target.value)}
+                  onChange={(e) => setNuevoPeso(e.target.value)}
                   className="socio-pc-form-input"
                   placeholder="Ej: 78.5"
                   required
@@ -1144,9 +827,9 @@ export default function DashboardSocio() {
 
               <div className="socio-pc-form-group">
                 <label>Notas u Observaciones (opcional):</label>
-                <textarea 
+                <textarea
                   value={notasProgreso}
-                  onChange={e => setNotasProgreso(e.target.value)}
+                  onChange={(e) => setNotasProgreso(e.target.value)}
                   className="socio-pc-form-textarea"
                   placeholder="Ej: Sentí buena fuerza, mejor definición en abdomen..."
                   rows={3}
@@ -1154,16 +837,16 @@ export default function DashboardSocio() {
               </div>
 
               <div className="socio-pc-modal-actions">
-                <button 
-                  type="button" 
-                  className="socio-pc-btn-secondary" 
+                <button
+                  type="button"
+                  className="socio-pc-btn-secondary"
                   onClick={() => setModalProgresoAbierto(false)}
                   disabled={guardandoProgreso}
                 >
                   Cancelar
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="socio-pc-btn-primary"
                   style={{ background: 'linear-gradient(135deg, #a855f7, #9333ea)', color: '#ffffff' }}
                   disabled={guardandoProgreso}
@@ -1179,9 +862,9 @@ export default function DashboardSocio() {
       {/* ================================================================
           MODAL: Ver Comprobante de Pago Rápido
           ================================================================ */}
-      {modalReciboAbierto && (
+      {modalReciboAbierto && ultimoPago && (
         <div className="socio-pc-modal-backdrop" onClick={() => setModalReciboAbierto(false)}>
-          <div className="socio-pc-modal-content" onClick={e => e.stopPropagation()}>
+          <div className="socio-pc-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="socio-pc-modal-header">
               <h3 className="socio-pc-modal-title">
                 <FaReceipt style={{ color: '#38bdf8' }} />
@@ -1201,35 +884,39 @@ export default function DashboardSocio() {
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '14px' }}>
                 <span style={{ color: '#94a3b8', fontSize: '13px' }}>Monto Pagado</span>
                 <span style={{ color: '#22c55e', fontWeight: '800', fontSize: '16px' }}>
-                  ${(ultimoPago?.monto || 12500).toLocaleString('es-AR')} ARS
+                  ${Number(ultimoPago.monto || 0).toLocaleString('es-AR')} ARS
                 </span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '14px' }}>
                 <span style={{ color: '#94a3b8', fontSize: '13px' }}>Fecha de Operación</span>
-                <span style={{ color: '#ffffff', fontSize: '13.5px' }}>{ultimoPago?.fecha_pago || '15 May 2026'}</span>
+                <span style={{ color: '#ffffff', fontSize: '13.5px' }}>
+                  {ultimoPago.fecha_pago ? formatFechaArgentina(ultimoPago.fecha_pago) : '—'}
+                </span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '14px' }}>
                 <span style={{ color: '#94a3b8', fontSize: '13px' }}>Método de Pago</span>
-                <span style={{ color: '#ffffff', fontSize: '13.5px' }}>{ultimoPago?.metodo_pago || 'Mercado Pago'}</span>
+                <span style={{ color: '#ffffff', fontSize: '13.5px' }}>{ultimoPago.metodo_pago || '—'}</span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#94a3b8', fontSize: '13px' }}>Estado</span>
-                <span style={{ color: '#22c55e', fontWeight: '700', fontSize: '13.5px' }}>● Acreditado</span>
+                <span style={{ color: '#22c55e', fontWeight: '700', fontSize: '13.5px' }}>
+                  ● {ultimoPago.estado || 'Acreditado'}
+                </span>
               </div>
             </div>
 
             <div className="socio-pc-modal-actions">
-              <button 
-                className="socio-pc-btn-secondary" 
+              <button
+                className="socio-pc-btn-secondary"
                 onClick={() => setModalReciboAbierto(false)}
               >
                 Cerrar
               </button>
-              <button 
-                className="socio-pc-btn-primary" 
+              <button
+                className="socio-pc-btn-primary"
                 onClick={() => {
                   setModalReciboAbierto(false);
                   navigate('/membresia-socio');
@@ -1242,7 +929,6 @@ export default function DashboardSocio() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
