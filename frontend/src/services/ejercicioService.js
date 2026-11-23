@@ -1,96 +1,70 @@
-/**
- * =========================================================================================
- * ARCHIVO: ejercicioService.js
- * RUTA: frontend/src/services/ejercicioService.js
- * PROYECTO: GYMTRACK - Frontend
- * DESCRIPCIÓN: Servicio para la gestión del catálogo de ejercicios desde el panel del Dueño.
- * =========================================================================================
- */
+// ==============================================================================
+// SERVICIO DE EJERCICIOS DEL GIMNASIO (`public.ejercicio_gimnasio`)
+// ==============================================================================
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+import { apiRequest } from './apiClient';
 
-const getHeaders = () => {
-  const token = localStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`
-  };
-};
+export async function getEjerciciosDueno({
+  grupo_muscular = '',
+  search = '',
+  id_gimnasio = null,
+  solo_activos = false,
+  limit = 200,
+  signal
+} = {}) {
+  const safeLimit = Math.min(200, Math.max(1, Number(limit) || 200));
+  const params = new URLSearchParams({ limit: String(safeLimit) });
+  if (grupo_muscular && grupo_muscular !== 'todos') params.append('grupo_muscular', grupo_muscular);
+  if (search && search.trim()) params.append('search', search.trim());
+  if (id_gimnasio) params.append('id_gimnasio', String(id_gimnasio));
+  if (solo_activos) params.append('solo_activos', 'true');
 
-/**
- * Consultar catálogo de ejercicios del gimnasio (excluye ejercicios personales de socios)
- */
-export async function getEjerciciosDueno({ grupo_muscular = '', search = '' } = {}) {
-  const params = new URLSearchParams({ limit: 'all' });
-  if (grupo_muscular && grupo_muscular !== 'todos') {
-    params.append('grupo_muscular', grupo_muscular);
-  }
-  if (search && search.trim()) {
-    params.append('search', search.trim());
-  }
-
-  const response = await fetch(`${API_URL}/ejercicios?${params.toString()}`, {
-    headers: getHeaders()
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.error || data.detail || 'Error al obtener el catálogo de ejercicios.');
-  }
-
-  const lista = Array.isArray(data) ? data : data.datos || [];
-  return lista.filter((ej) => !ej.id_socio);
+  const data = await apiRequest(`/ejercicios?${params.toString()}`, { signal });
+  return Array.isArray(data) ? data : data.datos || [];
 }
 
-/**
- * Crear un ejercicio oficial asignado al gimnasio del dueño
- */
 export async function crearEjercicioDueno(ejercicioData) {
-  const response = await fetch(`${API_URL}/ejercicios`, {
+  const payload = {
+    nombre: String(ejercicioData.nombre || '').trim(),
+    descripcion: ejercicioData.descripcion ? String(ejercicioData.descripcion).trim() : null,
+    grupo_muscular: ejercicioData.grupo_muscular ? String(ejercicioData.grupo_muscular).trim() : null,
+    dificultad: ejercicioData.dificultad ? String(ejercicioData.dificultad).trim() : null,
+    estado: ejercicioData.estado !== undefined ? Boolean(ejercicioData.estado) : true
+  };
+  if (ejercicioData.id_gimnasio != null && ejercicioData.id_gimnasio !== '') {
+    payload.id_gimnasio = Number(ejercicioData.id_gimnasio);
+  }
+
+  const data = await apiRequest('/ejercicios', {
     method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify(ejercicioData)
+    body: payload
   });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.error || data.detail || data.message || 'Error al crear el ejercicio.');
-  }
-
   return data.ejercicio || data;
 }
 
-/**
- * Actualizar un ejercicio del gimnasio
- */
-export async function actualizarEjercicioDueno(id, ejercicioData) {
-  const response = await fetch(`${API_URL}/ejercicios/${id}`, {
+export async function actualizarEjercicioDueno(id_ejercicio_gimnasio, ejercicioData) {
+  const payload = {};
+  if (ejercicioData.nombre !== undefined) payload.nombre = String(ejercicioData.nombre).trim();
+  if (ejercicioData.descripcion !== undefined) {
+    payload.descripcion = ejercicioData.descripcion ? String(ejercicioData.descripcion).trim() : null;
+  }
+  if (ejercicioData.grupo_muscular !== undefined) {
+    payload.grupo_muscular = ejercicioData.grupo_muscular ? String(ejercicioData.grupo_muscular).trim() : null;
+  }
+  if (ejercicioData.dificultad !== undefined) {
+    payload.dificultad = ejercicioData.dificultad ? String(ejercicioData.dificultad).trim() : null;
+  }
+  if (ejercicioData.estado !== undefined) payload.estado = Boolean(ejercicioData.estado);
+
+  const data = await apiRequest(`/ejercicios/${id_ejercicio_gimnasio}`, {
     method: 'PUT',
-    headers: getHeaders(),
-    body: JSON.stringify(ejercicioData)
+    body: payload
   });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.error || data.detail || data.message || 'Error al actualizar el ejercicio.');
-  }
-
   return data.ejercicio || data;
 }
 
-/**
- * Eliminar un ejercicio del gimnasio
- */
-export async function eliminarEjercicioDueno(id) {
-  const response = await fetch(`${API_URL}/ejercicios/${id}`, {
-    method: 'DELETE',
-    headers: getHeaders()
+export async function eliminarEjercicioDueno(id_ejercicio_gimnasio) {
+  return apiRequest(`/ejercicios/${id_ejercicio_gimnasio}`, {
+    method: 'DELETE'
   });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.error || data.detail || data.message || 'Error al eliminar el ejercicio.');
-  }
-
-  return data;
 }

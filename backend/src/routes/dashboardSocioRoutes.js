@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { 
-  getDashboardSocio, 
-  registrarCheckinSocio, 
-  registrarProgresoSocio 
+const {
+  getDashboardSocio,
+  registrarCheckinSocio,
+  registrarCheckoutSocio,
+  registrarProgresoSocio
 } = require('../controllers/dashboardSocioController');
 const {
   getMiMembresia,
@@ -20,32 +21,30 @@ const {
   actualizarEjercicioSocio,
   eliminarEjercicioSocio
 } = require('../controllers/socioEjercicioController');
-const { verifyToken } = require('../middlewares/authMiddleware');
+const { verifyToken, requireRoles } = require('../middlewares/authMiddleware');
 
-// Endpoint público para webhooks de pasarelas de pago (Mercado Pago / Ualá)
+// Webhook público de pasarelas de pago
 router.post('/pagos/webhook', webhookPago);
 
-// Rutas que requieren autenticación JWT obligatoria del socio
+// Rutas protegidas para socios autenticados
 router.use(verifyToken);
+router.use(requireRoles('socio'));
 
-// Dashboard general del socio
+// Dashboard, check-in/out y progreso del socio
 router.get('/dashboard', getDashboardSocio);
 router.post('/checkin', registrarCheckinSocio);
+router.post('/checkout', registrarCheckoutSocio);
 router.post('/progreso', registrarProgresoSocio);
 
-// Módulo de Mi Membresía del socio
+// Membresías y pagos multigimnasio del socio
 router.get('/membresia', getMiMembresia);
 router.get('/planes-disponibles', getPlanesDisponibles);
 router.post('/membresia/actualizar', solicitarActualizacion);
-
-// Integración y registro de pagos con Mercado Pago y Ualá
 router.post('/pagos/iniciar', iniciarPago);
 router.post('/pagos/confirmar', confirmarPago);
 router.get('/pagos/verificar-mp', verificarPagoMercadoPago);
 
-// ==============================================================================
-// #32 — ENDPOINTS DE EJERCICIOS DEL SOCIO (GIMNASIO + PERSONALIZADOS)
-// ==============================================================================
+// Ejercicios del gimnasio seleccionado + personales
 router.get('/ejercicios', getEjerciciosSocio);
 router.post('/ejercicios', crearEjercicioSocio);
 router.put('/ejercicios/:id', actualizarEjercicioSocio);

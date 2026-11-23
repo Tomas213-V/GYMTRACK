@@ -1,275 +1,192 @@
-/**
- * =========================================================================================
- * ARCHIVO: membresiaAdminService.js
- * PROYECTO: GYMTRACK - Frontend
- * DESCRIPCIÓN: Servicio para la configuración de planes de precios y asignación de suscripciones.
- * =========================================================================================
- * 
- * GUÍA PASO A PASO PARA EL DESARROLLADOR:
- * 1. Catálogo de Planes: Permite al dueño crear planes (ej: "Mensual Pase Libre", "Trimestral Musculación")
- *    especificando precio, duración en días y estado.
- * 2. Suscripciones de Socios: Gestiona la asignación de planes a alumnos específicos, registrando
- *    fecha de inicio, vencimiento automático y estados (activa, vencida, cancelada).
- * 3. Operaciones CRUD completas tanto para planes como para suscripciones.
- */
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-
-/**
- * Obtener headers comunes con token JWT
- */
-const getHeaders = () => {
-  const token = localStorage.getItem('token');
-  const headers = {
-    'Content-Type': 'application/json'
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-};
-
-
 // ==============================================================================
-// 1. GESTIÓN DE PLANES DE MEMBRESÍA (CATÁLOGO)
+// SERVICIO DE PLANES (membresia_gimnasio) Y CONTRATACIONES (membresia_socio)
+// Fuente de verdad: routers/planes_membresia.py y routers/membresias.py
 // ==============================================================================
 
-/**
- * Obtener todos los planes de membresía del gimnasio
- * @param {string} estado - 'activo', 'inactivo', 'todos'
- */
-export async function getPlanesMembresia(estado = 'todos') {
-  try {
-    const query = estado ? `?estado=${encodeURIComponent(estado)}` : '';
-    const res = await fetch(`${API_URL}/planes-membresia${query}`, {
-      headers: getHeaders()
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error al obtener los planes de membresía.');
-    return data.planes || [];
-  } catch (error) {
-    console.error('Error en getPlanesMembresia:', error);
-    throw error;
-  }
+import { apiRequest } from './apiClient';
+
+export async function getPlanesMembresia(estado = 'todos', { id_gimnasio = null, signal } = {}) {
+  const params = new URLSearchParams();
+  if (estado && estado !== 'todos') params.append('estado', String(estado));
+  if (id_gimnasio) params.append('id_gimnasio', String(id_gimnasio));
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const data = await apiRequest(`/planes-membresia${qs}`, {
+    signal,
+    ...(id_gimnasio ? { gimnasioId: id_gimnasio } : {})
+  });
+  return data.planes || [];
 }
 
-/**
- * Obtener un plan específico por ID
- */
-export async function getPlanMembresiaById(id) {
-  try {
-    const res = await fetch(`${API_URL}/planes-membresia/${id}`, {
-      headers: getHeaders()
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error al obtener el plan.');
-    return data.plan;
-  } catch (error) {
-    console.error('Error en getPlanMembresiaById:', error);
-    throw error;
-  }
+export async function getCatalogoPlanes({ id_gimnasio = null, signal } = {}) {
+  const qs = id_gimnasio ? `?id_gimnasio=${encodeURIComponent(id_gimnasio)}` : '';
+  return apiRequest(`/planes-membresia/catalogo${qs}`, { signal });
 }
 
-/**
- * Crear un nuevo plan de membresía
- * @param {Object} planData - { nombre, precio, duracion_dias, estado }
- */
+export async function getPlanMembresiaById(id, { signal } = {}) {
+  const data = await apiRequest(`/planes-membresia/${id}`, { signal });
+  return data.plan;
+}
+
 export async function createPlanMembresia(planData) {
-  try {
-    const res = await fetch(`${API_URL}/planes-membresia`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(planData)
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error al crear el plan de membresía.');
-    return data;
-  } catch (error) {
-    console.error('Error en createPlanMembresia:', error);
-    throw error;
-  }
+  const payload = {
+    nombre: String(planData.nombre || '').trim(),
+    descripcion: planData.descripcion ? String(planData.descripcion).trim() : null,
+    precio: Number(planData.precio),
+    duracion_dias: Number(planData.duracion_dias),
+    limite_asistencias_semanales:
+      planData.limite_asistencias_semanales !== '' && planData.limite_asistencias_semanales != null
+        ? Number(planData.limite_asistencias_semanales)
+        : null,
+    limite_asistencias_totales:
+      planData.limite_asistencias_totales !== '' && planData.limite_asistencias_totales != null
+        ? Number(planData.limite_asistencias_totales)
+        : null,
+    estado: planData.estado !== undefined ? Boolean(planData.estado) : true
+  };
+  return apiRequest('/planes-membresia', {
+    method: 'POST',
+    body: payload
+  });
 }
 
-/**
- * Actualizar un plan de membresía existente
- * @param {number|string} id
- * @param {Object} planData - { nombre, precio, duracion_dias, estado }
- */
 export async function updatePlanMembresia(id, planData) {
-  try {
-    const res = await fetch(`${API_URL}/planes-membresia/${id}`, {
-      method: 'PUT',
-      headers: getHeaders(),
-      body: JSON.stringify(planData)
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error al actualizar el plan.');
-    return data;
-  } catch (error) {
-    console.error('Error en updatePlanMembresia:', error);
-    throw error;
-  }
+  const payload = {
+    ...(planData.nombre !== undefined ? { nombre: String(planData.nombre).trim() } : {}),
+    ...(planData.descripcion !== undefined
+      ? { descripcion: planData.descripcion ? String(planData.descripcion).trim() : null }
+      : {}),
+    ...(planData.precio !== undefined ? { precio: Number(planData.precio) } : {}),
+    ...(planData.duracion_dias !== undefined ? { duracion_dias: Number(planData.duracion_dias) } : {}),
+    ...(planData.limite_asistencias_semanales !== undefined
+      ? {
+          limite_asistencias_semanales:
+            planData.limite_asistencias_semanales !== '' && planData.limite_asistencias_semanales != null
+              ? Number(planData.limite_asistencias_semanales)
+              : null
+        }
+      : {}),
+    ...(planData.limite_asistencias_totales !== undefined
+      ? {
+          limite_asistencias_totales:
+            planData.limite_asistencias_totales !== '' && planData.limite_asistencias_totales != null
+              ? Number(planData.limite_asistencias_totales)
+              : null
+        }
+      : {}),
+    ...(planData.estado !== undefined ? { estado: Boolean(planData.estado) } : {})
+  };
+  return apiRequest(`/planes-membresia/${id}`, {
+    method: 'PUT',
+    body: payload
+  });
 }
 
-/**
- * Desactivar un plan de membresía (baja lógica)
- */
+export async function cambiarEstadoPlanMembresia(id, estado) {
+  return apiRequest(`/planes-membresia/${id}/estado`, {
+    method: 'PATCH',
+    body: { estado: Boolean(estado) }
+  });
+}
+
 export async function deshabilitarPlanMembresia(id) {
-  try {
-    const res = await fetch(`${API_URL}/planes-membresia/${id}/desactivar`, {
-      method: 'PATCH',
-      headers: getHeaders()
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error al desactivar el plan.');
-    return data;
-  } catch (error) {
-    console.error('Error en deshabilitarPlanMembresia:', error);
-    throw error;
-  }
+  return apiRequest(`/planes-membresia/${id}/desactivar`, {
+    method: 'PATCH'
+  });
 }
 
-/**
- * Eliminar un plan de membresía
- */
 export async function deletePlanMembresia(id) {
-  try {
-    const res = await fetch(`${API_URL}/planes-membresia/${id}`, {
-      method: 'DELETE',
-      headers: getHeaders()
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error al eliminar el plan.');
-    return data;
-  } catch (error) {
-    console.error('Error en deletePlanMembresia:', error);
-    throw error;
-  }
+  return apiRequest(`/planes-membresia/${id}`, {
+    method: 'DELETE'
+  });
 }
 
-// ==============================================================================
-// 2. GESTIÓN DE MEMBRESÍAS ASIGNADAS A SOCIOS
-// ==============================================================================
+export async function getMembresiasSocios({ estado = 'todos', id_socio = '', signal } = {}) {
+  const params = new URLSearchParams();
+  if (estado && estado !== 'todos') params.append('estado', String(estado));
+  if (id_socio) params.append('id_socio', String(id_socio));
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const data = await apiRequest(`/membresias${qs}`, { signal });
+  return data.membresias || [];
+}
 
-/**
- * Obtener listado de membresías asignadas a socios con filtros opcionales
- * @param {Object} params - { estado, id_socio }
- */
-export async function getMembresiasSocios({ estado = 'todos', id_socio = '' } = {}) {
-  try {
-    const params = new URLSearchParams();
-    if (estado && estado !== 'todos') params.append('estado', estado);
-    if (id_socio) params.append('id_socio', id_socio);
-
-    const query = params.toString() ? `?${params.toString()}` : '';
-    const res = await fetch(`${API_URL}/membresias${query}`, {
-      headers: getHeaders()
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error al consultar membresías.');
-    return data.membresias || [];
-  } catch (error) {
-    console.error('Error en getMembresiasSocios:', error);
-    throw error;
-  }
+export async function getMembresiaSocioById(id, { signal } = {}) {
+  const data = await apiRequest(`/membresias/${id}`, { signal });
+  return data.membresia;
 }
 
 /**
- * Obtener una membresía de socio por ID
- */
-export async function getMembresiaSocioById(id) {
-  try {
-    const res = await fetch(`${API_URL}/membresias/${id}`, {
-      headers: getHeaders()
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error al obtener la membresía.');
-    return data.membresia;
-  } catch (error) {
-    console.error('Error en getMembresiaSocioById:', error);
-    throw error;
-  }
-}
-
-/**
- * Asignar / Registrar una nueva membresía a un socio
- * @param {Object} membData - { id_socio, id_plan_membresia, fecha_inicio, dias_adicionales, estado, precio }
+ * Contrata una membresía (MembresiaCreate con extra="forbid").
+ * El precio y duración los resuelve el backend desde public.membresia_gimnasio.
  */
 export async function createMembresiaSocio(membData) {
-  try {
-    const res = await fetch(`${API_URL}/membresias`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(membData)
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error al asignar la membresía.');
-    return data;
-  } catch (error) {
-    console.error('Error en createMembresiaSocio:', error);
-    throw error;
-  }
+  const estadoInicial = String(membData.estado || 'activa').toLowerCase() === 'pendiente' ? 'pendiente' : 'activa';
+  const payload = {
+    ...(membData.id_socio ? { id_socio: Number(membData.id_socio) } : {}),
+    id_membresia_gimnasio: Number(membData.id_membresia_gimnasio),
+    ...(membData.id_gimnasio ? { id_gimnasio: Number(membData.id_gimnasio) } : {}),
+    ...(membData.fecha_inicio ? { fecha_inicio: String(membData.fecha_inicio).split('T')[0] } : {}),
+    estado: estadoInicial,
+    registrar_pago: Boolean(membData.registrar_pago),
+    ...(membData.metodo_pago ? { metodo_pago: String(membData.metodo_pago).toLowerCase() } : {}),
+    ...(membData.estado_pago ? { estado_pago: String(membData.estado_pago).toLowerCase() } : {}),
+    ...(membData.comprobante ? { comprobante: String(membData.comprobante).trim() } : {})
+  };
+  return apiRequest('/membresias', {
+    method: 'POST',
+    body: payload
+  });
 }
 
 /**
- * Actualizar una membresía de socio (fechas, plan, precio, estado)
- * @param {number|string} id
- * @param {Object} updateData - { estado, fecha_inicio, fecha_vencimiento, dias_extension, precio, id_plan_membresia }
+ * Renueva creando una nueva fila histórica (POST /api/membresias/renovar).
+ */
+export async function renovarMembresiaSocio(membData) {
+  const estadoInicial = String(membData.estado || 'activa').toLowerCase() === 'pendiente' ? 'pendiente' : 'activa';
+  const payload = {
+    ...(membData.id_socio ? { id_socio: Number(membData.id_socio) } : {}),
+    id_membresia_gimnasio: Number(membData.id_membresia_gimnasio),
+    ...(membData.id_gimnasio ? { id_gimnasio: Number(membData.id_gimnasio) } : {}),
+    ...(membData.fecha_inicio ? { fecha_inicio: String(membData.fecha_inicio).split('T')[0] } : {}),
+    estado: estadoInicial,
+    registrar_pago: Boolean(membData.registrar_pago),
+    ...(membData.metodo_pago ? { metodo_pago: String(membData.metodo_pago).toLowerCase() } : {}),
+    ...(membData.estado_pago ? { estado_pago: String(membData.estado_pago).toLowerCase() } : {}),
+    ...(membData.comprobante ? { comprobante: String(membData.comprobante).trim() } : {})
+  };
+  return apiRequest('/membresias/renovar', {
+    method: 'POST',
+    body: payload
+  });
+}
+
+/**
+ * Actualiza únicamente campos mutables de membresia_socio (estado y/o fecha_vencimiento).
+ * Respeta MembresiaUpdate (extra="forbid" e inmutabilidad de precio/plan/fecha_inicio).
  */
 export async function updateMembresiaSocio(id, updateData) {
-  try {
-    const res = await fetch(`${API_URL}/membresias/${id}`, {
-      method: 'PATCH',
-      headers: getHeaders(),
-      body: JSON.stringify(updateData)
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error al actualizar la membresía.');
-    return data;
-  } catch (error) {
-    console.error('Error en updateMembresiaSocio:', error);
-    throw error;
-  }
+  const payload = {
+    ...(updateData.estado !== undefined ? { estado: String(updateData.estado).toLowerCase() } : {}),
+    ...(updateData.fecha_vencimiento
+      ? { fecha_vencimiento: String(updateData.fecha_vencimiento).split('T')[0] }
+      : {})
+  };
+  return apiRequest(`/membresias/${id}`, {
+    method: 'PATCH',
+    body: payload
+  });
 }
 
-/**
- * Cancelar una membresía de socio
- */
 export async function cancelarMembresiaSocio(id) {
   return updateMembresiaSocio(id, { estado: 'cancelada' });
 }
 
-/**
- * Eliminar una membresía de socio
- */
 export async function deleteMembresiaSocio(id) {
-  try {
-    const res = await fetch(`${API_URL}/membresias/${id}`, {
-      method: 'DELETE',
-      headers: getHeaders()
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error al eliminar la membresía.');
-    return data;
-  } catch (error) {
-    console.error('Error en deleteMembresiaSocio:', error);
-    throw error;
-  }
+  return apiRequest(`/membresias/${id}`, {
+    method: 'DELETE'
+  });
 }
 
-/**
- * Obtener socios simples para dropdown de asignación de membresías
- */
-export async function getSociosDropdown() {
-  try {
-    const res = await fetch(`${API_URL}/socios?limit=all`, {
-      headers: getHeaders()
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Error al cargar socios.');
-    return data.socios || [];
-  } catch (error) {
-    console.error('Error en getSociosDropdown:', error);
-    return [];
-  }
+export async function getSociosDropdown({ signal } = {}) {
+  const data = await apiRequest('/socios?limit=all', { signal });
+  return data.socios || [];
 }

@@ -14,13 +14,16 @@
  * 4. PASO 4 (Credencial y Pase): Despliega un comprobante con el DNI formateado para presentar en molinetes/recepción.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
 import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
-import { 
-  fetchHistorialPorSocio, 
-  registrarAsistencia 
+import { useGymContext } from '../../context/GymContext';
+import {
+  fetchMisAsistencias,
+  registrarAsistencia,
+  checkoutAsistencia
 } from '../../services/asistenciaService';
+import { getSucursales } from '../../services/sucursalService';
 import { fetchDashboardSocio } from '../../services/dashboardSocioService';
 
 import {
@@ -40,7 +43,9 @@ import {
   FaExclamationTriangle,
   FaInfoCircle,
   FaCheck,
-  FaBolt
+  FaBolt,
+  FaMapMarkerAlt,
+  FaSignOutAlt
 } from 'react-icons/fa';
 
 import './asistencia-socio.css';
@@ -63,21 +68,22 @@ const formatDni = (dni) => {
 };
 
 export default function AsistenciaSocio() {
-
+  const { usuario, gimnasioActivo, gimnasioActivoId, contextVersion } = useGymContext();
 
   // --------------------------------------------------------------------------
   // Estados de Usuario & Perfil
   // --------------------------------------------------------------------------
-  const [socio, setSocio] = useState(null);
-  const [gimnasio, setGimnasio] = useState({
-    nombre: 'GymTrack Fitness Center',
-    direccion: 'Sede Central'
-  });
+  const [socio, setSocio] = useState(usuario || null);
+  const [gimnasio, setGimnasio] = useState(gimnasioActivo || { nombre: 'Sin gimnasio seleccionado' });
+  const [sucursales, setSucursales] = useState([]);
+  const [sucursalSeleccionada, setSucursalSeleccionada] = useState('');
+  const [verTodosGimnasios, setVerTodosGimnasios] = useState(false);
 
   // --------------------------------------------------------------------------
   // Estados de Asistencias & Control de UI
   // --------------------------------------------------------------------------
   const [asistencias, setAsistencias] = useState([]);
+  const [asistenciaAbierta, setAsistenciaAbierta] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
   const [registrando, setRegistrando] = useState(false);
@@ -93,8 +99,8 @@ export default function AsistenciaSocio() {
   const porPagina = 8;
 
   // Modales
-  const [modalConfirmacion, setModalConfirmacion] = useState(null); // datos de asistencia confirmada
-  const [modalComprobante, setModalComprobante] = useState(null); // comprobante seleccionado
+  const [modalConfirmacion, setModalConfirmacion] = useState(null);
+  const [modalComprobante, setModalComprobante] = useState(null);
 
   // Reloj en tiempo real
   useEffect(() => {
@@ -103,57 +109,61 @@ export default function AsistenciaSocio() {
   }, []);
 
   // --------------------------------------------------------------------------
-  // Carga inicial de datos
+  // Carga inicial y reactiva ante cambio de gimnasio
   // --------------------------------------------------------------------------
-  const cargarDatos = async (mostrarSpinner = true) => {
+  const cargarDatos = useCallback(async (mostrarSpinner = true) => {
     if (mostrarSpinner) setCargando(true);
     else setRefrescando(true);
 
     try {
-      // 1. Obtener socio autenticado desde localStorage
-      const socioStorage = localStorage.getItem('socio');
-      const usuarioStorage = localStorage.getItem('usuario');
-      let socioObj = null;
-
-      if (socioStorage) {
-        socioObj = JSON.parse(socioStorage);
-      } else if (usuarioStorage) {
-        socioObj = JSON.parse(usuarioStorage);
-      }
-
-      const idSocio = socioObj?.id_socio || socioObj?.id;
-
+      const idSocio = usuario?.id_socio;
       if (!idSocio) {
         setAlerta({
           tipo: 'error',
           mensaje: 'No se encontraron las credenciales de socio. Por favor, iniciá sesión nuevamente.'
         });
-        setCargando(false);
-        setRefrescando(false);
         return;
       }
 
-      setSocio(socioObj);
+      setSocio(usuario);
+      setGimnasio(gimnasioActivo || { nombre: 'Sin gimnasio activo' });
+      setAlerta(null);
 
-      // 2. Obtener historial individual de asistencias
-      const dataHistorial = await fetchHistorialPorSocio(idSocio);
+      // 1. Obtener historial de asistencias (filtrado por gimnasio activo o todos)
+      const dataHistorial = await fetchMisAsistencias({
+        id_gimnasio: verTodosGimnasios ? null : (gimnasioActivoId || null)
+      });
       const lista = dataHistorial.asistencias || [];
       setAsistencias(lista);
 
-      // 3. Obtener información complementaria del dashboard de socio (opcional)
-      try {
-        const dataDash = await fetchDashboardSocio();
-        if (dataDash?.gimnasio) {
-          setGimnasio(dataDash.gimnasio);
-        }
-        if (dataDash?.socio) {
-          setSocio((prev) => ({ ...prev, ...dataDash.socio }));
-        }
-      } catch (errDash) {
-        // Fallback no crítico
-        console.warn('Dashboard socio info no disponible en segundo plano:', errDash.message);
-      }
+      // Detectar asistencia abierta (presente sin salida) en el gimnasio activo
+      const abierta = lista.find((a) => {
+        if (a.estado !== 'presente' || a.hora_salida) return false;
+        if (!gimnasioActivoId) return true;
+        const gymItem = a.sucursal?.id_gimnasio ?? a.sucursal?.gimnasio?.id_gimnasio;
+        return !gymItem || String(gymItem) === String(gimnasioActivoId);
+      }) || null;
+      setAsistenciaAbierta(abierta);
 
+      // 2. Si hay gimnasio activo, cargar sucursales activas e info del dashboard
+      if (gimnasioActivoId) {
+        const [sucList, dashData] = await Promise.all([
+          getSucursales({ estado: 'true' }).catch(() => []),
+          fetchDashboardSocio().catch(() => null)
+        ]);
+
+        setSucursales(sucList || []);
+        setSucursalSeleccionada((prev) => {
+          if (prev && sucList.some((s) => String(s.id_sucursal) === String(prev))) return prev;
+          return sucList?.[0]?.id_sucursal ? String(sucList[0].id_sucursal) : '';
+        });
+
+        if (dashData?.gimnasio_activo) setGimnasio(dashData.gimnasio_activo);
+        if (dashData?.socio) setSocio((prev) => ({ ...prev, ...dashData.socio }));
+      } else {
+        setSucursales([]);
+        setSucursalSeleccionada('');
+      }
     } catch (err) {
       console.error('Error al cargar asistencias del socio:', err);
       setAlerta({
@@ -164,18 +174,18 @@ export default function AsistenciaSocio() {
       setCargando(false);
       setRefrescando(false);
     }
-  };
+  }, [usuario, gimnasioActivo, gimnasioActivoId, verTodosGimnasios]);
 
   useEffect(() => {
     cargarDatos(true);
-  }, []);
+  }, [cargarDatos, contextVersion]);
 
   // --------------------------------------------------------------------------
   // Cálculos de Métricas & Estado de Hoy
   // --------------------------------------------------------------------------
   const {
     yaRegistradoHoy,
-    ultimaAsistenciaHoy,
+    ingresosHoyGymCount,
     asistenciasMesActual,
     totalAsistencias,
     rachaDias,
@@ -184,11 +194,15 @@ export default function AsistenciaSocio() {
   } = useMemo(() => {
     const hoyISO = getFechaLocalISO(new Date());
 
-    // 1. Verificar si ya registró hoy
-    const ingresoHoy = asistencias.find((a) => {
-      if (!a.hora_ingreso) return false;
-      return getFechaLocalISO(a.hora_ingreso) === hoyISO;
+    // 1. Verificar ingresos válidos de hoy (regla: máx. 3 por día y por gimnasio, sumando sucursales)
+    const ingresosHoyValidos = asistencias.filter((a) => {
+      if (!a.hora_ingreso || a.estado === 'anulada') return false;
+      if (getFechaLocalISO(a.hora_ingreso) !== hoyISO) return false;
+      if (!gimnasioActivoId) return true;
+      const gymItem = a.sucursal?.id_gimnasio ?? a.sucursal?.gimnasio?.id_gimnasio;
+      return !gymItem || String(gymItem) === String(gimnasioActivoId);
     });
+    const ingresoHoy = ingresosHoyValidos[0] || null;
 
     // 2. Contar asistencias del mes actual (en horario Argentina)
     const mesActualPrefix = hoyISO.slice(0, 7); // YYYY-MM
@@ -264,6 +278,7 @@ export default function AsistenciaSocio() {
 
     return {
       yaRegistradoHoy: Boolean(ingresoHoy),
+      ingresosHoyGymCount: ingresosHoyValidos.length,
       ultimaAsistenciaHoy: ingresoHoy || null,
       asistenciasMesActual: asistenciasMes,
       totalAsistencias: asistencias.length,
@@ -271,7 +286,7 @@ export default function AsistenciaSocio() {
       diasSemana: semana,
       ultimaAsistenciaGeneral: asistencias.length > 0 ? asistencias[0] : null
     };
-  }, [asistencias]);
+  }, [asistencias, gimnasioActivoId]);
 
   // --------------------------------------------------------------------------
   // Filtrado y Paginación del Historial
@@ -310,13 +325,21 @@ export default function AsistenciaSocio() {
         }).toLowerCase();
         const horaStr = formatHoraArgentina(a.hora_ingreso).toLowerCase();
         const estadoStr = (a.estado || '').toLowerCase();
+        const gymStr = (a.gimnasio?.nombre || gimnasio?.nombre || '').toLowerCase();
+        const sucStr = (a.sucursal?.direccion || a.sucursal?.descripcion || '').toLowerCase();
 
-        return fechaStr.includes(query) || horaStr.includes(query) || estadoStr.includes(query);
+        return (
+          fechaStr.includes(query) ||
+          horaStr.includes(query) ||
+          estadoStr.includes(query) ||
+          gymStr.includes(query) ||
+          sucStr.includes(query)
+        );
       });
     }
 
     return lista;
-  }, [asistencias, filtroPeriodo, busqueda]);
+  }, [asistencias, filtroPeriodo, busqueda, gimnasio]);
 
   const totalPaginas = Math.max(1, Math.ceil(asistenciasFiltradas.length / porPagina));
   const asistenciasPaginadas = useMemo(() => {
@@ -325,23 +348,39 @@ export default function AsistenciaSocio() {
   }, [asistenciasFiltradas, paginaActual]);
 
   // --------------------------------------------------------------------------
-  // Registrar Asistencia / Check-In del Socio
+  // Registrar Asistencia (Ingreso) y Salida (Check-out) del Socio
   // --------------------------------------------------------------------------
   const handleRegistrarAsistencia = async () => {
-    if (yaRegistradoHoy) return;
+    if (asistenciaAbierta) return;
     if (!socio) return;
+
+    if (!gimnasioActivoId) {
+      setAlerta({
+        tipo: 'error',
+        mensaje: 'Seleccioná un gimnasio en el encabezado o contratá una membresía antes de registrar tu ingreso.'
+      });
+      return;
+    }
+
+    if (!sucursalSeleccionada) {
+      setAlerta({
+        tipo: 'error',
+        mensaje: 'Seleccioná la sucursal donde vas a entrenar para registrar tu ingreso.'
+      });
+      return;
+    }
 
     try {
       setRegistrando(true);
       setAlerta(null);
 
-      const idSocio = socio.id_socio || socio.id;
-      const dni = socio.dni;
+      // El backend resuelve id_socio desde el token autenticado y valida la membresía dinámicamente
+      const data = await registrarAsistencia({
+        id_sucursal: Number(sucursalSeleccionada)
+      });
 
-      const data = await registrarAsistencia({ id_socio: idSocio, dni });
-
-      // Modal con confirmación visual
-      const rawHora = data.asistencia?.hora_ingreso;
+      const rawHora = data.asistencia?.hora_ingreso || new Date().toISOString();
+      const sucObj = sucursales.find((s) => String(s.id_sucursal) === String(sucursalSeleccionada));
 
       setModalConfirmacion({
         mensaje: data.mensaje || '¡Tu asistencia se registró exitosamente!',
@@ -352,17 +391,36 @@ export default function AsistenciaSocio() {
           year: 'numeric'
         }),
         hora: formatHoraArgentina(rawHora),
-        id_asistencia: data.asistencia?.id_asistencia || Math.floor(1000 + Math.random() * 9000)
+        sucursal: sucObj?.direccion || data.asistencia?.sucursal?.direccion || 'Sucursal seleccionada',
+        id_asistencia: data.asistencia?.id_asistencia_socio || data.asistencia?.id_asistencia || '-'
       });
 
-      // Refrescar asistencias desde el servidor
       await cargarDatos(false);
-
     } catch (err) {
       console.error('Error al registrar asistencia:', err);
       setAlerta({
         tipo: 'error',
         mensaje: err.message || 'No se pudo completar el registro de asistencia. Intentá nuevamente.'
+      });
+    } finally {
+      setRegistrando(false);
+    }
+  };
+
+  const handleRegistrarSalida = async () => {
+    if (!asistenciaAbierta) return;
+    const idAsistencia = asistenciaAbierta.id_asistencia_socio || asistenciaAbierta.id_asistencia;
+    if (!idAsistencia) return;
+
+    try {
+      setRegistrando(true);
+      setAlerta(null);
+      await checkoutAsistencia(idAsistencia);
+      await cargarDatos(false);
+    } catch (err) {
+      setAlerta({
+        tipo: 'error',
+        mensaje: err.message || 'No se pudo registrar la salida.'
       });
     } finally {
       setRegistrando(false);
@@ -378,15 +436,27 @@ export default function AsistenciaSocio() {
       return;
     }
 
-    const headers = ['ID Asistencia', 'Fecha', 'Hora de Ingreso', 'Día', 'Estado', 'Socio', 'DNI'];
+    const headers = ['ID Asistencia', 'Fecha', 'Ingreso', 'Salida', 'Gimnasio', 'Sucursal', 'Estado', 'Socio', 'DNI'];
     const rows = asistencias.map((a) => {
       const fecha = formatFechaArgentina(a.hora_ingreso);
       const hora = formatHoraArgentina(a.hora_ingreso);
-      const dia = formatFechaArgentina(a.hora_ingreso, { weekday: 'long' });
+      const salida = a.hora_salida ? formatHoraArgentina(a.hora_salida) : '-';
+      const gymNombre = a.gimnasio?.nombre || gimnasio?.nombre || '-';
+      const sucDir = a.sucursal?.direccion || '-';
       const nombreCompleto = socio ? `${socio.nombre || ''} ${socio.apellido || ''}`.trim() : 'Socio';
       const dni = socio?.dni || '-';
-      const estado = a.estado || 'Presente';
-      return [a.id_asistencia || '-', fecha, hora, `"${dia}"`, estado, `"${nombreCompleto}"`, dni];
+      const estado = a.estado || 'presente';
+      return [
+        a.id_asistencia_socio || a.id_asistencia || '-',
+        fecha,
+        hora,
+        salida,
+        `"${gymNombre}"`,
+        `"${sucDir}"`,
+        estado,
+        `"${nombreCompleto}"`,
+        dni
+      ];
     });
 
     const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
@@ -598,51 +668,99 @@ export default function AsistenciaSocio() {
                 })}
               </p>
 
-              {/* Estado de Asistencia de Hoy */}
+              {/* Estado de Asistencia Activa / Selector de Sucursal */}
               {cargando ? (
                 <div className="asist-socio-loader-box">
                   <div className="asist-socio-spinner"></div>
                   <p>Verificando estado de ingreso...</p>
                 </div>
-              ) : yaRegistradoHoy ? (
+              ) : asistenciaAbierta ? (
                 <div className="asist-socio-today-registered">
                   <div className="asist-socio-check-glow">
                     <FaCheckCircle />
                   </div>
                   <div className="asist-socio-today-info">
-                    <h3>¡Asistencia de Hoy Ya Registrada!</h3>
+                    <h3>Ingreso en Curso</h3>
                     <p>
-                      Marcaste tu ingreso hoy a las{' '}
+                      Ingresaste a las{' '}
                       <strong>
-                        {ultimaAsistenciaHoy?.hora_ingreso
-                          ? formatHoraArgentina(ultimaAsistenciaHoy.hora_ingreso)
+                        {asistenciaAbierta.hora_ingreso
+                          ? formatHoraArgentina(asistenciaAbierta.hora_ingreso)
                           : 'horario confirmado'} hs
                       </strong>
+                      {asistenciaAbierta.sucursal?.direccion
+                        ? ` en ${asistenciaAbierta.sucursal.direccion}`
+                        : ''}
+                      {asistenciaAbierta.sucursal?.gimnasio?.nombre || asistenciaAbierta.gimnasio?.nombre
+                        ? ` (${asistenciaAbierta.sucursal?.gimnasio?.nombre || asistenciaAbierta.gimnasio?.nombre})`
+                        : ''}
                     </p>
-                    <span className="asist-socio-today-note">
-                      El sistema habilita un (1) registro por día por socio. ¡Que tengas un excelente entrenamiento!
-                    </span>
+                    <button
+                      type="button"
+                      className="asist-socio-btn-checkin"
+                      style={{ marginTop: '12px', background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}
+                      disabled={registrando}
+                      onClick={handleRegistrarSalida}
+                    >
+                      <FaSignOutAlt />
+                      <span>{registrando ? 'Registrando salida...' : 'Registrar Mi Salida'}</span>
+                    </button>
                   </div>
                 </div>
               ) : (
                 <div className="asist-socio-today-pending">
                   <div className="asist-socio-pending-message">
                     <div className="asist-socio-pulse-dot"></div>
-                    <span>Listo para marcar tu ingreso a la sala de entrenamiento</span>
+                    <span>
+                      {yaRegistradoHoy
+                        ? 'Ya entrenaste hoy; podés registrar un nuevo ingreso eligiendo sucursal.'
+                        : 'Seleccioná la sucursal donde vas a entrenar y marcá tu ingreso'}
+                    </span>
                   </div>
+
+                  {sucursales.length > 0 ? (
+                    <div style={{ width: '100%', marginBottom: '12px' }}>
+                      <label
+                        htmlFor="asist-socio-sucursal"
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', color: '#94a3b8', marginBottom: '6px' }}
+                      >
+                        <FaMapMarkerAlt style={{ color: '#9EF01A' }} /> Sucursal de {gimnasio?.nombre || 'tu gimnasio'}
+                      </label>
+                      <select
+                        id="asist-socio-sucursal"
+                        className="asist-socio-select"
+                        style={{ width: '100%', padding: '10px 12px' }}
+                        value={sucursalSeleccionada}
+                        onChange={(e) => setSucursalSeleccionada(e.target.value)}
+                      >
+                        {sucursales.map((s) => (
+                          <option key={s.id_sucursal} value={s.id_sucursal}>
+                            {s.direccion}{s.descripcion ? ` — ${s.descripcion}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <p className="asist-socio-security-text" style={{ color: '#fbbf24' }}>
+                      <FaExclamationTriangle />{' '}
+                      {gimnasioActivoId
+                        ? 'Este gimnasio aún no tiene sucursales activas habilitadas.'
+                        : 'Contratá una membresía en un gimnasio para registrar ingresos.'}
+                    </p>
+                  )}
 
                   <button
                     type="button"
                     className="asist-socio-btn-checkin"
-                    disabled={registrando}
+                    disabled={registrando || !sucursalSeleccionada || !gimnasioActivoId}
                     onClick={handleRegistrarAsistencia}
                   >
                     <FaBolt className="asist-socio-btn-icon-bolt" />
-                    <span>{registrando ? 'Registrando ingreso...' : 'Marcar Mi Asistencia Ahora'}</span>
+                    <span>{registrando ? 'Registrando ingreso...' : 'Marcar Mi Ingreso Ahora'}</span>
                   </button>
 
                   <p className="asist-socio-security-text">
-                    <FaInfoCircle /> Tu DNI ({formatDni(socio?.dni)}) se utilizará para registrar la hora oficial en el sistema.
+                    <FaInfoCircle /> Ingresos de hoy en {gimnasio?.nombre || 'este gimnasio'}: <strong>{ingresosHoyGymCount}/3</strong> (límite diario por gimnasio sumando todas sus sucursales).
                   </p>
                 </div>
               )}
@@ -755,6 +873,21 @@ export default function AsistenciaSocio() {
                   )}
                 </div>
 
+                {/* Toggle Gimnasio Activo vs Todos */}
+                <div className="asist-socio-filter-group">
+                  <select
+                    value={verTodosGimnasios ? 'todos' : 'activo'}
+                    onChange={(e) => {
+                      setVerTodosGimnasios(e.target.value === 'todos');
+                      setPaginaActual(1);
+                    }}
+                    className="asist-socio-select"
+                  >
+                    <option value="activo">Gimnasio actual</option>
+                    <option value="todos">Todos mis gimnasios</option>
+                  </select>
+                </div>
+
                 {/* Filtro por Período */}
                 <div className="asist-socio-filter-group">
                   <FaFilter className="filter-icon" />
@@ -782,10 +915,10 @@ export default function AsistenciaSocio() {
                 <thead>
                   <tr>
                     <th>Fecha</th>
-                    <th>Hora de Ingreso</th>
-                    <th>Día</th>
+                    <th>Ingreso</th>
+                    <th>Salida</th>
                     <th>Estado</th>
-                    <th>Sede / Gimnasio</th>
+                    <th>Gimnasio / Sucursal</th>
                     <th style={{ textAlign: 'right' }}>Comprobante</th>
                   </tr>
                 </thead>
@@ -819,10 +952,13 @@ export default function AsistenciaSocio() {
                         year: 'numeric'
                       });
                       const horaFormateada = formatHoraArgentina(item.hora_ingreso);
+                      const horaSalidaFormateada = item.hora_salida ? formatHoraArgentina(item.hora_salida) : null;
                       const diaSemanaNombre = formatFechaArgentina(item.hora_ingreso, { weekday: 'long' });
+                      const nombreGymItem = item.sucursal?.gimnasio?.nombre || item.gimnasio?.nombre || gimnasio?.nombre || 'Gimnasio';
+                      const direccionSucItem = item.sucursal?.direccion || 'Sucursal';
 
                       return (
-                        <tr key={item.id_asistencia || index}>
+                        <tr key={item.id_asistencia_socio || item.id_asistencia || index}>
                           <td>
                             <div className="asist-socio-date-cell">
                               <span className="date-main">{fechaFormateada}</span>
@@ -836,16 +972,22 @@ export default function AsistenciaSocio() {
                           </td>
                           <td>
                             <span className="asist-socio-day-badge">
-                              {diaSemanaNombre.charAt(0).toUpperCase() + diaSemanaNombre.slice(1)}
+                              {horaSalidaFormateada ? `${horaSalidaFormateada} hs` : 'En curso'}
                             </span>
                           </td>
                           <td>
                             <span className="asist-socio-status-badge present">
-                              <FaCheck /> {item.estado || 'Presente'}
+                              <FaCheck /> {item.estado || 'presente'}
                             </span>
                           </td>
                           <td>
-                            <span className="asist-socio-gym-name">{gimnasio.nombre}</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              <span className="asist-socio-gym-name">{nombreGymItem}</span>
+                              <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                                <FaMapMarkerAlt style={{ marginRight: '4px', fontSize: '10px' }} />
+                                {direccionSucItem}
+                              </span>
+                            </div>
                           </td>
                           <td style={{ textAlign: 'right' }}>
                             <button
@@ -856,7 +998,10 @@ export default function AsistenciaSocio() {
                                   ...item,
                                   fechaFormateada,
                                   horaFormateada,
-                                  diaSemanaNombre
+                                  horaSalidaFormateada,
+                                  diaSemanaNombre,
+                                  nombreGymItem,
+                                  direccionSucItem
                                 })
                               }
                               title="Ver comprobante de acceso"
@@ -962,8 +1107,12 @@ export default function AsistenciaSocio() {
                 <span className="val">{formatDni(socio?.dni)}</span>
               </div>
               <div className="receipt-row">
-                <span className="lbl">Sede</span>
-                <span className="val">{gimnasio.nombre}</span>
+                <span className="lbl">Gimnasio</span>
+                <span className="val">{gimnasio?.nombre || '-'}</span>
+              </div>
+              <div className="receipt-row">
+                <span className="lbl">Sucursal</span>
+                <span className="val">{modalConfirmacion.sucursal || '-'}</span>
               </div>
             </div>
 
@@ -1004,7 +1153,7 @@ export default function AsistenciaSocio() {
               <div className="asist-ticket-details-grid">
                 <div>
                   <span className="lbl">Código de Acceso</span>
-                  <span className="val code">#ASIST-{modalComprobante.id_asistencia || '001'}</span>
+                  <span className="val code">#ASIST-{modalComprobante.id_asistencia_socio || modalComprobante.id_asistencia || '001'}</span>
                 </div>
                 <div>
                   <span className="lbl">Fecha</span>
@@ -1015,9 +1164,9 @@ export default function AsistenciaSocio() {
                   <span className="val">{modalComprobante.horaFormateada} hs</span>
                 </div>
                 <div>
-                  <span className="lbl">Día</span>
-                  <span className="val" style={{ textTransform: 'capitalize' }}>
-                    {modalComprobante.diaSemanaNombre}
+                  <span className="lbl">Hora de Salida</span>
+                  <span className="val">
+                    {modalComprobante.horaSalidaFormateada ? `${modalComprobante.horaSalidaFormateada} hs` : 'En curso'}
                   </span>
                 </div>
                 <div>
@@ -1028,9 +1177,13 @@ export default function AsistenciaSocio() {
                   <span className="lbl">DNI</span>
                   <span className="val">{formatDni(socio?.dni)}</span>
                 </div>
-                <div style={{ gridColumn: 'span 2' }}>
+                <div>
                   <span className="lbl">Gimnasio</span>
-                  <span className="val">{gimnasio.nombre}</span>
+                  <span className="val">{modalComprobante.nombreGymItem || gimnasio?.nombre}</span>
+                </div>
+                <div>
+                  <span className="lbl">Sucursal</span>
+                  <span className="val">{modalComprobante.direccionSucItem || '-'}</span>
                 </div>
               </div>
             </div>

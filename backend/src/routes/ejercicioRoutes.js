@@ -9,14 +9,13 @@ const {
   actualizarEjercicio,
   eliminarEjercicio
 } = require('../controllers/ejercicioController');
+const { verifyToken } = require('../middlewares/authMiddleware');
 
-// 1. Consultar ejercicios disponibles para un socio (Gimnasio + Personalizados)
+// Todas las rutas de ejercicios requieren autenticación Supabase Auth
+router.use(verifyToken);
+
 router.get('/disponibles', getEjerciciosDisponiblesSocio);
-
-// 2. Registrar ejercicio personalizado del socio
 router.post('/personalizado', crearEjercicioPersonalizado);
-
-// 3. Endpoints estándar de catálogo
 router.get('/', getEjercicios);
 router.get('/:id', getEjercicioById);
 router.post('/', crearEjercicio);

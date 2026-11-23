@@ -46,9 +46,10 @@ function PagosFiltros({
           onChange={(e) => setFiltroEstado(e.target.value)}
         >
           <option value="todos">Todos los estados</option>
-          <option value="pagado">Pagados</option>
+          <option value="aprobado">Aprobados</option>
           <option value="pendiente">Pendientes</option>
-          <option value="vencido">Vencidos</option>
+          <option value="rechazado">Rechazados</option>
+          <option value="anulado">Anulados</option>
         </select>
         <FaChevronDown className="Caja-pagos-select-flecha" />
       </div>

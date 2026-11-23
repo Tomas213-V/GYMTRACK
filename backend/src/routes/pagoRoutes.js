@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pagoController = require('../controllers/pagoController');
+const { verifyToken, requireRoles, requireGimnasioAccess } = require('../middlewares/authMiddleware');
 
 const {
   getPagos,
@@ -13,7 +14,11 @@ const {
   getPlanes
 } = pagoController;
 
-// Definición de Endpoints
+// Todas las rutas de pagos requieren autenticación y rol autorizado
+router.use(verifyToken);
+router.use(requireRoles('dueño', 'empleado:administrador', 'empleado:recepcionista'));
+router.use(requireGimnasioAccess);
+
 router.get('/', getPagos);
 router.get('/resumen', getResumenPagos);
 router.get('/membresias', getMembresias);

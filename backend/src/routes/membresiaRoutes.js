@@ -7,15 +7,16 @@ const {
   updateMembresia,
   deleteMembresia
 } = require('../controllers/membresiaController');
-const { verifyToken } = require('../middlewares/authMiddleware');
+const { verifyToken, requireRoles, requireGimnasioAccess } = require('../middlewares/authMiddleware');
 
 router.use(verifyToken);
+router.use(requireRoles('dueño', 'empleado:administrador', 'empleado:recepcionista'));
+router.use(requireGimnasioAccess);
 
-// CORRECTO: Usar '/' porque el prefijo '/api/membresias' se define en server.js
 router.get('/', getMembresias);
 router.get('/:id', getMembresiaById);
 router.post('/', createMembresia);
 router.patch('/:id', updateMembresia);
-router.delete('/:id', deleteMembresia);
+router.delete('/:id', requireRoles('dueño', 'empleado:administrador'), deleteMembresia);
 
 module.exports = router;

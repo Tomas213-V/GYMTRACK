@@ -1,80 +1,113 @@
-const supabase = require('../config/supabase');
+// ==============================================================================
+// CONTROLADOR DE CONTRATACIONES DE MEMBRESÍAS (PANEL DUEÑO / STAFF)
+// Tabla: public.membresia_socio -> public.membresia_gimnasio
+// - Conserva condiciones históricas del plan (precio, duración, límites) vía RPC.
+// - Estados válidos por CHECK: 'pendiente' | 'activa' | 'vencida' | 'cancelada'.
+// ==============================================================================
+
+const ESTADOS_VALIDOS = ['pendiente', 'activa', 'vencida', 'cancelada'];
+
+function normalizarEstado(valor, fallback = 'activa') {
+  if (!valor) return fallback;
+  const s = String(valor).trim().toLowerCase();
+  if (s === 'activo' || s === 'activa') return 'activa';
+  if (s === 'pendiente') return 'pendiente';
+  if (s === 'vencido' || s === 'vencida') return 'vencida';
+  if (s === 'cancelado' || s === 'cancelada' || s === 'pausada' || s === 'inactiva') return 'cancelada';
+  return ESTADOS_VALIDOS.includes(s) ? s : null;
+}
+
+function normalizarMembresiaRespuesta(m) {
+  if (!m) return null;
+  return {
+    ...m,
+    id_membresia: m.id_membresia_socio,
+    id_plan_membresia: m.id_membresia_gimnasio,
+    plan_membresia: m.membresia_gimnasio
+      ? {
+          ...m.membresia_gimnasio,
+          id_plan_membresia: m.membresia_gimnasio.id_membresia_gimnasio
+        }
+      : null
+  };
+}
 
 /**
- * 1. OBTENER TODAS LAS MEMBRESÍAS DE SOCIOS
- * GET /api/membresias?estado=activo&id_socio=1
+ * GET /api/membresias?estado=activa&id_socio=1
  */
 const getMembresias = async (req, res) => {
   try {
-    const idGimnasio = req.usuario?.id_gimnasio;
-
-    if (!idGimnasio) {
-      return res.status(400).json({ error: 'No se identificó el gimnasio autenticado.' });
-    }
-
+    const db = req.supabase;
+    const idGimnasio = req.gimnasioId;
     const { id_socio, estado } = req.query;
 
-    let query = supabase
-      .from('membresia')
+    let query = db
+      .from('membresia_socio')
       .select(`
         *,
-        socio!inner (
+        socio (
           id_socio,
           nombre,
           apellido,
           dni,
-          id_gimnasio
+          email,
+          telefono,
+          estado
         ),
-        plan_membresia (*)
+        membresia_gimnasio (
+          id_membresia_gimnasio,
+          nombre,
+          descripcion,
+          precio,
+          duracion_dias,
+          limite_asistencias_semanales,
+          limite_asistencias_totales,
+          estado
+        )
       `)
-      .eq('socio.id_gimnasio', idGimnasio)
-      .order('fecha_vencimiento', { ascending: true });
+      .eq('id_gimnasio', idGimnasio)
+      .order('fecha_vencimiento', { ascending: false });
 
     if (id_socio) {
       query = query.eq('id_socio', id_socio);
     }
 
-    if (estado && estado.toLowerCase() !== 'todos') {
-      query = query.eq('estado', estado.toLowerCase());
+    if (estado && String(estado).toLowerCase() !== 'todos') {
+      const est = normalizarEstado(estado, null);
+      if (est) query = query.eq('estado', est);
     }
 
     const { data: membresias, error } = await query;
-
     if (error) {
       return res.status(500).json({ error: 'Error al consultar las membresías: ' + error.message });
     }
 
-    return res.status(200).json({ membresias: membresias || [] });
-
+    return res.status(200).json({
+      membresias: (membresias || []).map(normalizarMembresiaRespuesta)
+    });
   } catch (error) {
     return res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
   }
 };
 
 /**
- * 2. OBTENER UNA MEMBRESÍA POR ID
  * GET /api/membresias/:id
  */
 const getMembresiaById = async (req, res) => {
   try {
+    const db = req.supabase;
     const { id } = req.params;
-    const idGimnasio = req.usuario?.id_gimnasio;
+    const idGimnasio = req.gimnasioId;
 
-    const { data: membresia, error } = await supabase
-      .from('membresia')
+    const { data: membresia, error } = await db
+      .from('membresia_socio')
       .select(`
         *,
-        socio!inner (
-          id_socio,
-          nombre,
-          apellido,
-          dni,
-          id_gimnasio
-        ),
-        plan_membresia (*)
+        socio (id_socio, nombre, apellido, dni, email),
+        membresia_gimnasio (*)
       `)
-      .eq('id_membresia', id)
-      .eq('socio.id_gimnasio', idGimnasio)
+      .eq('id_membresia_socio', id)
+      .eq('id_gimnasio', idGimnasio)
       .maybeSingle();
 
     if (error) {
@@ -82,217 +115,207 @@ const getMembresiaById = async (req, res) => {
     }
 
     if (!membresia) {
-      return res.status(404).json({ error: 'Membresía no encontrada o no pertenece a tu gimnasio.' });
+      return res.status(404).json({ error: 'Membresía no encontrada o no pertenece al gimnasio activo.' });
     }
 
-    return res.status(200).json({ membresia });
-
+    return res.status(200).json({ membresia: normalizarMembresiaRespuesta(membresia) });
   } catch (error) {
     return res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
   }
 };
 
 /**
- * 3. REGISTRAR / ASIGNAR UNA MEMBRESÍA A UN SOCIO
  * POST /api/membresias
- * Automático: Toma los días del plan y calcula fecha_vencimiento a partir de fecha_inicio.
+ * Crea una nueva contratación copiando las condiciones vigentes del plan mediante
+ * la función transaccional rpc_contratar_membresia.
  */
 const createMembresia = async (req, res) => {
   try {
-    const idGimnasio = req.usuario?.id_gimnasio;
-    const { id_socio, id_plan_membresia, fecha_inicio, dias_adicionales, estado, precio } = req.body;
+    const db = req.supabase;
+    const idGimnasio = req.gimnasioId;
+    const {
+      id_socio,
+      id_membresia_gimnasio,
+      id_plan_membresia,
+      fecha_inicio,
+      estado,
+      precio,
+      registrar_pago = false,
+      metodo_pago = 'efectivo',
+      estado_pago = 'aprobado',
+      comprobante = null
+    } = req.body;
 
-    // Validaciones básicas
+    const planId = id_membresia_gimnasio || id_plan_membresia;
+
     if (!id_socio) {
       return res.status(400).json({ error: 'El id_socio es obligatorio.' });
     }
-
-    if (!id_plan_membresia) {
-      return res.status(400).json({ error: 'El id_plan_membresia es obligatorio.' });
+    if (!planId) {
+      return res.status(400).json({ error: 'Debes indicar el plan (id_membresia_gimnasio).' });
     }
 
-    // 1. Validar que el socio existe y pertenece al gimnasio
-    const { data: socio, error: socioErr } = await supabase
-      .from('socio')
-      .select('id_socio')
-      .eq('id_socio', id_socio)
-      .eq('id_gimnasio', idGimnasio)
-      .maybeSingle();
-
-    if (socioErr || !socio) {
-      return res.status(404).json({ error: 'El socio especificado no existe o no pertenece a tu gimnasio.' });
-    }
-
-    // 2. Validar el plan seleccionado
-    const { data: plan, error: planErr } = await supabase
-      .from('plan_membresia')
-      .select('*')
-      .eq('id_plan_membresia', id_plan_membresia)
+    // Verificar que el plan pertenece al gimnasio activo
+    const { data: plan, error: planErr } = await db
+      .from('membresia_gimnasio')
+      .select('id_membresia_gimnasio, id_gimnasio, estado')
+      .eq('id_membresia_gimnasio', planId)
       .eq('id_gimnasio', idGimnasio)
       .maybeSingle();
 
     if (planErr || !plan) {
-      return res.status(404).json({ error: 'El plan de membresía especificado no existe.' });
+      return res.status(404).json({ error: 'El plan especificado no existe o no pertenece al gimnasio activo.' });
     }
 
-    // 3. Cálculo automático: Fecha Inicio + Días del Plan (+ días adicionales si los hay)
-    const fInicio = fecha_inicio ? new Date(fecha_inicio) : new Date();
-    const duracionTotal = (plan.duracion_dias || 30) + (parseInt(dias_adicionales) || 0);
-
-    const fVencimiento = new Date(fInicio);
-    fVencimiento.setDate(fVencimiento.getDate() + duracionTotal);
-
-    // 4. Armar datos e insertar
-    const nuevaMembresiaData = {
-      id_socio,
-      id_plan_membresia,
-      precio: precio !== undefined ? parseFloat(precio) : plan.precio,
-      fecha_inicio: fInicio.toISOString().split('T')[0],
-      fecha_vencimiento: fVencimiento.toISOString().split('T')[0],
-      estado: estado ? estado.trim().toLowerCase() : 'activo'
-    };
-
-    const { data: nuevaMembresia, error: insertErr } = await supabase
-      .from('membresia')
-      .insert([nuevaMembresiaData])
-      .select('*, plan_membresia(*)')
-      .single();
-
-    if (insertErr) {
-      return res.status(500).json({ error: 'Error al registrar la membresía: ' + insertErr.message });
+    const estadoFinal = normalizarEstado(estado, 'activa');
+    if (!estadoFinal) {
+      return res.status(400).json({
+        error: `Estado de membresía inválido. Valores permitidos: ${ESTADOS_VALIDOS.join(', ')}.`
+      });
     }
 
-    return res.status(201).json({
-      mensaje: 'Membresía asignada al socio exitosamente.',
-      membresia: nuevaMembresia
+    const { data: rpcRes, error: rpcErr } = await db.rpc('rpc_contratar_membresia', {
+      p_id_socio: Number(id_socio),
+      p_id_membresia_gimnasio: Number(planId),
+      p_fecha_inicio: fecha_inicio || new Date().toISOString().split('T')[0],
+      p_estado: estadoFinal,
+      p_registrar_pago: Boolean(registrar_pago),
+      p_metodo_pago: metodo_pago || 'efectivo',
+      p_estado_pago: estado_pago || 'aprobado',
+      p_comprobante: comprobante || null,
+      p_monto_override: precio !== undefined && precio !== '' ? Number(precio) : null
     });
 
+    if (rpcErr) {
+      return res.status(400).json({ error: rpcErr.message });
+    }
+
+    // Recuperar detalle completo con joins
+    const contratoId = rpcRes?.membresia_socio?.id_membresia_socio;
+    const { data: completa } = await db
+      .from('membresia_socio')
+      .select('*, socio(id_socio, nombre, apellido, dni), membresia_gimnasio(*)')
+      .eq('id_membresia_socio', contratoId)
+      .single();
+
+    return res.status(201).json({
+      mensaje: 'Membresía contratada exitosamente conservando las condiciones vigentes del plan.',
+      membresia: normalizarMembresiaRespuesta(completa || rpcRes?.membresia_socio),
+      pago: rpcRes?.pago || null
+    });
   } catch (error) {
     return res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
   }
 };
 
 /**
- * 4. ACTUALIZAR / EXTENDER FECHAS O ESTADO DE UNA MEMBRESÍA
  * PATCH /api/membresias/:id
- * Manual: Permite definir explicitamente fecha_vencimiento, fecha_inicio o sumar dias_extension.
+ * Permite ajustar vigencia o estado ('pendiente'|'activa'|'vencida'|'cancelada').
  */
 const updateMembresia = async (req, res) => {
   try {
-    const idGimnasio = req.usuario?.id_gimnasio;
+    const db = req.supabase;
+    const idGimnasio = req.gimnasioId;
     const { id } = req.params;
-    const { estado, fecha_inicio, fecha_vencimiento, dias_extension, precio, id_plan_membresia } = req.body;
+    const { estado, fecha_inicio, fecha_vencimiento, dias_extension } = req.body;
 
-    // 1. Verificar que la membresía exista y pertenezca al gimnasio
-    const { data: membActual, error: membErr } = await supabase
-      .from('membresia')
-      .select(`
-        *,
-        socio!inner (id_gimnasio)
-      `)
-      .eq('id_membresia', id)
-      .eq('socio.id_gimnasio', idGimnasio)
+    const { data: membActual, error: membErr } = await db
+      .from('membresia_socio')
+      .select('*')
+      .eq('id_membresia_socio', id)
+      .eq('id_gimnasio', idGimnasio)
       .maybeSingle();
 
     if (membErr || !membActual) {
-      return res.status(404).json({ error: 'Membresía no encontrada o no pertenece a tu gimnasio.' });
+      return res.status(404).json({ error: 'Membresía no encontrada o no pertenece al gimnasio activo.' });
     }
 
     const updateData = {};
 
-    if (id_plan_membresia) {
-      updateData.id_plan_membresia = id_plan_membresia;
-    }
-
-    // 2. Manejo de Fechas (Manual o por días)
     if (fecha_inicio) {
-      updateData.fecha_inicio = fecha_inicio; // Formato esperado: YYYY-MM-DD
+      updateData.fecha_inicio = fecha_inicio;
     }
 
     if (fecha_vencimiento) {
-      // Prioridad 1: Fecha fija asignada manualmente desde el frontend
-      updateData.fecha_vencimiento = fecha_vencimiento; // Formato esperado: YYYY-MM-DD
+      updateData.fecha_vencimiento = fecha_vencimiento;
     } else if (dias_extension && !isNaN(dias_extension)) {
-      // Prioridad 2: Extensión rápida de días desde la fecha actual de vencimiento
-      const baseDate = new Date(membActual.fecha_vencimiento);
-      baseDate.setDate(baseDate.getDate() + parseInt(dias_extension));
+      const baseDate = new Date(membActual.fecha_vencimiento + 'T00:00:00');
+      baseDate.setDate(baseDate.getDate() + parseInt(dias_extension, 10));
       updateData.fecha_vencimiento = baseDate.toISOString().split('T')[0];
     }
 
-    if (estado) {
-      updateData.estado = estado.trim().toLowerCase();
+    if (estado !== undefined) {
+      const estNorm = normalizarEstado(estado, null);
+      if (!estNorm) {
+        return res.status(400).json({
+          error: `Estado no válido. Permitidos: ${ESTADOS_VALIDOS.join(', ')}.`
+        });
+      }
+      updateData.estado = estNorm;
     }
 
-    if (precio !== undefined) {
-      updateData.precio = parseFloat(precio);
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: 'No se enviaron cambios para actualizar.' });
     }
 
-    // 3. Guardar cambios en Supabase
-    const { data: membActualizada, error: updateErr } = await supabase
-      .from('membresia')
+    const { data: membActualizada, error: updateErr } = await db
+      .from('membresia_socio')
       .update(updateData)
-      .eq('id_membresia', id)
-      .select('*, plan_membresia(*)')
+      .eq('id_membresia_socio', id)
+      .eq('id_gimnasio', idGimnasio)
+      .select('*, socio(id_socio, nombre, apellido, dni), membresia_gimnasio(*)')
       .single();
 
     if (updateErr) {
-      return res.status(500).json({ error: 'Error al actualizar la membresía: ' + updateErr.message });
+      return res.status(400).json({ error: 'Error al actualizar la membresía: ' + updateErr.message });
     }
 
     return res.status(200).json({
       mensaje: 'Membresía actualizada exitosamente.',
-      membresia: membActualizada
+      membresia: normalizarMembresiaRespuesta(membActualizada)
     });
-
   } catch (error) {
     return res.status(500).json({ error: 'Error interno del servidor: ' + error.message });
   }
 };
 
 /**
- * 5. ELIMINAR / CANCELAR MEMBRESÍA
  * DELETE /api/membresias/:id
+ * Cancela si posee pagos/asistencias asociadas para preservar historial.
  */
 const deleteMembresia = async (req, res) => {
   try {
-    const idGimnasio = req.usuario?.id_gimnasio;
+    const db = req.supabase;
+    const idGimnasio = req.gimnasioId;
     const { id } = req.params;
 
-    if (!idGimnasio) {
-      return res.status(400).json({ error: 'No se identificó el gimnasio autenticado.' });
-    }
-
-    // Verificar que la membresía exista y pertenezca al gimnasio
-    const { data: membActual, error: membErr } = await supabase
-      .from('membresia')
-      .select(`
-        id_membresia,
-        socio!inner (id_gimnasio)
-      `)
-      .eq('id_membresia', id)
-      .eq('socio.id_gimnasio', idGimnasio)
+    const { data: membActual, error: membErr } = await db
+      .from('membresia_socio')
+      .select('id_membresia_socio')
+      .eq('id_membresia_socio', id)
+      .eq('id_gimnasio', idGimnasio)
       .maybeSingle();
 
     if (membErr || !membActual) {
-      return res.status(404).json({ error: 'Membresía no encontrada o no pertenece a tu gimnasio.' });
+      return res.status(404).json({ error: 'Membresía no encontrada o no pertenece al gimnasio activo.' });
     }
 
-    // Intentar eliminar directamente
-    const { error: delErr } = await supabase
-      .from('membresia')
+    const { error: delErr } = await db
+      .from('membresia_socio')
       .delete()
-      .eq('id_membresia', id);
+      .eq('id_membresia_socio', id)
+      .eq('id_gimnasio', idGimnasio);
 
     if (delErr) {
-      // Si falla por clave foránea (por ejemplo pagos existentes asociados a esta membresía)
-      if (delErr.code === '23503' || delErr.message?.includes('foreign key') || delErr.message?.includes('violates foreign key constraint')) {
-        await supabase
-          .from('membresia')
+      if (delErr.code === '23503' || delErr.message?.includes('foreign key')) {
+        await db
+          .from('membresia_socio')
           .update({ estado: 'cancelada' })
-          .eq('id_membresia', id);
+          .eq('id_membresia_socio', id)
+          .eq('id_gimnasio', idGimnasio);
 
         return res.status(200).json({
-          mensaje: 'La membresía tiene pagos u operaciones registradas en el historial contable. Se ha marcado como cancelada.',
+          mensaje: 'La membresía posee pagos o asistencias asociadas. Se marcó como cancelada para preservar el historial.',
           cancelada: true
         });
       }

@@ -1,204 +1,137 @@
-/**
- * =========================================================================================
- * ARCHIVO: socioService.js
- * PROYECTO: GYMTRACK - Frontend
- * DESCRIPCIÓN: Capa de servicios para la administración integral de socios y alumnos.
- * =========================================================================================
- * 
- * GUÍA PASO A PASO PARA EL DESARROLLADOR:
- * 1. Autenticación Bearer: Todas las llamadas a este servicio incluyen el token JWT en el encabezado
- *    `Authorization: Bearer <token>` mediante la función auxiliar `getHeaders()`.
- * 2. Operaciones soportadas:
- *    - `fetchSocios()`: Obtención paginada con filtrado dinámico por estado (activo/inactivo/pendiente) y texto.
- *    - `createSocio()`: Registro de un nuevo socio vinculado al gimnasio actual.
- *    - `getSocioById()`: Detalle completo de un socio (membresía, pagos, contacto).
- *    - `updateSocio()`: Modificación de información de contacto o datos personales.
- *    - `deleteSocio()`: Baja física o lógica del socio.
- *    - `changeEstadoSocio()`: Transición de estado rápida mediante HTTP PATCH.
- *    - `getPerfilSocio()` / `updatePerfilSocio()`: Auto-gestión del perfil del alumno.
- */
+// ==============================================================================
+// SERVICIO DE SOCIOS — IDENTIDAD ÚNICA Y ASOCIACIONES socio_gimnasio (N:M)
+// Fuente de verdad: gymtrack-backend-python/app/routers/socios.py
+// ==============================================================================
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+import { apiRequest } from './apiClient';
 
-/**
- * Función auxiliar para generar las cabeceras HTTP requeridas por el backend.
- * Recupera el token JWT almacenado al iniciar sesión para autorizar la petición.
- */
-const getHeaders = () => {
-  const token = localStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`
-  };
-};
-
-/**
- * PASO 1: Listado paginado de socios con filtros.
- * Construye dinámicamente los parámetros URL (query string).
- * 
- * @param {Object} params
- * @param {number} [params.page=1] - Número de página actual
- * @param {number} [params.limit=6] - Cantidad de socios por página
- * @param {string} [params.estado=''] - Filtro por estado ('activo', 'inactivo', 'pendiente')
- * @param {string} [params.search=''] - Búsqueda por DNI, nombre o teléfono
- * @returns {Promise<{socios: Array, total: number, totalPages: number}>}
- */
-export async function fetchSocios({ page = 1, limit = 6, estado = '', search = '' }) {
+export async function fetchSocios({ page = 1, limit = 6, estado = '', search = '', signal } = {}) {
   const params = new URLSearchParams();
-  if (page) params.append('page', page);
-  if (limit) params.append('limit', limit);
-  if (estado && estado !== 'todos') params.append('estado', estado);
-  if (search) params.append('search', search);
+  if (page) params.append('page', String(page));
+  if (limit) params.append('limit', String(limit));
+  if (estado && estado !== 'todos') params.append('estado', String(estado));
+  if (search) params.append('search', String(search));
 
-  const response = await fetch(`${API_URL}/socios?${params.toString()}`, {
-    headers: getHeaders()
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al obtener socios.');
-  return data;
+  return apiRequest(`/socios?${params.toString()}`, { signal });
 }
 
-/**
- * PASO 1b: Verificación preventiva de DNI y vinculación con otros gimnasios.
- * 
- * @param {string|number} dni - Documento a verificar
- * @returns {Promise<{existeEnEsteGimnasio: boolean, vinculadoOtroGimnasio: boolean, gimnasio?: Object, socio?: Object, mensaje?: string}>}
- */
-export async function verificarDniSocio(dni) {
-  if (!dni) return null;
-  const cleanDni = dni.toString().trim();
+export async function verificarDniSocio(dni, idGimnasio = null) {
+  const cleanDni = String(dni || '').trim();
   if (!cleanDni) return null;
-
-  const response = await fetch(`${API_URL}/socios/verificar-dni?dni=${encodeURIComponent(cleanDni)}`, {
-    headers: getHeaders()
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al verificar DNI');
-  return data;
+  const params = new URLSearchParams({ dni: cleanDni });
+  if (idGimnasio) params.append('id_gimnasio', String(idGimnasio));
+  return apiRequest(`/socios/verificar-dni?${params.toString()}`);
 }
 
 /**
- * PASO 2: Creación de un nuevo socio en el gimnasio.
- * 
- * @param {Object} socioData - Datos del formulario (nombre, apellido, dni, email, telefono, etc.)
- * @returns {Promise<Object>} Datos del socio creado
+ * Crea un socio nuevo o reutiliza una identidad existente y la asocia al gimnasio activo.
+ * Respeta SocioCreate (sin contrasena, sin password, sin id_plan_membresia).
  */
 export async function createSocio(socioData) {
-  const response = await fetch(`${API_URL}/socios`, {
+  const payload = {
+    ...(socioData.id_gimnasio ? { id_gimnasio: Number(socioData.id_gimnasio) } : {}),
+    ...(socioData.nombre ? { nombre: String(socioData.nombre).trim() } : {}),
+    ...(socioData.apellido ? { apellido: String(socioData.apellido).trim() } : {}),
+    ...(socioData.dni ? { dni: String(socioData.dni).trim() } : {}),
+    ...(socioData.telefono ? { telefono: String(socioData.telefono).trim() } : {}),
+    ...(socioData.email ? { email: String(socioData.email).trim().toLowerCase() } : {})
+  };
+  return apiRequest('/socios', {
     method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify(socioData)
+    body: payload
   });
-  const data = await response.json();
-  if (!response.ok) {
-    const error = new Error(data.error || 'Error al crear socio.');
-    error.status = response.status;
-    error.alertaVinculacion = data.alertaVinculacion || data.bloqueadoPorOtroGimnasio || false;
-    error.bloqueadoPorOtroGimnasio = data.bloqueadoPorOtroGimnasio || false;
-    error.gimnasioNombre = data.gimnasioNombre;
-    error.socioNombre = data.socioNombre;
-    error.dni = data.dni;
-    throw error;
-  }
-  return data;
 }
 
-/**
- * PASO 3: Consulta individual por ID.
- * 
- * @param {string|number} id - Identificador único del socio
- * @returns {Promise<Object>} Datos individuales del socio
- */
-export async function getSocioById(id) {
-  const response = await fetch(`${API_URL}/socios/${id}`, {
-    headers: getHeaders()
+export async function asociarSocioGimnasio(idSocio, idGimnasio = null) {
+  return apiRequest('/socios/asociar', {
+    method: 'POST',
+    body: {
+      id_socio: Number(idSocio),
+      ...(idGimnasio ? { id_gimnasio: Number(idGimnasio) } : {})
+    }
   });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al obtener socio.');
+}
+
+export async function listarMisGimnasiosSocio({ solo_activas = false, signal } = {}) {
+  const qs = solo_activas ? '?solo_activas=true' : '';
+  return apiRequest(`/socios/mis-gimnasios${qs}`, { signal });
+}
+
+export async function getSocioById(id, { signal } = {}) {
+  const data = await apiRequest(`/socios/${id}`, { signal });
   return data.socio;
 }
 
 /**
- * PASO 4: Actualización completa de datos de un socio.
- * 
- * @param {string|number} id - Identificador único
- * @param {Object} socioData - Nuevos datos modificados
- * @returns {Promise<Object>}
+ * Actualiza datos personales de public.socio por personal autorizado (SocioUpdate).
  */
 export async function updateSocio(id, socioData) {
-  const response = await fetch(`${API_URL}/socios/${id}`, {
+  let estadoBool;
+  if (typeof socioData.estado === 'boolean') {
+    estadoBool = socioData.estado;
+  } else if (typeof socioData.estado === 'string') {
+    const est = socioData.estado.trim().toLowerCase();
+    if (est === 'activo' || est === 'activa' || est === 'true') estadoBool = true;
+    else if (est === 'inactivo' || est === 'inactiva' || est === 'false') estadoBool = false;
+  }
+
+  const payload = {
+    ...(socioData.nombre !== undefined ? { nombre: String(socioData.nombre).trim() } : {}),
+    ...(socioData.apellido !== undefined ? { apellido: String(socioData.apellido).trim() } : {}),
+    ...(socioData.dni !== undefined ? { dni: socioData.dni ? String(socioData.dni).trim() : null } : {}),
+    ...(socioData.telefono !== undefined ? { telefono: socioData.telefono ? String(socioData.telefono).trim() : null } : {}),
+    ...(socioData.email !== undefined ? { email: socioData.email ? String(socioData.email).trim().toLowerCase() : null } : {}),
+    ...(estadoBool !== undefined ? { estado: estadoBool } : {})
+  };
+  return apiRequest(`/socios/${id}`, {
     method: 'PUT',
-    headers: getHeaders(),
-    body: JSON.stringify(socioData)
+    body: payload
   });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al actualizar socio.');
-  return data;
 }
 
-/**
- * PASO 5: Eliminación de un socio.
- * 
- * @param {string|number} id - Identificador del socio a dar de baja
- * @returns {Promise<Object>} Confirmación de eliminación
- */
 export async function deleteSocio(id) {
-  const response = await fetch(`${API_URL}/socios/${id}`, {
-    method: 'DELETE',
-    headers: getHeaders()
+  return apiRequest(`/socios/${id}`, {
+    method: 'DELETE'
   });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al eliminar socio.');
-  return data;
 }
 
-/**
- * PASO 6: Cambio ágil de estado (activo/inactivo).
- * 
- * @param {string|number} id - ID del socio
- * @param {string} estado - Nuevo estado
- * @returns {Promise<Object>}
- */
 export async function changeEstadoSocio(id, estado) {
-  const response = await fetch(`${API_URL}/socios/${id}/estado`, {
+  const estadoBool =
+    typeof estado === 'boolean'
+      ? estado
+      : ['activo', 'activa', 'true', '1'].includes(String(estado).toLowerCase().trim());
+  return apiRequest(`/socios/${id}/estado`, {
     method: 'PATCH',
-    headers: getHeaders(),
-    body: JSON.stringify({ estado })
+    body: { estado: estadoBool }
   });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al cambiar estado del socio.');
-  return data;
+}
+
+export async function cambiarEstadoAsociacionSocio(idSocioGimnasio, estado) {
+  return apiRequest(`/socios/asociaciones/${idSocioGimnasio}/estado`, {
+    method: 'PATCH',
+    body: { estado: Boolean(estado) }
+  });
+}
+
+export async function getPerfilSocio(id = null, { signal } = {}) {
+  const path = id ? `/socios/perfil?id=${encodeURIComponent(id)}` : '/socios/perfil';
+  return apiRequest(path, { signal });
 }
 
 /**
- * PASO 7: Consulta de perfil propio (usado en la vista de perfil de socio).
- * 
- * @param {string|number|null} [id=null]
- * @returns {Promise<Object>} Perfil y datos del socio actual
- */
-export async function getPerfilSocio(id = null) {
-  const url = id ? `${API_URL}/socios/perfil?id=${id}` : `${API_URL}/socios/perfil`;
-  const response = await fetch(url, {
-    headers: getHeaders()
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al obtener el perfil.');
-  return data;
-}
-
-/**
- * PASO 8: Actualización de perfil propio del socio.
- * 
- * @param {Object} datos - Nuevos datos de contacto o perfil
- * @returns {Promise<Object>}
+ * Actualiza los datos personales propios del socio autenticado (SocioUpdatePerfil).
+ * NO envía id_socio ni contraseñas (el cambio de contraseña va a PUT /api/auth/me).
  */
 export async function updatePerfilSocio(datos) {
-  const response = await fetch(`${API_URL}/socios/perfil`, {
+  const payload = {
+    ...(datos.nombre !== undefined ? { nombre: String(datos.nombre).trim() } : {}),
+    ...(datos.apellido !== undefined ? { apellido: String(datos.apellido).trim() } : {}),
+    ...(datos.telefono !== undefined ? { telefono: datos.telefono ? String(datos.telefono).trim() : null } : {}),
+    ...(datos.email !== undefined ? { email: datos.email ? String(datos.email).trim().toLowerCase() : null } : {}),
+    ...(datos.dni !== undefined ? { dni: datos.dni ? String(datos.dni).trim() : null } : {})
+  };
+  return apiRequest('/socios/perfil', {
     method: 'PUT',
-    headers: getHeaders(),
-    body: JSON.stringify(datos)
+    body: payload
   });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al actualizar el perfil.');
-  return data;
-}
+}

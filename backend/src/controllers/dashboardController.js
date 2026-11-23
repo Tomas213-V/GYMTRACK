@@ -1,118 +1,128 @@
-const supabase = require('../config/supabase');
+// ==============================================================================
+// CONTROLADOR DE DASHBOARD GERENCIAL (DUEÑO / STAFF) — 100% DATOS REALES SUPABASE
+// Tablas: gimnasio, sucursal, empleado, membresia_socio, pago, asistencia_socio
+// ==============================================================================
 
-/**
- * GET /api/dashboard/admin
- * Obtiene métricas consolidadas, KPIs, gráficos y actividades recientes para el Dueño / Administrador del Gimnasio.
- */
 const getDashboardAdmin = async (req, res) => {
   try {
-    const gymId = req.usuario?.id_gimnasio || req.query.id_gimnasio;
-
-    if (!gymId) {
-      return res.status(400).json({ error: 'No se pudo identificar el gimnasio autenticado.' });
-    }
+    const db = req.supabase;
+    const gymId = req.gimnasioId;
+    const { id_sucursal } = req.query;
 
     const ahora = new Date();
     const yearActual = ahora.getFullYear();
     const mesActual = ahora.getMonth();
 
-    // Rango mes actual
     const inicioMesActual = new Date(yearActual, mesActual, 1).toISOString();
     const finMesActual = new Date(yearActual, mesActual + 1, 0, 23, 59, 59, 999).toISOString();
-
-    // Rango mes anterior
     const inicioMesAnterior = new Date(yearActual, mesActual - 1, 1).toISOString();
     const finMesAnterior = new Date(yearActual, mesActual, 0, 23, 59, 59, 999).toISOString();
+    const inicioHoy = new Date(yearActual, mesActual, ahora.getDate(), 0, 0, 0, 0).toISOString();
+    const finHoy = new Date(yearActual, mesActual, ahora.getDate(), 23, 59, 59, 999).toISOString();
 
-    // Rango hoy
-    const inicioHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 0, 0, 0, 0).toISOString();
-    const finHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 23, 59, 59, 999).toISOString();
-
-    // Rango próximos 7 días para vencimientos
-    const en7Dias = new Date(ahora.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
-
-    // 1. OBTENER INFORMACIÓN DEL GIMNASIO
-    const { data: gimnasio } = await supabase
-      .from('gimnasio')
-      .select('*')
-      .eq('id_gimnasio', gymId)
-      .maybeSingle();
-
-    // 2. CONSULTAR SOCIOS
-    const { data: socios, error: errSocios } = await supabase
-      .from('socio')
-      .select('id_socio, nombre, apellido, dni, email, telefono, estado, fecha_alta')
-      .eq('id_gimnasio', gymId);
-
-    if (errSocios) {
-      console.error('Error socios dashboard:', errSocios);
-    }
-
-    const totalSocios = socios?.length || 0;
-    const sociosActivos = socios?.filter(s => (s.estado || '').toLowerCase() === 'activo').length || 0;
-    const sociosInactivos = socios?.filter(s => (s.estado || '').toLowerCase() === 'inactivo').length || 0;
-    const sociosPendientes = socios?.filter(s => (s.estado || '').toLowerCase() === 'pendiente').length || 0;
-
-    const nuevosSociosMes = socios?.filter(s => {
-      if (!s.fecha_alta) return false;
-      return s.fecha_alta >= inicioMesActual && s.fecha_alta <= finMesActual;
-    }).length || 0;
-
-    // 3. CONSULTAR PAGOS
-    const { data: pagos, error: errPagos } = await supabase
-      .from('pago')
+    let asistQuery = db
+      .from('asistencia_socio')
       .select(`
-        id_pago,
-        monto,
-        fecha_pago,
-        metodo_pago,
+        id_asistencia_socio,
+        id_sucursal,
+        hora_ingreso,
+        hora_salida,
         estado,
-        membresia!inner(
-          id_membresia,
-          plan_membresia(nombre),
-          socio!inner(id_socio, nombre, apellido, dni, id_gimnasio)
-        )
+        socio (id_socio, nombre, apellido, dni),
+        sucursal!inner (id_sucursal, direccion, id_gimnasio)
       `)
-      .eq('membresia.socio.id_gimnasio', gymId)
-      .order('id_pago', { ascending: false });
+      .eq('sucursal.id_gimnasio', gymId)
+      .neq('estado', 'anulada')
+      .order('hora_ingreso', { ascending: false });
 
-    if (errPagos) {
-      console.error('Error pagos dashboard:', errPagos);
+    if (id_sucursal && id_sucursal !== 'todas') {
+      asistQuery = asistQuery.eq('id_sucursal', Number(id_sucursal));
     }
 
-    const pagosList = pagos || [];
+    const [gymRes, sucursalesRes, membresiasRes, pagosRes, asistenciasRes] = await Promise.all([
+      db.from('gimnasio').select('*').eq('id_gimnasio', gymId).maybeSingle(),
+      db.from('sucursal').select('*').eq('id_gimnasio', gymId).order('id_sucursal', { ascending: true }),
+      db
+        .from('membresia_socio')
+        .select(`
+          id_membresia_socio,
+          id_socio,
+          fecha_inicio,
+          fecha_vencimiento,
+          estado,
+          creado_en,
+          membresia_gimnasio (nombre),
+          socio (id_socio, nombre, apellido, dni, estado, fecha_alta)
+        `)
+        .eq('id_gimnasio', gymId),
+      db
+        .from('pago')
+        .select(`
+          id_pago,
+          monto,
+          fecha_pago,
+          metodo_pago,
+          estado,
+          membresia_socio!inner (
+            id_membresia_socio,
+            id_gimnasio,
+            membresia_gimnasio (nombre),
+            socio (id_socio, nombre, apellido, dni)
+          )
+        `)
+        .eq('membresia_socio.id_gimnasio', gymId)
+        .order('id_pago', { ascending: false }),
+      asistQuery
+    ]);
 
-    // Pagos del mes actual vs mes anterior
+    const gimnasio = gymRes.data;
+    const sucursales = sucursalesRes.data || [];
+    const membresiasList = membresiasRes.data || [];
+    const pagosList = pagosRes.data || [];
+    const asistenciasList = asistenciasRes.data || [];
+
+    // 1. KPI Socios (distintos vinculados al gimnasio por membresia_socio)
+    const sociosMap = new Map();
+    membresiasList.forEach((m) => {
+      if (!m.socio) return;
+      const existing = sociosMap.get(m.id_socio);
+      if (!existing || m.estado === 'activa') {
+        sociosMap.set(m.id_socio, { ...m.socio, estado_contrato: m.estado, creado_en: m.creado_en });
+      }
+    });
+
+    const sociosUnicos = Array.from(sociosMap.values());
+    const totalSocios = sociosUnicos.length;
+    const sociosActivos = sociosUnicos.filter((s) => s.estado && s.estado_contrato === 'activa').length;
+    const sociosPendientes = sociosUnicos.filter((s) => s.estado_contrato === 'pendiente').length;
+    const sociosInactivos = Math.max(0, totalSocios - sociosActivos - sociosPendientes);
+    const nuevosSociosMes = sociosUnicos.filter((s) => {
+      const f = s.creado_en || s.fecha_alta;
+      return f && f >= inicioMesActual && f <= finMesActual;
+    }).length;
+
+    // 2. KPI Pagos e Ingresos (estado = 'aprobado')
     let recaudacionMesActual = 0;
     let recaudacionMesAnterior = 0;
     let pagosRealizados = 0;
     let pagosPendientes = 0;
-    let pagosVencidos = 0;
+    let pagosRechazados = 0;
 
-    pagosList.forEach(p => {
+    pagosList.forEach((p) => {
       const monto = Number(p.monto) || 0;
-      const estado = (p.estado || '').toLowerCase();
       const fPago = p.fecha_pago ? new Date(p.fecha_pago).toISOString() : '';
 
-      if (fPago >= inicioMesActual && fPago <= finMesActual) {
-        if (estado === 'pagado') {
-          recaudacionMesActual += monto;
-          pagosRealizados += 1;
-        }
+      if (fPago >= inicioMesActual && fPago <= finMesActual && p.estado === 'aprobado') {
+        recaudacionMesActual += monto;
+        pagosRealizados += 1;
       }
-
-      if (estado === 'pendiente') {
-        pagosPendientes += 1;
-      } else if (estado === 'vencido') {
-        pagosVencidos += 1;
-      }
-
-      if (fPago >= inicioMesAnterior && fPago <= finMesAnterior && estado === 'pagado') {
+      if (fPago >= inicioMesAnterior && fPago <= finMesAnterior && p.estado === 'aprobado') {
         recaudacionMesAnterior += monto;
       }
+      if (p.estado === 'pendiente') pagosPendientes += 1;
+      if (p.estado === 'rechazado') pagosRechazados += 1;
     });
 
-    // Variación porcentual de ingresos
     let variacionIngresos = 0;
     if (recaudacionMesAnterior > 0) {
       variacionIngresos = Math.round(((recaudacionMesActual - recaudacionMesAnterior) / recaudacionMesAnterior) * 100);
@@ -120,10 +130,8 @@ const getDashboardAdmin = async (req, res) => {
       variacionIngresos = 100;
     }
 
-    // Histórico de ingresos últimos 6 meses para gráfico
     const mesesNombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     const ingresosUltimos6Meses = [];
-
     for (let i = 5; i >= 0; i--) {
       const d = new Date(yearActual, mesActual - i, 1);
       const mIdx = d.getMonth();
@@ -132,51 +140,31 @@ const getDashboardAdmin = async (req, res) => {
       const mFin = new Date(yIdx, mIdx + 1, 0, 23, 59, 59, 999).toISOString();
 
       const totalMes = pagosList.reduce((acc, p) => {
-        const est = (p.estado || '').toLowerCase();
         const f = p.fecha_pago ? new Date(p.fecha_pago).toISOString() : '';
-        if (f >= mInicio && f <= mFin && est === 'pagado') {
+        if (f >= mInicio && f <= mFin && p.estado === 'aprobado') {
           return acc + (Number(p.monto) || 0);
         }
         return acc;
       }, 0);
 
       ingresosUltimos6Meses.push({
-        mes: `${mesesNombres[mIdx]} ${yIdx !== yearActual ? "'" + String(yIdx).slice(2) : ''}`,
+        mes: `${mesesNombres[mIdx]}${yIdx !== yearActual ? ` '${String(yIdx).slice(2)}` : ''}`,
         recaudacion: totalMes
       });
     }
 
-    // 4. CONSULTAR ASISTENCIAS
-    const { data: asistencias, error: errAsistencias } = await supabase
-      .from('asistencia')
-      .select(`
-        id_asistencia,
-        hora_ingreso,
-        hora_salida,
-        estado,
-        socio!inner(id_socio, nombre, apellido, dni, id_gimnasio)
-      `)
-      .eq('socio.id_gimnasio', gymId)
-      .order('hora_ingreso', { ascending: false });
-
-    if (errAsistencias) {
-      console.error('Error asistencias dashboard:', errAsistencias);
-    }
-
-    const asistenciasList = asistencias || [];
-
-    // Asistencias hoy y mes actual
-    const asistenciasHoy = asistenciasList.filter(a => {
+    // 3. KPI Asistencias y desglose por sucursal
+    const asistenciasHoy = asistenciasList.filter((a) => {
       const h = a.hora_ingreso ? new Date(a.hora_ingreso).toISOString() : '';
       return h >= inicioHoy && h <= finHoy;
     }).length;
 
-    const asistenciasMesActual = asistenciasList.filter(a => {
+    const asistenciasMesActual = asistenciasList.filter((a) => {
       const h = a.hora_ingreso ? new Date(a.hora_ingreso).toISOString() : '';
       return h >= inicioMesActual && h <= finMesActual;
     }).length;
 
-    const asistenciasMesAnterior = asistenciasList.filter(a => {
+    const asistenciasMesAnterior = asistenciasList.filter((a) => {
       const h = a.hora_ingreso ? new Date(a.hora_ingreso).toISOString() : '';
       return h >= inicioMesAnterior && h <= finMesAnterior;
     }).length;
@@ -188,54 +176,28 @@ const getDashboardAdmin = async (req, res) => {
       variacionAsistencias = 100;
     }
 
-    // Afluencia por día de la semana (Lunes a Domingo)
     const diasSemanaMap = { 0: 'Dom', 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb' };
     const ordenDias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
     const conteoDias = { Lun: 0, Mar: 0, Mié: 0, Jue: 0, Vie: 0, Sáb: 0, Dom: 0 };
 
-    asistenciasList.forEach(a => {
+    const conteoPorSucursal = {};
+    asistenciasList.forEach((a) => {
       if (a.hora_ingreso) {
-        const diaNum = new Date(a.hora_ingreso).getDay();
-        const nombreDia = diasSemanaMap[diaNum];
-        if (conteoDias[nombreDia] !== undefined) {
-          conteoDias[nombreDia] += 1;
-        }
+        const nombreDia = diasSemanaMap[new Date(a.hora_ingreso).getDay()];
+        if (conteoDias[nombreDia] !== undefined) conteoDias[nombreDia] += 1;
       }
+      const sucLabel = a.sucursal?.direccion || `Sucursal #${a.id_sucursal}`;
+      conteoPorSucursal[sucLabel] = (conteoPorSucursal[sucLabel] || 0) + 1;
     });
 
-    const asistenciasPorDia = ordenDias.map(dia => ({
-      dia,
-      asistencias: conteoDias[dia]
+    const asistenciasPorDia = ordenDias.map((dia) => ({ dia, asistencias: conteoDias[dia] }));
+    const asistenciasPorSucursal = Object.entries(conteoPorSucursal).map(([sucursal, total]) => ({
+      sucursal,
+      total
     }));
 
-    // 5. CONSULTAR MEMBRESÍAS Y PLANES
-    const { data: membresias } = await supabase
-      .from('membresia')
-      .select(`
-        id_membresia,
-        fecha_inicio,
-        fecha_vencimiento,
-        estado,
-        plan_membresia(nombre),
-        socio!inner(id_socio, nombre, apellido, dni, id_gimnasio)
-      `)
-      .eq('socio.id_gimnasio', gymId);
-
-    const membresiasList = membresias || [];
-
-    // Distribución por planes
+    // 4. Distribución de planes y próximos vencimientos
     const planesConteo = {};
-    membresiasList.forEach(m => {
-      const planNombre = m.plan_membresia?.nombre || 'General / Estándar';
-      planesConteo[planNombre] = (planesConteo[planNombre] || 0) + 1;
-    });
-
-    const distribucionPlanes = Object.keys(planesConteo).map(nombre => ({
-      name: nombre,
-      value: planesConteo[nombre]
-    }));
-
-    // Fecha actual a medianoche para cálculo exacto de días
     const hoyDate = new Date();
     hoyDate.setHours(0, 0, 0, 0);
 
@@ -243,26 +205,21 @@ const getDashboardAdmin = async (req, res) => {
     let totalMembresiasPorVencer = 0;
     const proximosVencimientos = [];
 
-    membresiasList.forEach(m => {
-      const est = (m.estado || '').toLowerCase().trim();
-      // Si la membresía está cancelada, no se cuenta como deuda o cuota a cobrar
-      if (est === 'cancelada' || est === 'cancelado') return;
+    membresiasList.forEach((m) => {
+      const planNombre = m.membresia_gimnasio?.nombre || 'Plan';
+      planesConteo[planNombre] = (planesConteo[planNombre] || 0) + 1;
 
-      let esVencida = est === 'vencida' || est === 'vencido';
+      if (m.estado === 'cancelada') return;
+
+      let esVencida = m.estado === 'vencida';
       let esPorVencer = false;
 
       if (m.fecha_vencimiento) {
-        const fStr = String(m.fecha_vencimiento).split('T')[0];
-        const [y, mes, d] = fStr.split('-').map(Number);
-        const fVencDate = new Date(y, mes - 1, d, 23, 59, 59, 999);
-        const diffMs = fVencDate.getTime() - hoyDate.getTime();
-        const diasRestantes = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-        if (diasRestantes <= 0 || fVencDate < ahora) {
-          esVencida = true;
-        } else if (diasRestantes <= 7) {
-          esPorVencer = true;
-        }
+        const [y, mes, d] = String(m.fecha_vencimiento).split('T')[0].split('-').map(Number);
+        const fVenc = new Date(y, mes - 1, d, 23, 59, 59, 999);
+        const diasRest = Math.ceil((fVenc.getTime() - hoyDate.getTime()) / (1000 * 60 * 60 * 24));
+        if (diasRest <= 0) esVencida = true;
+        else if (diasRest <= 7) esPorVencer = true;
       }
 
       if (esVencida) {
@@ -270,44 +227,43 @@ const getDashboardAdmin = async (req, res) => {
       } else if (esPorVencer) {
         totalMembresiasPorVencer += 1;
         proximosVencimientos.push({
-          id_membresia: m.id_membresia,
+          id_membresia_socio: m.id_membresia_socio,
           socio: {
             id_socio: m.socio?.id_socio,
             nombre: `${m.socio?.nombre || ''} ${m.socio?.apellido || ''}`.trim(),
             dni: m.socio?.dni
           },
-          plan: m.plan_membresia?.nombre || 'Estándar',
-          fecha_fin: m.fecha_vencimiento,
+          plan: planNombre,
           fecha_vencimiento: m.fecha_vencimiento
         });
       }
     });
 
-    // 6. ACTIVIDAD RECIENTE (Últimas 6 asistencias y últimos 6 pagos)
-    const ultimasAsistencias = asistenciasList.slice(0, 6).map(a => ({
-      id: a.id_asistencia,
+    const distribucionPlanes = Object.entries(planesConteo).map(([name, value]) => ({ name, value }));
+
+    const ultimasAsistencias = asistenciasList.slice(0, 6).map((a) => ({
+      id: a.id_asistencia_socio,
       socio: `${a.socio?.nombre || ''} ${a.socio?.apellido || ''}`.trim(),
       dni: a.socio?.dni || 'S/D',
+      sucursal: a.sucursal?.direccion || '-',
       hora: a.hora_ingreso,
-      estado: a.estado || 'presente'
+      hora_salida: a.hora_salida,
+      estado: a.estado
     }));
 
-    const ultimosPagos = pagosList.slice(0, 6).map(p => ({
+    const ultimosPagos = pagosList.slice(0, 6).map((p) => ({
       id: p.id_pago,
-      socio: `${p.membresia?.socio?.nombre || ''} ${p.membresia?.socio?.apellido || ''}`.trim(),
-      plan: p.membresia?.plan_membresia?.nombre || 'Cuota Gimnasio',
+      socio: `${p.membresia_socio?.socio?.nombre || ''} ${p.membresia_socio?.socio?.apellido || ''}`.trim(),
+      plan: p.membresia_socio?.membresia_gimnasio?.nombre || 'Membresía',
       monto: Number(p.monto) || 0,
-      metodo: p.metodo_pago || 'Efectivo',
-      estado: (p.estado || 'pagado').toLowerCase(),
+      metodo: p.metodo_pago,
+      estado: p.estado,
       fecha: p.fecha_pago
     }));
 
     return res.status(200).json({
-      gimnasio: {
-        id: gimnasio?.id_gimnasio || gymId,
-        nombre: gimnasio?.nombre || 'GymTrack Central',
-        codigo_acceso: gimnasio?.codigo_acceso || ''
-      },
+      gimnasio: gimnasio || { id_gimnasio: gymId, nombre: 'Gimnasio' },
+      sucursales,
       kpis: {
         socios: {
           total: totalSocios,
@@ -316,13 +272,18 @@ const getDashboardAdmin = async (req, res) => {
           pendientes: sociosPendientes,
           nuevosMes: nuevosSociosMes
         },
+        sucursales: {
+          total: sucursales.length,
+          activas: sucursales.filter((s) => s.estado).length
+        },
         ingresos: {
           mesActual: recaudacionMesActual,
           mesAnterior: recaudacionMesAnterior,
           variacionPorcentaje: variacionIngresos,
           pagosRealizados,
           pagosPendientes,
-          pagosVencidos
+          pagosVencidos: pagosRechazados,
+          pagosRechazados
         },
         asistencias: {
           hoy: asistenciasHoy,
@@ -336,7 +297,8 @@ const getDashboardAdmin = async (req, res) => {
       graficos: {
         ingresosMensuales: ingresosUltimos6Meses,
         asistenciasPorDia,
-        distribucionPlanes: distribucionPlanes.length > 0 ? distribucionPlanes : [{ name: 'Estándar', value: Math.max(1, totalSocios) }]
+        asistenciasPorSucursal,
+        distribucionPlanes
       },
       actividadReciente: {
         asistencias: ultimasAsistencias,
@@ -344,9 +306,7 @@ const getDashboardAdmin = async (req, res) => {
       },
       proximosVencimientos
     });
-
   } catch (error) {
-    console.error('Error en getDashboardAdmin:', error);
     return res.status(500).json({ error: 'Error al compilar métricas del dashboard: ' + error.message });
   }
 };

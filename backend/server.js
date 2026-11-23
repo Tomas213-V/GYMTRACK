@@ -19,6 +19,8 @@ const supabase = require("./src/config/supabase");
 const authRoutes = require("./src/routes/authRoutes");
 const pagoRoutes = require("./src/routes/pagoRoutes");
 const gimnasioRoutes = require("./src/routes/gimnasioRoutes");
+const sucursalRoutes = require("./src/routes/sucursalRoutes");
+const empleadoRoutes = require("./src/routes/empleadoRoutes");
 const socioRoutes = require("./src/routes/socioRoutes");
 const rutinaRoutes = require('./src/routes/rutinaRoutes');
 const ejercicioRoutes = require('./src/routes/ejercicioRoutes');
@@ -76,6 +78,8 @@ app.get("/api/health", async (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/pagos", pagoRoutes);
 app.use("/api/gimnasios", gimnasioRoutes);
+app.use("/api/sucursales", sucursalRoutes);
+app.use("/api/empleados", empleadoRoutes);
 app.use("/api/socios", socioRoutes);
 app.use('/api/rutinas', rutinaRoutes);
 app.use('/api/ejercicios', ejercicioRoutes);

@@ -30,6 +30,7 @@ const MERCADOPAGO_ACCESS_TOKEN = process.env.MERCADOPAGO_ACCESS_TOKEN || process
 const UALA_CLIENT_ID = process.env.UALA_CLIENT_ID || '';
 const UALA_CLIENT_SECRET = process.env.UALA_CLIENT_SECRET || '';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const ENABLE_MOCK_PAYMENT_SANDBOX = process.env.ENABLE_MOCK_PAYMENT_SANDBOX === 'true';
 
 /**
  * Genera una preferencia de pago en la API de Mercado Pago (Checkout Pro).
@@ -97,22 +98,31 @@ async function crearPreferenciaMercadoPago({ titulo, monto, externalReference, s
           proveedor: 'mercadopago',
           modo: 'api_real',
           id_preferencia: mpData.id,
-          init_point: mpData.init_point,                               // URL oficial de cobro
-          sandbox_init_point: mpData.sandbox_init_point || mpData.init_point, // URL para cuentas de test
+          init_point: mpData.init_point,
+          sandbox_init_point: mpData.sandbox_init_point || mpData.init_point,
           external_reference: externalReference,
           monto: precioUnitario,
           qr_codigo: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(mpData.init_point)}`
         };
       }
+
+      const mpErrBody = await response.text().catch(() => '');
+      throw new Error(`Mercado Pago respondió ${response.status}: ${mpErrBody.slice(0, 200)}`);
     } catch (err) {
-      console.warn('Fallo al conectar con la API en vivo de Mercado Pago, usando fallback simulado:', err.message);
+      if (!ENABLE_MOCK_PAYMENT_SANDBOX) {
+        throw new Error(`No se pudo iniciar el checkout con Mercado Pago: ${err.message}`);
+      }
+      console.warn('Fallo con API en vivo de Mercado Pago; ENABLE_MOCK_PAYMENT_SANDBOX=true activo:', err.message);
     }
   }
 
-  // ---------------------------------------------------------------------------------------
-  // PASO 2: MODO SANDBOX / FALLBACK SIMULADO (Para desarrollo local y pruebas sin credenciales)
-  // ---------------------------------------------------------------------------------------
-  // Genera una preferencia sintética que simula el proceso de pago en la UI sin requerir dinero real
+  if (!ENABLE_MOCK_PAYMENT_SANDBOX) {
+    throw new Error(
+      'Mercado Pago no está configurado (falta MERCADOPAGO_ACCESS_TOKEN). Para desarrollo local explícito, habilitá ENABLE_MOCK_PAYMENT_SANDBOX=true.'
+    );
+  }
+
+  // Modo Sandbox explícito solo cuando ENABLE_MOCK_PAYMENT_SANDBOX=true
   const mockPrefId = `MP-PREF-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   const mockCheckoutUrl = `${FRONTEND_URL}/membresia-socio?checkout=mercadopago&ref=${externalReference}&pref=${mockPrefId}&monto=${precioUnitario}`;
 
@@ -125,7 +135,7 @@ async function crearPreferenciaMercadoPago({ titulo, monto, externalReference, s
     external_reference: externalReference,
     monto: precioUnitario,
     qr_codigo: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(mockCheckoutUrl)}`,
-    mensaje: 'Sesión de Mercado Pago preparada correctamente.'
+    mensaje: 'Sesión sandbox de Mercado Pago preparada (ENABLE_MOCK_PAYMENT_SANDBOX=true).'
   };
 }
 
@@ -186,15 +196,26 @@ async function crearOrdenUala({ titulo, monto, externalReference, socio, gimnasi
             qr_codigo: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(ualaData.links?.checkoutLink || '')}`
           };
         }
+        throw new Error(`Ualá respondió ${orderRes.status}`);
       }
+      throw new Error(`Auth Ualá respondió ${authRes.status}`);
     } catch (err) {
-      console.warn('Fallo al conectar con la API en vivo de Ualá, usando fallback simulado:', err.message);
+      if (!ENABLE_MOCK_PAYMENT_SANDBOX) {
+        throw new Error(`No se pudo iniciar la orden con Ualá: ${err.message}`);
+      }
+      console.warn('Fallo con API en vivo de Ualá; ENABLE_MOCK_PAYMENT_SANDBOX=true activo:', err.message);
     }
   }
 
-  // Modo Sandbox/Simulado listo para operar de inmediato
+  if (!ENABLE_MOCK_PAYMENT_SANDBOX) {
+    throw new Error(
+      'Ualá Bis no está configurado (faltan UALA_CLIENT_ID / UALA_CLIENT_SECRET). Para desarrollo local explícito, habilitá ENABLE_MOCK_PAYMENT_SANDBOX=true.'
+    );
+  }
+
+  // Modo Sandbox explícito solo cuando ENABLE_MOCK_PAYMENT_SANDBOX=true
   const mockOrderId = `UALA-ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-  const mockCheckoutUrl = `${FRONTEND_URL}/socio/membresia?checkout=uala&ref=${externalReference}&order=${mockOrderId}&monto=${precioUnitario}`;
+  const mockCheckoutUrl = `${FRONTEND_URL}/membresia-socio?checkout=uala&ref=${externalReference}&order=${mockOrderId}&monto=${precioUnitario}`;
 
   return {
     proveedor: 'uala',
@@ -204,7 +225,7 @@ async function crearOrdenUala({ titulo, monto, externalReference, socio, gimnasi
     external_reference: externalReference,
     monto: precioUnitario,
     qr_codigo: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(mockCheckoutUrl)}`,
-    mensaje: 'Orden de cobro Ualá preparada correctamente.'
+    mensaje: 'Orden sandbox de Ualá preparada (ENABLE_MOCK_PAYMENT_SANDBOX=true).'
   };
 }
 

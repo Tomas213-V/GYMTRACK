@@ -1,223 +1,127 @@
-/**
- * =========================================================================================
- * ARCHIVO: pagoService.js
- * PROYECTO: GYMTRACK - Frontend
- * DESCRIPCIÓN: Capa de servicios para la administración financiera, cobros y métricas de caja.
- * =========================================================================================
- * 
- * GUÍA PASO A PASO PARA EL DESARROLLADOR:
- * 1. Propósito: Conectar los componentes de tesorería y facturación con la API REST del backend.
- * 2. Autenticación y Autorización: Utiliza tokens Bearer inyectados en los headers HTTP.
- * 3. Filtrado por Gimnasio: Cada dueño gestiona estrictamente los pagos de su gimnasio (`id_gimnasio`).
- * 4. Métodos disponibles:
- *    - `getPagos()`: Listado paginado con rangos de fechas (desde/hasta) y filtro por estado.
- *    - `getResumenPagos()`: Métricas numéricas (total recaudado, completados, pendientes, vencidos).
- *    - `getMembresias()` y `getPlanes()`: Catálogos para el modal de nuevo cobro.
- *    - `registrarPago()`: Alta de cobro con método (efectivo, MP, transferencia, etc.).
- *    - `actualizarEstadoPago()`: Transición de estado (pagado, pendiente, vencido).
- *    - `getPagoById()` y `eliminarPago()`: Consulta detallada y baja.
- */
+// ==============================================================================
+// SERVICIO DE PAGOS — pago -> membresia_socio (CONTRATO ESTRICTO PagoCreate)
+// Fuente de verdad: gymtrack-backend-python/app/routers/pagos.py
+// ==============================================================================
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+import { apiRequest } from './apiClient';
 
-/**
- * Función auxiliar para inyectar token JWT y cabeceras JSON en cada petición.
- */
-function getHeaders() {
-  const token = localStorage.getItem('token');
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
+const METODOS_PERMITIDOS = new Set([
+  'efectivo',
+  'transferencia',
+  'tarjeta',
+  'debito',
+  'credito',
+  'mercadopago',
+  'uala',
+  'otro'
+]);
+
+function normalizarMetodoPago(metodo) {
+  const m = String(metodo || 'efectivo').trim().toLowerCase();
+  if (METODOS_PERMITIDOS.has(m)) return m;
+  if (m.includes('débito') || m.includes('debito')) return 'debito';
+  if (m.includes('crédito') || m.includes('credito')) return 'credito';
+  if (m.includes('mercado')) return 'mercadopago';
+  if (m.includes('ual')) return 'uala';
+  if (m.includes('transf')) return 'transferencia';
+  if (m.includes('tarj')) return 'tarjeta';
+  if (m.includes('efec')) return 'efectivo';
+  return 'otro';
 }
 
+export async function getPagos({
+  page = 1,
+  limit = 10,
+  estado = '',
+  desde = '',
+  hasta = '',
+  id_membresia_socio = null,
+  id_gimnasio = null,
+  signal
+} = {}) {
+  const query = new URLSearchParams();
+  if (page) query.append('page', String(page));
+  if (limit) query.append('limit', String(Math.min(Number(limit) || 10, 200)));
+  if (estado && estado !== 'todos') query.append('estado', String(estado).toLowerCase());
+  if (desde) query.append('desde', String(desde));
+  if (hasta) query.append('hasta', String(hasta));
+  if (id_membresia_socio) query.append('id_membresia_socio', String(id_membresia_socio));
+  if (id_gimnasio) query.append('id_gimnasio', String(id_gimnasio));
 
-/**
- * Obtener listado de pagos con paginación y filtros opcionales
- * @param {Object} params - { page, limit, estado, desde, hasta, id_gimnasio }
- */
-export async function getPagos({ page = 1, limit = 10, estado = '', desde = '', hasta = '', id_gimnasio = '' } = {}) {
-  try {
-    const query = new URLSearchParams();
-    if (page) query.append('page', page);
-    if (limit) query.append('limit', limit);
-    if (estado && estado !== 'todos') query.append('estado', estado);
-    if (desde) query.append('desde', desde);
-    if (hasta) query.append('hasta', hasta);
-    if (id_gimnasio) query.append('id_gimnasio', id_gimnasio);
-
-    const res = await fetch(`${API_URL}/pagos?${query.toString()}`, {
-      headers: getHeaders()
-    });
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || 'Error al obtener pagos');
-    }
-    return await res.json();
-  } catch (error) {
-    console.error('Error en getPagos:', error);
-    throw error;
-  }
+  return apiRequest(`/pagos?${query.toString()}`, {
+    signal,
+    ...(id_gimnasio ? { gimnasioId: id_gimnasio } : {})
+  });
 }
 
-/**
- * Obtener métricas resumidas de pagos
- * @param {Object} params - { desde, hasta, id_gimnasio }
- */
-export async function getResumenPagos({ desde = '', hasta = '', id_gimnasio = '' } = {}) {
-  try {
-    const query = new URLSearchParams();
-    if (desde) query.append('desde', desde);
-    if (hasta) query.append('hasta', hasta);
-    if (id_gimnasio) query.append('id_gimnasio', id_gimnasio);
+export async function getResumenPagos({ desde = '', hasta = '', id_gimnasio = null, signal } = {}) {
+  const query = new URLSearchParams();
+  if (desde) query.append('desde', String(desde));
+  if (hasta) query.append('hasta', String(hasta));
+  if (id_gimnasio) query.append('id_gimnasio', String(id_gimnasio));
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  return apiRequest(`/pagos/resumen${qs}`, {
+    signal,
+    ...(id_gimnasio ? { gimnasioId: id_gimnasio } : {})
+  });
+}
 
-    const res = await fetch(`${API_URL}/pagos/resumen?${query.toString()}`, {
-      headers: getHeaders()
-    });
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || 'Error al obtener resumen de pagos');
-    }
-    return await res.json();
-  } catch (error) {
-    console.error('Error en getResumenPagos:', error);
-    throw error;
-  }
+export async function getMembresias({ id_gimnasio = null, signal } = {}) {
+  const qs = id_gimnasio ? `?id_gimnasio=${encodeURIComponent(id_gimnasio)}` : '';
+  return apiRequest(`/pagos/membresias${qs}`, {
+    signal,
+    ...(id_gimnasio ? { gimnasioId: id_gimnasio } : {})
+  });
+}
+
+export async function getPlanes({ id_gimnasio = null, signal } = {}) {
+  const qs = id_gimnasio ? `?id_gimnasio=${encodeURIComponent(id_gimnasio)}` : '';
+  const data = await apiRequest(`/pagos/planes${qs}`, {
+    signal,
+    ...(id_gimnasio ? { gimnasioId: id_gimnasio } : {})
+  });
+  return Array.isArray(data) ? data : [];
 }
 
 /**
- * Obtener membresías y socios disponibles
- * @param {Object} params - { id_gimnasio }
- */
-export async function getMembresias({ id_gimnasio = '' } = {}) {
-  try {
-    const query = new URLSearchParams();
-    if (id_gimnasio) query.append('id_gimnasio', id_gimnasio);
-
-    const res = await fetch(`${API_URL}/pagos/membresias?${query.toString()}`, {
-      headers: getHeaders()
-    });
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || 'Error al obtener membresías');
-    }
-    return await res.json();
-  } catch (error) {
-    console.error('Error en getMembresias:', error);
-    throw error;
-  }
-}
-
-/**
- * Obtener lista de planes de membresía disponibles
- * @param {Object} params - { id_gimnasio }
- */
-export async function getPlanes({ id_gimnasio = '' } = {}) {
-  try {
-    const query = new URLSearchParams();
-    if (id_gimnasio) query.append('id_gimnasio', id_gimnasio);
-
-    const res = await fetch(`${API_URL}/pagos/planes?${query.toString()}`, {
-      headers: getHeaders()
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  } catch (error) {
-    console.error('Error en getPlanes:', error);
-    return [];
-  }
-}
-
-/**
- * Registrar un nuevo pago
- * @param {Object} datos - { id_membresia, monto, fecha_pago, metodo_pago, estado, comprobante, nombreSocio, dniSocio, plan, id_gimnasio }
+ * Registra un pago sobre una contratación existente (PagoCreate, extra="forbid").
  */
 export async function registrarPago(datos) {
-  try {
-    const res = await fetch(`${API_URL}/pagos`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(datos),
-    });
+  const estadoVal = String(datos.estado || 'aprobado').trim().toLowerCase();
+  const estadoPermitido = ['pendiente', 'aprobado', 'rechazado'].includes(estadoVal)
+    ? estadoVal
+    : 'aprobado';
 
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data.error || 'Error al registrar el pago');
-    }
-    return data;
-  } catch (error) {
-    console.error('Error en registrarPago:', error);
-    throw error;
-  }
+  const payload = {
+    id_membresia_socio: Number(datos.id_membresia_socio),
+    ...(datos.monto !== undefined && datos.monto !== '' && datos.monto !== null
+      ? { monto: Number(datos.monto) }
+      : {}),
+    metodo_pago: normalizarMetodoPago(datos.metodo_pago),
+    estado: estadoPermitido,
+    ...(datos.comprobante ? { comprobante: String(datos.comprobante).trim() } : {}),
+    ...(datos.fecha_pago ? { fecha_pago: String(datos.fecha_pago) } : {}),
+    ...(datos.id_gimnasio ? { id_gimnasio: Number(datos.id_gimnasio) } : {})
+  };
+  return apiRequest('/pagos', {
+    method: 'POST',
+    body: payload
+  });
 }
 
-/**
- * Actualizar el estado de un pago
- * @param {number|string} id - ID del pago
- * @param {string} estado - 'pagado' | 'pendiente' | 'vencido'
- */
 export async function actualizarEstadoPago(id, estado) {
-  try {
-    const res = await fetch(`${API_URL}/pagos/${id}/estado`, {
-      method: 'PATCH',
-      headers: getHeaders(),
-      body: JSON.stringify({ estado }),
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data.error || 'Error al actualizar el estado del pago');
-    }
-    return data;
-  } catch (error) {
-    console.error('Error en actualizarEstadoPago:', error);
-    throw error;
-  }
+  return apiRequest(`/pagos/${id}/estado`, {
+    method: 'PATCH',
+    body: { estado: String(estado).trim().toLowerCase() }
+  });
 }
 
-/**
- * Obtener detalle completo de un pago
- * @param {number|string} id - ID del pago
- */
-export async function getPagoById(id) {
-  try {
-    const res = await fetch(`${API_URL}/pagos/${id}`, {
-      headers: getHeaders()
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data.error || 'Error al obtener detalle del pago');
-    }
-    return data;
-  } catch (error) {
-    console.error('Error en getPagoById:', error);
-    throw error;
-  }
+export async function getPagoById(id, { signal } = {}) {
+  return apiRequest(`/pagos/${id}`, { signal });
 }
 
-/**
- * Eliminar un pago de la base de datos
- * @param {number|string} id - ID del pago
- */
 export async function eliminarPago(id) {
-  try {
-    const res = await fetch(`${API_URL}/pagos/${id}`, {
-      method: 'DELETE',
-      headers: getHeaders()
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data.error || 'Error al eliminar el pago');
-    }
-    return data;
-  } catch (error) {
-    console.error('Error en eliminarPago:', error);
-    throw error;
-  }
+  return apiRequest(`/pagos/${id}`, {
+    method: 'DELETE'
+  });
 }

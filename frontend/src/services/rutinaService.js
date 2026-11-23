@@ -1,272 +1,303 @@
-/**
- * =========================================================================================
- * ARCHIVO: rutinaService.js
- * PROYECTO: GYMTRACK - Frontend
- * DESCRIPCIÓN: Servicio para la creación y gestión de rutinas de entrenamiento y ejercicios.
- * =========================================================================================
- * 
- * GUÍA PASO A PASO PARA EL DESARROLLADOR:
- * 1. Estructura de Rutina: Cada rutina contiene información general (nombre, objetivo, socio asignado, estado)
- *    y una colección de días de entrenamiento con sus correspondientes ejercicios, series, repeticiones y descansos.
- * 2. Operaciones:
- *    - `fetchRutinas()`: Búsqueda con filtros por socio y estado.
- *    - `fetchRutinaById()`: Detalle completo para visualización o edición.
- *    - `createRutina()` / `updateRutina()`: Guardado de la rutina y sus bloques de ejercicios.
- *    - `deleteRutina()`: Eliminación de la rutina.
- */
+// ==============================================================================
+// SERVICIO DE RUTINAS — RUTINA_SOCIO, RUTINA_GIMNASIO Y ASIGNACIONES
+// Contratos alineados 100% con app/routers/rutinas.py (extra="forbid")
+// ==============================================================================
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+import { apiRequest } from './apiClient';
 
-const getHeaders = () => {
-  const token = localStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`
+// ------------------------------------------------------------------------------
+// 0. RESUMEN CONSOLIDADO (`GET /api/rutinas`)
+// ------------------------------------------------------------------------------
+export async function fetchRutinasResumen({ id_gimnasio = null, solo_activas = false, signal } = {}) {
+  const params = new URLSearchParams();
+  if (id_gimnasio) params.append('id_gimnasio', String(id_gimnasio));
+  if (solo_activas) params.append('solo_activas', 'true');
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  return apiRequest(`/rutinas${qs}`, { signal });
+}
+
+// ------------------------------------------------------------------------------
+// 1. RUTINAS PERSONALES DEL SOCIO (`public.rutina_socio` / `rutina_ejercicio_socio`)
+// ------------------------------------------------------------------------------
+export async function fetchRutinasPersonales({ solo_activas = false, signal } = {}) {
+  const qs = solo_activas ? '?solo_activas=true' : '';
+  const data = await apiRequest(`/rutinas/personales${qs}`, { signal });
+  return data.rutinas || [];
+}
+
+export async function fetchRutinaPersonalById(id_rutina_socio, { signal } = {}) {
+  const data = await apiRequest(`/rutinas/personales/${id_rutina_socio}`, { signal });
+  return data.rutina || data;
+}
+
+export async function createRutinaPersonal({
+  nombre,
+  descripcion = null,
+  fecha_inicio = null,
+  fecha_fin = null,
+  estado = true
+}) {
+  const body = {
+    nombre: String(nombre || '').trim(),
+    descripcion: descripcion ? String(descripcion).trim() : null,
+    estado: Boolean(estado)
   };
-};
+  if (fecha_inicio) body.fecha_inicio = fecha_inicio;
+  if (fecha_fin) body.fecha_fin = fecha_fin;
 
-
-/**
- * Obtener todas las rutinas con filtros opcionales
- */
-export async function fetchRutinas({ search = '', id_socio = '', estado = '' } = {}) {
-  const params = new URLSearchParams();
-  if (search) params.append('search', search);
-  if (id_socio && id_socio !== 'todos') params.append('id_socio', id_socio);
-  if (estado && estado !== 'todos') params.append('estado', estado);
-
-  const response = await fetch(`${API_URL}/rutinas?${params.toString()}`, {
-    headers: getHeaders()
-  });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al obtener las rutinas.');
-  return data;
-}
-
-/**
- * Obtener una rutina específica por su ID
- */
-export async function fetchRutinaById(id) {
-  const response = await fetch(`${API_URL}/rutinas/${id}`, {
-    headers: getHeaders()
-  });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || data.message || 'Error al obtener la rutina.');
-  return data;
-}
-
-/**
- * Crear una nueva rutina
- */
-export async function createRutina(rutinaData) {
-  const response = await fetch(`${API_URL}/rutinas`, {
+  const data = await apiRequest('/rutinas/personales', {
     method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify(rutinaData)
+    body
   });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || data.detail || data.message || 'Error al crear la rutina.');
-  return data;
+  return data.rutina || data;
 }
 
-/**
- * Actualizar una rutina existente
- */
-export async function updateRutina(id, rutinaData) {
-  const response = await fetch(`${API_URL}/rutinas/${id}`, {
+export async function updateRutinaPersonal(id_rutina_socio, cambios) {
+  const body = {};
+  if (cambios.nombre !== undefined) body.nombre = String(cambios.nombre).trim();
+  if (cambios.descripcion !== undefined) body.descripcion = cambios.descripcion ? String(cambios.descripcion).trim() : null;
+  if (cambios.fecha_inicio !== undefined) body.fecha_inicio = cambios.fecha_inicio || null;
+  if (cambios.fecha_fin !== undefined) body.fecha_fin = cambios.fecha_fin || null;
+  if (cambios.estado !== undefined) body.estado = Boolean(cambios.estado);
+
+  const data = await apiRequest(`/rutinas/personales/${id_rutina_socio}`, {
     method: 'PUT',
-    headers: getHeaders(),
-    body: JSON.stringify(rutinaData)
+    body
   });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || data.detail || data.message || 'Error al actualizar la rutina.');
-  return data;
+  return data.rutina || data;
 }
 
-/**
- * Eliminar una rutina
- */
-export async function deleteRutina(id) {
-  const response = await fetch(`${API_URL}/rutinas/${id}`, {
-    method: 'DELETE',
-    headers: getHeaders()
+export async function deleteRutinaPersonal(id_rutina_socio) {
+  return apiRequest(`/rutinas/personales/${id_rutina_socio}`, {
+    method: 'DELETE'
   });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al eliminar la rutina.');
-  return data;
 }
 
-/**
- * Asociar un ejercicio a una rutina
- */
-export async function addEjercicioToRutina(rutinaId, ejercicioData) {
-  const response = await fetch(`${API_URL}/rutinas/${rutinaId}/ejercicios`, {
+export async function addEjercicioRutinaPersonal(id_rutina_socio, {
+  id_ejercicio_socio,
+  series = 4,
+  repeticiones = 12,
+  peso = 0,
+  descanso = 60,
+  orden = 1
+}) {
+  return apiRequest(`/rutinas/personales/${id_rutina_socio}/ejercicios`, {
     method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify(ejercicioData)
+    body: {
+      id_ejercicio_socio: Number(id_ejercicio_socio),
+      series: Number(series),
+      repeticiones: Number(repeticiones),
+      peso: Number(peso ?? 0),
+      descanso: Number(descanso ?? 60),
+      orden: Number(orden)
+    }
   });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al agregar el ejercicio a la rutina.');
-  return data;
 }
 
-/**
- * Actualizar parámetros de un ejercicio en la rutina
- */
-export async function updateEjercicioEnRutina(rutinaId, ejercicioId, ejercicioData) {
-  const response = await fetch(`${API_URL}/rutinas/${rutinaId}/ejercicios/${ejercicioId}`, {
+export async function updateEjercicioRutinaPersonal(id_rutina_socio, id_item, cambios) {
+  const body = {};
+  if (cambios.series !== undefined) body.series = Number(cambios.series);
+  if (cambios.repeticiones !== undefined) body.repeticiones = Number(cambios.repeticiones);
+  if (cambios.peso !== undefined) body.peso = Number(cambios.peso);
+  if (cambios.descanso !== undefined) body.descanso = Number(cambios.descanso);
+  if (cambios.orden !== undefined) body.orden = Number(cambios.orden);
+
+  return apiRequest(`/rutinas/personales/${id_rutina_socio}/ejercicios/${id_item}`, {
     method: 'PUT',
-    headers: getHeaders(),
-    body: JSON.stringify(ejercicioData)
+    body
   });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al actualizar el ejercicio en la rutina.');
-  return data;
 }
 
-/**
- * Desvincular un ejercicio de una rutina
- */
-export async function removeEjercicioFromRutina(rutinaId, ejercicioId) {
-  const response = await fetch(`${API_URL}/rutinas/${rutinaId}/ejercicios/${ejercicioId}`, {
-    method: 'DELETE',
-    headers: getHeaders()
+export async function removeEjercicioRutinaPersonal(id_rutina_socio, id_item) {
+  return apiRequest(`/rutinas/personales/${id_rutina_socio}/ejercicios/${id_item}`, {
+    method: 'DELETE'
   });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al desvincular el ejercicio.');
-  return data;
 }
 
-/**
- * Obtener ejercicios disponibles para el socio (del gimnasio + personalizados propios)
- * Permite filtrar por origen: 'todos' | 'gimnasio' | 'propio'
- */
-export async function fetchEjerciciosDisponibles({ id_socio = '', origen = 'todos', grupo_muscular = '', search = '' } = {}) {
+export async function reordenarRutinaPersonal(id_rutina_socio, ids_ordenados) {
+  return apiRequest(`/rutinas/personales/${id_rutina_socio}/reordenar`, {
+    method: 'PUT',
+    body: { ids_ordenados: ids_ordenados.map((x) => Number(x)) }
+  });
+}
+
+// ------------------------------------------------------------------------------
+// 2. RUTINAS DEL GIMNASIO (`public.rutina_gimnasio` / `rutina_ejercicio_gimnasio`)
+// ------------------------------------------------------------------------------
+export async function fetchRutinasGimnasio({ id_gimnasio = null, solo_activas = false, signal } = {}) {
   const params = new URLSearchParams();
-  if (id_socio) params.append('id_socio', id_socio);
-  if (origen && origen !== 'todos') params.append('origen', origen);
-  if (grupo_muscular && grupo_muscular !== 'todos') params.append('grupo_muscular', grupo_muscular);
-  if (search) params.append('search', search);
-  params.append('limit', '100');
-
-  const response = await fetch(`${API_URL}/ejercicios/disponibles?${params.toString()}`, {
-    headers: getHeaders()
-  });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al obtener ejercicios disponibles.');
-  return Array.isArray(data) ? data : data.datos || [];
+  if (id_gimnasio) params.append('id_gimnasio', String(id_gimnasio));
+  if (solo_activas) params.append('solo_activas', 'true');
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const data = await apiRequest(`/rutinas/gimnasio${qs}`, { signal });
+  return data.rutinas || [];
 }
 
-/**
- * Obtener catálogo general de ejercicios
- */
-export async function fetchCatalogoEjercicios({ id_socio = '', origen = 'todos', search = '', grupo_muscular = '' } = {}) {
-  try {
-    return await fetchEjerciciosDisponibles({ id_socio, origen, search, grupo_muscular });
-  } catch {
-    const params = new URLSearchParams({ limit: '100' });
-    if (search) params.append('search', search);
-    if (grupo_muscular && grupo_muscular !== 'todos') params.append('grupo_muscular', grupo_muscular);
-    const response = await fetch(`${API_URL}/ejercicios?${params.toString()}`, {
-      headers: getHeaders()
-    });
-    const data = await response.json();
-    return Array.isArray(data) ? data : data.datos || [];
+export async function fetchRutinaGimnasioById(id_rutina_gimnasio, { signal } = {}) {
+  const data = await apiRequest(`/rutinas/gimnasio/${id_rutina_gimnasio}`, { signal });
+  return data.rutina || data;
+}
+
+export async function createRutinaGimnasio({
+  nombre,
+  descripcion = null,
+  nivel = null,
+  estado = true,
+  id_gimnasio = null
+}) {
+  const body = {
+    nombre: String(nombre || '').trim(),
+    descripcion: descripcion ? String(descripcion).trim() : null,
+    nivel: nivel ? String(nivel).trim() : null,
+    estado: Boolean(estado)
+  };
+  if (id_gimnasio != null && id_gimnasio !== '') {
+    body.id_gimnasio = Number(id_gimnasio);
   }
-}
 
-/**
- * Crear un ejercicio oficial asignado al gimnasio (para dueño / administrador)
- */
-export async function createEjercicio(ejercicioData) {
-  const response = await fetch(`${API_URL}/ejercicios`, {
+  const data = await apiRequest('/rutinas/gimnasio', {
     method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify(ejercicioData)
+    body
   });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || data.detail || data.message || 'Error al crear el ejercicio del gimnasio.');
-  return data.ejercicio || data;
-}
-
-/**
- * Crear un ejercicio personalizado propio para el socio
- */
-export async function createEjercicioPersonalizado(ejercicioData) {
-  const response = await fetch(`${API_URL}/ejercicios/personalizado`, {
-    method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify(ejercicioData)
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || data.detail || data.message || 'Error al crear el ejercicio personalizado.');
-  return data.ejercicio || data;
-}
-
-/**
- * Eliminar un ejercicio personalizado
- */
-export async function deleteEjercicioPersonalizado(id) {
-  const response = await fetch(`${API_URL}/ejercicios/${id}`, {
-    method: 'DELETE',
-    headers: getHeaders()
-  });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al eliminar el ejercicio.');
-  return data;
-}
-
-/**
- * Obtener las rutinas oficiales que ofrece el gimnasio a los socios
- */
-export async function fetchRutinasOfrecidasGym() {
-  const response = await fetch(`${API_URL}/rutinas/gym/ofrecidas`, {
-    headers: getHeaders()
-  });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al obtener programas del gimnasio.');
-  return data;
-}
-
-/**
- * Adoptar / Comenzar una rutina ofrecida por el gimnasio
- */
-export async function adoptarRutinaGym({ plantilla, id_plantilla, id_socio, nombre_personalizado }) {
-  const response = await fetch(`${API_URL}/rutinas/adoptar`, {
-    method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify({ plantilla, id_plantilla, id_socio, nombre_personalizado })
-  });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || data.message || 'Error al adoptar la rutina.');
   return data.rutina || data;
 }
 
-/**
- * Establecer una rutina como la rutina activa principal del socio
- */
-export async function activarRutina(id) {
-  const response = await fetch(`${API_URL}/rutinas/${id}/activar`, {
+export async function updateRutinaGimnasio(id_rutina_gimnasio, cambios) {
+  const body = {};
+  if (cambios.nombre !== undefined) body.nombre = String(cambios.nombre).trim();
+  if (cambios.descripcion !== undefined) body.descripcion = cambios.descripcion ? String(cambios.descripcion).trim() : null;
+  if (cambios.nivel !== undefined) body.nivel = cambios.nivel ? String(cambios.nivel).trim() : null;
+  if (cambios.estado !== undefined) body.estado = Boolean(cambios.estado);
+
+  const data = await apiRequest(`/rutinas/gimnasio/${id_rutina_gimnasio}`, {
     method: 'PUT',
-    headers: getHeaders()
+    body
   });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || data.message || 'Error al activar la rutina.');
   return data.rutina || data;
 }
 
+export async function deleteRutinaGimnasio(id_rutina_gimnasio) {
+  return apiRequest(`/rutinas/gimnasio/${id_rutina_gimnasio}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function addEjercicioRutinaGimnasio(id_rutina_gimnasio, {
+  id_ejercicio_gimnasio,
+  series = 4,
+  repeticiones = 12,
+  peso = 0,
+  descanso = 60,
+  orden = 1
+}) {
+  return apiRequest(`/rutinas/gimnasio/${id_rutina_gimnasio}/ejercicios`, {
+    method: 'POST',
+    body: {
+      id_ejercicio_gimnasio: Number(id_ejercicio_gimnasio),
+      series: Number(series),
+      repeticiones: Number(repeticiones),
+      peso: Number(peso ?? 0),
+      descanso: Number(descanso ?? 60),
+      orden: Number(orden)
+    }
+  });
+}
+
+export async function updateEjercicioRutinaGimnasio(id_rutina_gimnasio, id_item, cambios) {
+  const body = {};
+  if (cambios.series !== undefined) body.series = Number(cambios.series);
+  if (cambios.repeticiones !== undefined) body.repeticiones = Number(cambios.repeticiones);
+  if (cambios.peso !== undefined) body.peso = Number(cambios.peso);
+  if (cambios.descanso !== undefined) body.descanso = Number(cambios.descanso);
+  if (cambios.orden !== undefined) body.orden = Number(cambios.orden);
+
+  return apiRequest(`/rutinas/gimnasio/${id_rutina_gimnasio}/ejercicios/${id_item}`, {
+    method: 'PUT',
+    body
+  });
+}
+
+export async function removeEjercicioRutinaGimnasio(id_rutina_gimnasio, id_item) {
+  return apiRequest(`/rutinas/gimnasio/${id_rutina_gimnasio}/ejercicios/${id_item}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function reordenarRutinaGimnasio(id_rutina_gimnasio, ids_ordenados) {
+  return apiRequest(`/rutinas/gimnasio/${id_rutina_gimnasio}/reordenar`, {
+    method: 'PUT',
+    body: { ids_ordenados: ids_ordenados.map((x) => Number(x)) }
+  });
+}
+
+// ------------------------------------------------------------------------------
+// 3. ASIGNACIONES DE RUTINAS (`public.rutinas_asignadas_socio_gimnasio`)
+// ------------------------------------------------------------------------------
+export async function fetchAsignacionesRutinas({
+  id_gimnasio = null,
+  id_socio = null,
+  solo_activas = false,
+  signal
+} = {}) {
+  const params = new URLSearchParams();
+  if (id_gimnasio) params.append('id_gimnasio', String(id_gimnasio));
+  if (id_socio) params.append('id_socio', String(id_socio));
+  if (solo_activas) params.append('solo_activas', 'true');
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const data = await apiRequest(`/rutinas/asignaciones${qs}`, { signal });
+  return data.asignaciones || [];
+}
+
+export async function asignarRutinaASocio({
+  id_rutina_gimnasio,
+  id_socio_gimnasio,
+  fecha_finalizacion = null,
+  observaciones = null,
+  id_empleado_responsable = null
+}) {
+  const body = {
+    id_rutina_gimnasio: Number(id_rutina_gimnasio),
+    id_socio_gimnasio: Number(id_socio_gimnasio)
+  };
+  if (fecha_finalizacion) body.fecha_finalizacion = fecha_finalizacion;
+  if (observaciones && String(observaciones).trim()) body.observaciones = String(observaciones).trim();
+  if (id_empleado_responsable != null && id_empleado_responsable !== '') {
+    body.id_empleado_responsable = Number(id_empleado_responsable);
+  }
+
+  return apiRequest('/rutinas/asignaciones', {
+    method: 'POST',
+    body
+  });
+}
+
+export async function reasignarResponsableRutina(id_rutina_asignada, {
+  id_empleado_responsable,
+  observaciones = null
+}) {
+  const body = {
+    id_empleado_responsable: Number(id_empleado_responsable)
+  };
+  if (observaciones !== undefined) {
+    body.observaciones = observaciones && String(observaciones).trim() ? String(observaciones).trim() : null;
+  }
+
+  return apiRequest(`/rutinas/asignaciones/${id_rutina_asignada}/responsable`, {
+    method: 'PATCH',
+    body
+  });
+}
+
+export async function finalizarAsignacionRutina(id_rutina_asignada, {
+  fecha_finalizacion = null,
+  observaciones = null
+} = {}) {
+  const body = {};
+  if (fecha_finalizacion) body.fecha_finalizacion = fecha_finalizacion;
+  if (observaciones && String(observaciones).trim()) body.observaciones = String(observaciones).trim();
+
+  return apiRequest(`/rutinas/asignaciones/${id_rutina_asignada}/finalizar`, {
+    method: 'PATCH',
+    body
+  });
+}

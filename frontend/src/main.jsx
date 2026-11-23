@@ -18,6 +18,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import { BrowserRouter } from 'react-router-dom'
+import { GymProvider } from './context/GymContext.jsx'
 
 // PASO 1: Localizamos el elemento contenedor '#root' en index.html y montamos el árbol de React.
 createRoot(document.getElementById('root')).render(
@@ -25,8 +26,10 @@ createRoot(document.getElementById('root')).render(
   <StrictMode>
     {/* BrowserRouter gestiona las URLs y la sincronización de la vista en el navegador */}
     <BrowserRouter>
-      {/* Componente principal con la definición de rutas */}
-      <App />
+      <GymProvider>
+        {/* Componente principal con la definición de rutas */}
+        <App />
+      </GymProvider>
     </BrowserRouter>
   </StrictMode>,
 )

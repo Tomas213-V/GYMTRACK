@@ -1,12 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const { crearGimnasio, obtenerMiGimnasio, actualizarMiGimnasio } = require('../controllers/gimnasioController');
-const { verifyToken } = require('../middlewares/authMiddleware');
+const {
+  listarMisGimnasios,
+  listarCatalogoGimnasios,
+  crearGimnasio,
+  obtenerMiGimnasio,
+  actualizarMiGimnasio
+} = require('../controllers/gimnasioController');
+const { verifyToken, requireRoles } = require('../middlewares/authMiddleware');
 
-// Rutas para gestión del gimnasio
-router.post('/', verifyToken, crearGimnasio);
-router.get('/mi-gimnasio', verifyToken, obtenerMiGimnasio);
-router.put('/mi-gimnasio', verifyToken, actualizarMiGimnasio);
-router.put('/:id', verifyToken, actualizarMiGimnasio);
+router.use(verifyToken);
+
+router.get('/', listarMisGimnasios);
+router.get('/catalogo', listarCatalogoGimnasios);
+router.get('/mi-gimnasio', obtenerMiGimnasio);
+router.post('/', requireRoles('dueño'), crearGimnasio);
+router.put('/mi-gimnasio', requireRoles('dueño'), actualizarMiGimnasio);
+router.put('/:id', requireRoles('dueño'), actualizarMiGimnasio);
 
 module.exports = router;

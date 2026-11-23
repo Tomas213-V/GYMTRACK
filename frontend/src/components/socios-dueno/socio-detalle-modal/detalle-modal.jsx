@@ -12,7 +12,6 @@ import {
   FaCheckCircle
 } from "react-icons/fa";
 import { getSocioById, updateSocio, deleteSocio, changeEstadoSocio } from "../../../services/socioService";
-import { getPlanes } from "../../../services/pagoService";
 import "./detalle-modal.css";
 
 function SocioDetalleModal({
@@ -20,8 +19,7 @@ function SocioDetalleModal({
   socio,
   onCerrar,
   onEliminarSocio,
-  onActualizarSocio,
-  gymId
+  onActualizarSocio
 }) {
   const [detalle, setDetalle] = useState(null);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
@@ -31,63 +29,41 @@ function SocioDetalleModal({
   const [eliminando, setEliminando] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [exitoMsg, setExitoMsg] = useState("");
-  const [planesDisponibles, setPlanesDisponibles] = useState([]);
 
-  // Estado del formulario de edición
+  // Estado del formulario de edición (solo campos válidos de SocioUpdate)
   const [formData, setFormData] = useState({
     nombre: "",
     apellido: "",
     dni: "",
     telefono: "",
-    estado: "activo",
-    id_plan_membresia: "",
-    plan: ""
+    email: "",
+    estado: "activo"
   });
 
-  // Cargar información extendida del socio y planes del gimnasio
+  // Cargar información extendida del socio
   useEffect(() => {
     let montado = true;
     if (abierto && socio?.id_socio) {
       setCargandoDetalle(true);
 
-      const idGym = gymId || (() => {
-        try {
-          const u = JSON.parse(localStorage.getItem("usuario") || "{}");
-          const user = Array.isArray(u) ? u[0] : u;
-          return user?.id_gimnasio || user?.gimnasio_id || null;
-        } catch {
-          return null;
-        }
-      })();
-
-      Promise.all([
-        getSocioById(socio.id_socio).catch(() => null),
-        getPlanes({ id_gimnasio: idGym }).catch(() => [])
-      ])
-        .then(([socioData, planes]) => {
+      getSocioById(socio.id_socio)
+        .catch(() => null)
+        .then((socioData) => {
           if (!montado) return;
           const s = socioData || socio;
           setDetalle(s);
 
-          if (Array.isArray(planes)) {
-            setPlanesDisponibles(planes);
-          }
-
-          const u = s.usuario || {};
-          const membActiva = Array.isArray(s.membresia) && s.membresia.length > 0
-            ? (s.membresia.find(m => m.estado === 'activo') || s.membresia[0])
-            : (s.membresia && !Array.isArray(s.membresia) ? s.membresia : null);
+          const estadoBool = typeof s.estado === 'boolean'
+            ? s.estado
+            : ['activo', 'activa', 'true'].includes(String(s.estado || 'activo').toLowerCase());
 
           setFormData({
-            nombre: s.nombre || u.nombre || "",
-            apellido: s.apellido || u.apellido || "",
+            nombre: s.nombre || "",
+            apellido: s.apellido || "",
             dni: s.dni || "",
             telefono: s.telefono || "",
-            email: s.email || u.email || "",
-            contrasena: "",
-            estado: (s.estado || "activo").toLowerCase(),
-            id_plan_membresia: membActiva?.id_plan_membresia || membActiva?.plan_membresia?.id_plan_membresia || "",
-            plan: membActiva?.plan_membresia?.nombre || membActiva?.tipo || "Plan Premium"
+            email: s.email || "",
+            estado: estadoBool ? "activo" : "inactivo"
           });
         })
         .finally(() => {
@@ -99,7 +75,7 @@ function SocioDetalleModal({
     return () => {
       montado = false;
     };
-  }, [abierto, socio, gymId]);
+  }, [abierto, socio]);
 
   if (!abierto || !socio) return null;
 
@@ -116,10 +92,10 @@ function SocioDetalleModal({
     ? (s.membresia.find(m => m.estado === 'activo') || s.membresia[0])
     : (s.membresia && !Array.isArray(s.membresia) ? s.membresia : null);
 
-  const planNombre = membActiva?.plan_membresia?.nombre || membActiva?.tipo || "Sin Plan";
+  const planNombre = membActiva?.membresia_gimnasio?.nombre || "Sin Plan";
   const planPrecio = membActiva?.precio != null 
     ? `$${Number(membActiva.precio).toLocaleString("es-AR")}` 
-    : (membActiva?.plan_membresia?.precio != null ? `$${Number(membActiva.plan_membresia.precio).toLocaleString("es-AR")}` : "No definido");
+    : (membActiva?.membresia_gimnasio?.precio != null ? `$${Number(membActiva.membresia_gimnasio.precio).toLocaleString("es-AR")}` : "No definido");
 
   const formatearFecha = (fechaStr) => {
     if (!fechaStr) return "Sin fecha";
@@ -162,14 +138,8 @@ function SocioDetalleModal({
         dni: formData.dni,
         telefono: formData.telefono,
         email: formData.email,
-        estado: formData.estado,
-        id_plan_membresia: formData.id_plan_membresia || undefined,
-        plan: formData.plan || undefined
+        estado: formData.estado === "activo"
       };
-
-      if (formData.contrasena && formData.contrasena.trim()) {
-        payload.contrasena = formData.contrasena.trim();
-      }
 
       await updateSocio(s.id_socio, payload);
 
@@ -467,57 +437,12 @@ function SocioDetalleModal({
                 </div>
 
                 <div className="socio-form-grupo">
-                  <label>Modificar Contraseña</label>
-                  <input
-                    type="password"
-                    placeholder="Dejar en blanco para no cambiar"
-                    value={formData.contrasena || ""}
-                    onChange={(e) => setFormData({ ...formData, contrasena: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="socio-form-fila">
-                <div className="socio-form-grupo">
-                  <label>Plan de Membresía</label>
-                  <select
-                    value={formData.id_plan_membresia}
-                    onChange={(e) => {
-                      const idSeleccionado = e.target.value;
-                      const planObj = planesDisponibles.find(
-                        (p) => String(p.id_plan_membresia) === String(idSeleccionado)
-                      );
-                      setFormData({
-                        ...formData,
-                        id_plan_membresia: idSeleccionado,
-                        plan: planObj ? planObj.nombre : formData.plan
-                      });
-                    }}
-                  >
-                    {planesDisponibles.length > 0 ? (
-                      planesDisponibles.map((p) => (
-                        <option key={p.id_plan_membresia} value={p.id_plan_membresia}>
-                          {p.nombre} {p.precio ? `($${p.precio})` : ""}
-                        </option>
-                      ))
-                    ) : (
-                      <>
-                        <option value="">Plan Básico</option>
-                        <option value="">Plan Premium</option>
-                        <option value="">Pase Libre</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-
-                <div className="socio-form-grupo">
                   <label>Estado</label>
                   <select
                     value={formData.estado}
                     onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
                   >
                     <option value="activo">Activo</option>
-                    <option value="pendiente">Pendiente</option>
                     <option value="inactivo">Inactivo</option>
                   </select>
                 </div>

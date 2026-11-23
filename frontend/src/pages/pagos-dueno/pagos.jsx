@@ -28,6 +28,7 @@
 import { useState, useEffect, useCallback } from "react";
 import NavGlobal from "../../components/nav-global/nav-global";
 import Sidebar from "../../components/sidebar-dueno/sidebar";
+import { useGymContext } from "../../context/GymContext";
 import PagosAcciones from "../../components/pagos-dueno/acciones/acciones";
 import PagosFiltros from "../../components/pagos-dueno/filtros/filtros";
 import PagosTabla from "../../components/pagos-dueno/tabla/tabla";
@@ -35,9 +36,12 @@ import PagosResumen from "../../components/pagos-dueno/resumen/resumen";
 import PagosModal from "../../components/pagos-dueno/modal/modal";
 import PagosDetalleModal from "../../components/pagos-dueno/detalle-modal/detalle-modal";
 import { getPagos, getResumenPagos, registrarPago, actualizarEstadoPago, eliminarPago } from "../../services/pagoService";
+import { createSocio } from "../../services/socioService";
+import { createMembresiaSocio } from "../../services/membresiaAdminService";
 import "./pagos.css";
 
 function Pagos() {
+  const { gimnasioActivo, gimnasioActivoId, contextVersion } = useGymContext();
   const [pagos, setPagos] = useState([]);
   const [resumen, setResumen] = useState({
     total_recaudado: 0,
@@ -47,8 +51,6 @@ function Pagos() {
   });
 
   const [cargando, setCargando] = useState(true);
-  const [usuarioActual, setUsuarioActual] = useState(null);
-
 
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("todos");
@@ -57,14 +59,10 @@ function Pagos() {
   const [paginaActual, setPaginaActual] = useState(1);
   const elementosPorPagina = 8;
 
-  // Estado del modal de registro
   const [modalAbierto, setModalAbierto] = useState(false);
-
-  // Estado del modal de detalle y eliminación
   const [pagoSeleccionado, setPagoSeleccionado] = useState(null);
   const [modalDetalleAbierto, setModalDetalleAbierto] = useState(false);
 
-  // Formatear fechas YYYY-MM-DD a DD/MM/YYYY
   const formatearFecha = (fechaStr) => {
     if (!fechaStr) return "";
     const partes = fechaStr.split("T")[0].split("-");
@@ -74,83 +72,66 @@ function Pagos() {
     return fechaStr;
   };
 
-  // Cargar pagos y métricas desde el backend con los datos del usuario autenticado
-  // Función auxiliar para obtener el ID de gimnasio del usuario logueado
-  const obtenerGymId = (u) => {
-    if (!u) return "";
-    if (u.gimnasio && typeof u.gimnasio === 'object') {
-      if (Array.isArray(u.gimnasio)) {
-        return u.gimnasio[0]?.id_gimnasio || "";
-      }
-      return u.gimnasio.id_gimnasio || "";
-    }
-    return u.id_gimnasio || "";
-  };
-
   const cargarDatos = useCallback(async () => {
+    if (!gimnasioActivoId) {
+      setPagos([]);
+      setCargando(false);
+      return;
+    }
     setCargando(true);
     try {
-      let gymId = "";
-      const guardado = localStorage.getItem("usuario");
-      if (guardado) {
-        try {
-          const u = JSON.parse(guardado);
-          setUsuarioActual(u);
-          gymId = obtenerGymId(u);
-        } catch {
-          // Ignorar error de parseo
-        }
-      }
+      const [resPagos, resResumen] = await Promise.all([
+        getPagos({ limit: 100, id_gimnasio: gimnasioActivoId }),
+        getResumenPagos({ id_gimnasio: gimnasioActivoId }).catch(() => null)
+      ]);
 
-      // 1. Obtener pagos reales de la base de datos (filtrados exclusivamente por su gimnasio)
-      let resPagos = await getPagos({ limit: 100, id_gimnasio: gymId });
       let pagosFormateados = [];
-
       if (resPagos && Array.isArray(resPagos.datos)) {
         pagosFormateados = resPagos.datos.map((item) => {
-          const socio = item.membresia?.socio || {};
+          const memb = item.membresia_socio || item.membresia || {};
+          const socio = memb.socio_gimnasio?.socio || memb.socio || {};
           const nombreCompleto = socio.nombre
             ? `${socio.nombre} ${socio.apellido || ""}`.trim()
-            : (socio.usuario?.nombre
-                ? `${socio.usuario.nombre} ${socio.usuario.apellido || ""}`.trim()
-                : (socio.dni ? `Socio DNI ${socio.dni}` : "Socio"));
+            : (socio.dni ? `Socio DNI ${socio.dni}` : "Socio");
           const dni = socio.dni || "S/D";
-          const planNombre = item.membresia?.plan_membresia?.nombre || item.membresia?.tipo || "Plan Básico";
+          const planNombre = memb.membresia_gimnasio?.nombre || "Plan";
 
           return {
             id: item.id_pago,
-            socio: { nombre: nombreCompleto, dni: dni },
+            socio: { nombre: nombreCompleto, dni },
             plan: planNombre,
             fecha: formatearFecha(item.fecha_pago),
             fechaOriginal: item.fecha_pago,
             monto: Number(item.monto) || 0,
-            estado: (item.estado || "pagado").toLowerCase()
+            metodo_pago: item.metodo_pago || "efectivo",
+            estado: (item.estado || "aprobado").toLowerCase()
           };
         });
       }
       setPagos(pagosFormateados);
 
-      // 2. Obtener resumen de métricas reales del gimnasio
-      let resResumen = await getResumenPagos({ id_gimnasio: gymId });
       if (resResumen) {
         setResumen({
           total_recaudado: resResumen.total_recaudado || 0,
-          pagos_realizados: resResumen.pagos_realizados || 0,
+          pagos_realizados: resResumen.pagos_aprobados ?? resResumen.pagos_realizados ?? 0,
           pagos_pendientes: resResumen.pagos_pendientes || 0,
-          pagos_vencidos: resResumen.pagos_vencidos || 0
+          pagos_vencidos: (resResumen.pagos_rechazados || 0) + (resResumen.pagos_anulados || 0)
         });
       } else {
-        const rec = pagosFormateados.reduce((acc, p) => {
-          if (p.estado === "pagado") {
-            acc.total_recaudado += p.monto;
-            acc.pagos_realizados += 1;
-          } else if (p.estado === "pendiente") {
-            acc.pagos_pendientes += 1;
-          } else if (p.estado === "vencido") {
-            acc.pagos_vencidos += 1;
-          }
-          return acc;
-        }, { total_recaudado: 0, pagos_realizados: 0, pagos_pendientes: 0, pagos_vencidos: 0 });
+        const rec = pagosFormateados.reduce(
+          (acc, p) => {
+            if (p.estado === "aprobado" || p.estado === "pagado") {
+              acc.total_recaudado += p.monto;
+              acc.pagos_realizados += 1;
+            } else if (p.estado === "pendiente") {
+              acc.pagos_pendientes += 1;
+            } else if (p.estado === "rechazado" || p.estado === "anulado") {
+              acc.pagos_vencidos += 1;
+            }
+            return acc;
+          },
+          { total_recaudado: 0, pagos_realizados: 0, pagos_pendientes: 0, pagos_vencidos: 0 }
+        );
         setResumen(rec);
       }
     } catch (err) {
@@ -159,44 +140,70 @@ function Pagos() {
     } finally {
       setCargando(false);
     }
-  }, []);
+  }, [gimnasioActivoId]);
 
   useEffect(() => {
     cargarDatos();
-  }, [cargarDatos]);
+  }, [cargarDatos, contextVersion]);
 
-  // Guardar nuevo pago conectando directamente a la API
   const handleGuardarPago = async (formulario) => {
-    const gymId = obtenerGymId(usuarioActual);
+    let idMembresiaSocio = formulario.id_membresia_socio ? Number(formulario.id_membresia_socio) : null;
+    let idSocio = formulario.id_socio ? Number(formulario.id_socio) : null;
+
+    // Si es un socio nuevo desde caja, crear/asociar identidad primero en POST /api/socios
+    if (!idSocio && (formulario.dniSocio || formulario.nombreSocio)) {
+      const partes = String(formulario.nombreSocio || "").trim().split(/\s+/);
+      const resSocio = await createSocio({
+        id_gimnasio: gimnasioActivoId,
+        nombre: partes[0] || "Socio",
+        apellido: partes.slice(1).join(" ") || "-",
+        dni: formulario.dniSocio || undefined
+      });
+      idSocio = resSocio?.socio?.id_socio || null;
+    }
+
+    // Si aún no tiene contratación activa/pendiente, crearla mediante POST /api/membresias
+    if (!idMembresiaSocio) {
+      if (!idSocio || !formulario.id_membresia_gimnasio) {
+        throw new Error("Debés seleccionar un socio y un plan de membresía para registrar el pago.");
+      }
+      const resMemb = await createMembresiaSocio({
+        id_socio: idSocio,
+        id_membresia_gimnasio: Number(formulario.id_membresia_gimnasio),
+        id_gimnasio: gimnasioActivoId,
+        estado: "pendiente",
+        registrar_pago: false
+      });
+      idMembresiaSocio =
+        resMemb?.membresia_socio?.id_membresia_socio ||
+        resMemb?.membresia?.id_membresia_socio ||
+        null;
+    }
+
+    if (!idMembresiaSocio) {
+      throw new Error("No se pudo resolver la contratación de membresía para asociar el pago.");
+    }
 
     await registrarPago({
-      id_socio: formulario.id_socio || undefined,
-      id_membresia: formulario.id_membresia || undefined,
-      id_plan_membresia: formulario.id_plan_membresia || undefined,
-      nombreSocio: formulario.nombreSocio,
-      dniSocio: formulario.dniSocio,
-      plan: formulario.plan,
-      monto: Number(formulario.monto),
-      fecha_pago: formulario.fecha_pago,
+      id_membresia_socio: idMembresiaSocio,
+      monto: formulario.monto !== "" && formulario.monto != null ? Number(formulario.monto) : undefined,
+      fecha_pago: formulario.fecha_pago || undefined,
       metodo_pago: formulario.metodo_pago,
-      estado: formulario.estado.toLowerCase(),
-      id_gimnasio: gymId
+      estado: String(formulario.estado || "aprobado").toLowerCase(),
+      comprobante: formulario.comprobante || undefined,
+      id_gimnasio: gimnasioActivoId
     });
 
-    // Recargar pagos de inmediato desde la base de datos
     await cargarDatos();
   };
 
-  // Cambiar el estado del socio / pago de forma manual
   const handleCambiarEstado = async (idPago, nuevoEstado) => {
-    // 1. Actualización optimista en el frontend
     setPagos((prevPagos) =>
       prevPagos.map((p) => (p.id === idPago ? { ...p, estado: nuevoEstado } : p))
     );
 
     try {
       await actualizarEstadoPago(idPago, nuevoEstado);
-      // 2. Refrescar métricas y asegurar sincronía
       await cargarDatos();
     } catch (error) {
       console.error("Error al actualizar estado del pago:", error);
@@ -204,19 +211,14 @@ function Pagos() {
     }
   };
 
-  // Abrir modal de detalle completo de un pago
   const handleVerDetalle = (pago) => {
     setPagoSeleccionado(pago);
     setModalDetalleAbierto(true);
   };
 
-  // Eliminar un pago y recargar datos
+  // Anular pago (baja lógica a 'anulado' para preservar historial contable)
   const handleEliminarPago = async (idPago) => {
-    // 1. Remoción optimista
-    setPagos((prev) => prev.filter((p) => p.id !== idPago));
-    // 2. Ejecutar eliminación en base de datos
     await eliminarPago(idPago);
-    // 3. Recargar datos y métricas
     await cargarDatos();
   };
 
@@ -275,8 +277,8 @@ function Pagos() {
           <div className="Caja-pagos-header">
             <h1 className="Caja-pagos-header-titulo">Pagos</h1>
             <p className="Caja-pagos-header-subtitulo">
-              {usuarioActual?.gimnasio?.nombre
-                ? `Gestiona los pagos de ${usuarioActual.gimnasio.nombre} y el estado de sus cuotas.`
+              {gimnasioActivo?.nombre
+                ? `Gestiona los pagos de ${gimnasioActivo.nombre} y el estado de sus cuotas.`
                 : "Gestiona los pagos de tus socios y el estado de sus cuotas."}
             </p>
           </div>
@@ -335,7 +337,7 @@ function Pagos() {
             abierto={modalAbierto}
             onCerrar={() => setModalAbierto(false)}
             onGuardarPago={handleGuardarPago}
-            gymId={obtenerGymId(usuarioActual)}
+            gymId={gimnasioActivoId}
           />
 
           {/* Componente Modular: Modal de Detalle Completo y Eliminación */}

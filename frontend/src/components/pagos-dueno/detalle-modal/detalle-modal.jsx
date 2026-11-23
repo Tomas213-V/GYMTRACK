@@ -78,23 +78,21 @@ function PagosDetalleModal({
     return <FaMoneyBillWave />;
   };
 
-  // Datos extraídos del detalle de Supabase o del objeto pago de la tabla
-  const socioData = detalle?.membresia?.socio || {};
-  const usuarioData = socioData.usuario || {};
+  // Datos extraídos del detalle de FastAPI o del objeto pago de la tabla
+  const membData = detalle?.membresia_socio || detalle?.membresia || {};
+  const socioData = membData.socio_gimnasio?.socio || membData.socio || {};
   const nombreSocio = socioData.nombre
     ? `${socioData.nombre} ${socioData.apellido || ""}`.trim()
-    : (usuarioData.nombre
-        ? `${usuarioData.nombre} ${usuarioData.apellido || ""}`.trim()
-        : (pago.socio?.nombre || "Socio"));
+    : (pago.socio?.nombre || "Socio");
   const dniSocio = socioData.dni || pago.socio?.dni || "S/D";
   const telefonoSocio = socioData.telefono || "No especificado";
-  const emailSocio = socioData.email || usuarioData.email || "No especificado";
+  const emailSocio = socioData.email || "No especificado";
   const metodoPago = detalle?.metodo_pago || pago.metodo_pago || "efectivo";
-  const estadoActual = (pago.estado || detalle?.estado || "pagado").toLowerCase();
+  const estadoActual = (pago.estado || detalle?.estado || "aprobado").toLowerCase();
   const fechaPago = pago.fecha || formatearFecha(detalle?.fecha_pago);
-  const planNombre = detalle?.membresia?.plan_membresia?.nombre || detalle?.membresia?.tipo || pago.plan || "Plan General";
-  const vencimientoMembresia = detalle?.membresia?.fecha_vencimiento
-    ? formatearFecha(detalle.membresia.fecha_vencimiento)
+  const planNombre = membData.membresia_gimnasio?.nombre || pago.plan || "Plan General";
+  const vencimientoMembresia = membData.fecha_vencimiento
+    ? formatearFecha(membData.fecha_vencimiento)
     : "Sin vencimiento fijo";
 
   // Manejador de eliminación con confirmación
@@ -161,13 +159,20 @@ function PagosDetalleModal({
             <div className="Caja-pagos-detalle-estado-selector">
               <label>Estado del Pago:</label>
               <select
-                className={`Caja-pagos-badge Caja-pagos-badge-select Caja-pagos-badge-${estadoActual}`}
-                value={estadoActual}
+                className={`Caja-pagos-badge Caja-pagos-badge-select Caja-pagos-badge-${
+                  estadoActual === "aprobado" || estadoActual === "pagado"
+                    ? "pagado"
+                    : estadoActual === "pendiente"
+                    ? "pendiente"
+                    : "vencido"
+                }`}
+                value={estadoActual === "pagado" ? "aprobado" : estadoActual}
                 onChange={(e) => onCambiarEstado && onCambiarEstado(pago.id, e.target.value)}
               >
-                <option value="pagado">Pagado</option>
+                <option value="aprobado">Aprobado</option>
                 <option value="pendiente">Pendiente</option>
-                <option value="vencido">Vencido</option>
+                <option value="rechazado">Rechazado</option>
+                <option value="anulado">Anulado</option>
               </select>
             </div>
           </div>
@@ -221,18 +226,22 @@ function PagosDetalleModal({
             </div>
           </div>
 
-          {/* Zona de Peligro / Confirmación de Eliminación */}
+          {/* Zona de Anulación (baja lógica para preservar historial financiero) */}
           <div className="Caja-pagos-detalle-zona-eliminar">
-            {!confirmandoEliminar ? (
+            {estadoActual === "anulado" ? (
               <div className="Caja-pagos-detalle-eliminar-barra">
-                <p>¿Necesitas anular o remover esta transacción del sistema?</p>
+                <p>Este pago ya se encuentra <strong>anulado</strong> (conservado en historial contable).</p>
+              </div>
+            ) : !confirmandoEliminar ? (
+              <div className="Caja-pagos-detalle-eliminar-barra">
+                <p>¿Necesitas anular esta transacción conservando el historial contable?</p>
                 <button
                   type="button"
                   className="Caja-pagos-btn-eliminar-pago"
                   onClick={() => setConfirmandoEliminar(true)}
                 >
                   <FaTrash />
-                  <span>Eliminar Pago</span>
+                  <span>Anular Pago</span>
                 </button>
               </div>
             ) : (
@@ -240,8 +249,8 @@ function PagosDetalleModal({
                 <div className="Caja-pagos-confirmar-texto">
                   <FaExclamationTriangle className="Caja-pagos-confirmar-icono" />
                   <div>
-                    <strong>¿Estás seguro de eliminar este pago?</strong>
-                    <p>Esta acción removerá el registro de la base de datos de manera irreversible.</p>
+                    <strong>¿Confirmás la anulación de este pago?</strong>
+                    <p>El pago pasará a estado <strong>anulado</strong> sin eliminarse físicamente del historial financiero.</p>
                   </div>
                 </div>
                 <div className="Caja-pagos-confirmar-botones">
@@ -260,7 +269,7 @@ function PagosDetalleModal({
                     disabled={eliminando}
                   >
                     <FaTrash />
-                    <span>"Sí, eliminar definitivamente"</span>
+                    <span>{eliminando ? "Anulando..." : "Sí, anular pago"}</span>
                   </button>
                 </div>
               </div>

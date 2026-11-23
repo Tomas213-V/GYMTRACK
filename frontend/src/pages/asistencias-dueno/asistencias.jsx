@@ -22,17 +22,20 @@
  *    - Eliminación supervisada de marcaciones duplicadas o accidentales (`deleteAsistencia`).
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
 import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar-dueno/sidebar';
+import { useGymContext } from '../../context/GymContext';
 import {
   fetchAsistencias,
   registrarAsistencia,
+  checkoutAsistencia,
   fetchEstadisticasAsistencias,
   fetchHistorialPorSocio,
-  deleteAsistencia
+  anularAsistencia
 } from '../../services/asistenciaService';
+import { getSucursales } from '../../services/sucursalService';
 import { fetchSocios } from '../../services/socioService';
 import {
   formatFechaArgentina,
@@ -53,15 +56,17 @@ import {
   FaHistory,
   FaTrashAlt,
   FaArrowUp,
-  FaArrowDown
+  FaArrowDown,
+  FaMapMarkerAlt,
+  FaSignOutAlt
 } from 'react-icons/fa';
 
 import './asistencias.css';
 
 export default function Asistencias() {
-  const rol = localStorage.getItem('rol');
-  const esSocio = rol === 'socio' || Boolean(localStorage.getItem('socio'));
-
+  const { rol, esDueno, esAdministrador, esAdminSucursal, hasPermission, gimnasioActivoId, contextVersion } = useGymContext();
+  const esSocio = rol === 'socio';
+  const puedeGestionarAsistencia = esDueno || esAdministrador || esAdminSucursal || hasPermission('gestionar_asistencias');
 
   // Estados para datos
   const [asistencias, setAsistencias] = useState([]);
@@ -71,13 +76,18 @@ export default function Asistencias() {
   const [loading, setLoading] = useState(false);
   const limitPerPage = 10;
 
+  // Sucursales del gimnasio activo
+  const [sucursales, setSucursales] = useState([]);
+  const [filtroSucursalId, setFiltroSucursalId] = useState('');
+  const [sucursalCheckinId, setSucursalCheckinId] = useState('');
+
   // Estados de Estadísticas
   const [stats, setStats] = useState({
     totalMesActual: 0,
     totalMesAnterior: 0,
     porcentajeCambio: 0,
     tendencia: 'neutral',
-    nombreMes: 'abril'
+    nombreMes: 'mes actual'
   });
 
   // Filtros superiores
@@ -98,7 +108,7 @@ export default function Asistencias() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSocio, setSelectedSocio] = useState(null);
   const [registerLoading, setRegisterLoading] = useState(false);
-  const [feedbackMessage, setFeedbackMessage] = useState(null); // { type: 'success' | 'error', text: '' }
+  const [feedbackMessage, setFeedbackMessage] = useState(null);
 
   // Menú contextual en tabla
   const [activeMenuId, setActiveMenuId] = useState(null);
@@ -108,13 +118,11 @@ export default function Asistencias() {
   const [historialSocio, setHistorialSocio] = useState([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
 
-  // Referencias para cerrar dropdowns al hacer clic afuera
   const fechaRef = useRef(null);
   const socioFilterRef = useRef(null);
   const registerInputRef = useRef(null);
   const menuRef = useRef(null);
 
-  // Cerrar menús al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (fechaRef.current && !fechaRef.current.contains(event.target)) {
@@ -134,37 +142,44 @@ export default function Asistencias() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Cargar lista general de socios para autocomplete y filtros
+  // Cargar socios y sucursales del gimnasio activo
   useEffect(() => {
-    const loadSocios = async () => {
+    if (!gimnasioActivoId) return;
+    const loadCatalogs = async () => {
       try {
-        const res = await fetchSocios({ limit: 'all' });
-        if (res && res.socios) {
-          setSociosList(res.socios);
-        }
+        const [resSocios, resSuc] = await Promise.all([
+          fetchSocios({ limit: 200 }).catch(() => ({ socios: [] })),
+          getSucursales({ estado: 'true' }).catch(() => [])
+        ]);
+        setSociosList(resSocios?.socios || []);
+        setSucursales(resSuc || []);
+        setFiltroSucursalId('');
+        setSucursalCheckinId(resSuc?.[0]?.id_sucursal ? String(resSuc[0].id_sucursal) : '');
       } catch (err) {
-        console.error('Error cargando socios:', err);
+        console.error('Error cargando socios/sucursales:', err);
       }
     };
-    loadSocios();
-  }, []);
+    loadCatalogs();
+  }, [gimnasioActivoId, contextVersion]);
 
   // Cargar estadísticas
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
+    if (!gimnasioActivoId) return;
     try {
-      const data = await fetchEstadisticasAsistencias();
+      const data = await fetchEstadisticasAsistencias({ id_sucursal: filtroSucursalId });
       setStats(data);
     } catch (err) {
       console.error('Error cargando estadísticas:', err);
     }
-  };
+  }, [gimnasioActivoId, filtroSucursalId]);
 
   useEffect(() => {
     loadStats();
-  }, []);
+  }, [loadStats, contextVersion]);
 
   // Cargar tabla de asistencias según filtros y página
-  const loadAsistencias = async () => {
+  const loadAsistencias = useCallback(async () => {
+    if (!gimnasioActivoId) return;
     setLoading(true);
     try {
       const data = await fetchAsistencias({
@@ -173,7 +188,8 @@ export default function Asistencias() {
         search: searchTerm,
         desde: fechaDesde,
         hasta: fechaHasta,
-        id_socio: filtroSocioId
+        id_socio: filtroSocioId,
+        id_sucursal: filtroSucursalId
       });
 
       setAsistencias(data.asistencias || []);
@@ -184,11 +200,11 @@ export default function Asistencias() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [gimnasioActivoId, currentPage, searchTerm, fechaDesde, fechaHasta, filtroSocioId, filtroSucursalId]);
 
   useEffect(() => {
     loadAsistencias();
-  }, [currentPage, searchTerm, fechaDesde, fechaHasta, filtroSocioId]);
+  }, [loadAsistencias, contextVersion]);
 
   // Manejar sugerencias del input de búsqueda en el formulario de registro
   const handleSearchSocioChange = (e) => {
@@ -233,12 +249,19 @@ export default function Asistencias() {
       });
       return;
     }
+    if (!sucursalCheckinId) {
+      setFeedbackMessage({
+        type: 'error',
+        text: 'Seleccioná una sucursal activa para registrar el ingreso.'
+      });
+      return;
+    }
 
     setRegisterLoading(true);
     try {
       const payload = selectedSocio
-        ? { id_socio: selectedSocio.id_socio }
-        : { dni: searchSocioInput.trim() };
+        ? { id_socio: selectedSocio.id_socio, id_sucursal: Number(sucursalCheckinId) }
+        : { dni: searchSocioInput.trim(), id_sucursal: Number(sucursalCheckinId) };
 
       const res = await registrarAsistencia(payload);
 
@@ -247,7 +270,6 @@ export default function Asistencias() {
         text: res.mensaje || '¡Asistencia registrada correctamente!'
       });
 
-      // Limpiar campos y refrescar
       setSelectedSocio(null);
       setSearchSocioInput('');
       loadAsistencias();
@@ -262,14 +284,26 @@ export default function Asistencias() {
     }
   };
 
+  // Registrar salida (Check-out)
+  const handleCheckoutAsistencia = async (idAsistencia) => {
+    setActiveMenuId(null);
+    try {
+      await checkoutAsistencia(idAsistencia);
+      loadAsistencias();
+      loadStats();
+    } catch (err) {
+      alert(err.message || 'Error al registrar la salida.');
+    }
+  };
+
   // Rango de fechas predefinidos (en horario de Argentina GMT-3)
   const aplicarRangoFecha = (tipo) => {
     const hoyArgStr = getFechaArgentinaISO(new Date());
     const [anioStr, mesStr] = hoyArgStr.split('-');
     const anio = Number(anioStr);
     const mes = Number(mesStr); // 1-12
-    let desde = '';
-    let hasta = '';
+    let desde;
+    let hasta;
     let label;
 
     if (tipo === 'mes_actual') {
@@ -309,14 +343,16 @@ export default function Asistencias() {
       return;
     }
 
-    const headers = ['ID Asistencia', 'Fecha', 'Hora', 'Socio', 'DNI', 'Estado'];
+    const headers = ['ID Asistencia', 'Fecha', 'Ingreso', 'Salida', 'Sucursal', 'Socio', 'DNI', 'Estado'];
     const rows = asistencias.map((a) => {
       const fecha = formatFechaArgentina(a.hora_ingreso);
       const hora = formatHoraArgentina(a.hora_ingreso);
+      const salida = a.hora_salida ? formatHoraArgentina(a.hora_salida) : '-';
+      const sucursal = a.sucursal?.direccion || '-';
       const socioNombre = a.socio ? `${a.socio.nombre || ''} ${a.socio.apellido || ''}`.trim() : 'N/A';
       const dni = a.socio?.dni || 'N/A';
-      const estado = a.estado || 'Registrada';
-      return [a.id_asistencia, fecha, hora, `"${socioNombre}"`, dni, estado];
+      const estado = a.estado || 'presente';
+      return [a.id_asistencia_socio || a.id_asistencia, fecha, hora, salida, `"${sucursal}"`, `"${socioNombre}"`, dni, estado];
     });
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
@@ -344,17 +380,18 @@ export default function Asistencias() {
     }
   };
 
-  // Eliminar Asistencia
-  const handleEliminarAsistencia = async (idAsistencia) => {
+  // Anular Asistencia lógicamente (RPC rpc_anular_asistencia)
+  const handleAnularAsistencia = async (idAsistencia) => {
     setActiveMenuId(null);
-    if (!window.confirm('¿Seguro que deseas eliminar este registro de asistencia?')) return;
+    const motivo = window.prompt('Indicá el motivo de anulación de esta asistencia (opcional):', '');
+    if (motivo === null) return;
 
     try {
-      await deleteAsistencia(idAsistencia);
+      await anularAsistencia(idAsistencia, motivo);
       loadAsistencias();
       loadStats();
     } catch (err) {
-      alert(err.message || 'Error al eliminar asistencia');
+      alert(err.message || 'Error al anular asistencia');
     }
   };
 
@@ -497,6 +534,26 @@ export default function Asistencias() {
                   </div>
                 )}
               </div>
+              {/* Filtro por Sucursal */}
+              <div className="asist-filter-box">
+                <FaMapMarkerAlt className="asist-filter-icon" />
+                <select
+                  className="asist-filter-input"
+                  value={filtroSucursalId}
+                  onChange={(e) => {
+                    setFiltroSucursalId(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  style={{ background: 'transparent', border: 'none', color: '#e2e8f0', cursor: 'pointer' }}
+                >
+                  <option value="" style={{ background: '#151b23' }}>Todas las sucursales</option>
+                  {sucursales.map((s) => (
+                    <option key={s.id_sucursal} value={s.id_sucursal} style={{ background: '#151b23' }}>
+                      {s.direccion}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </section>
 
@@ -512,8 +569,34 @@ export default function Asistencias() {
                   </div>
                   <div className="asist-register-titles">
                     <h2>Registrar asistencia</h2>
-                    <p>Seleccioná un socio para marcar su asistencia</p>
+                    <p>Seleccioná sucursal y socio para marcar su ingreso</p>
                   </div>
+                </div>
+
+                <div className="asist-form-group">
+                  <label>Sucursal *</label>
+                  <select
+                    value={sucursalCheckinId}
+                    onChange={(e) => setSucursalCheckinId(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: '#11161d',
+                      color: '#f8fafc',
+                      border: '1px solid rgba(255,255,255,0.12)'
+                    }}
+                  >
+                    {sucursales.length === 0 ? (
+                      <option value="">No hay sucursales activas (creá una en Sucursales)</option>
+                    ) : (
+                      sucursales.map((s) => (
+                        <option key={s.id_sucursal} value={s.id_sucursal}>
+                          {s.direccion}{s.descripcion ? ` — ${s.descripcion}` : ''}
+                        </option>
+                      ))
+                    )}
+                  </select>
                 </div>
 
                 <div className="asist-form-group" ref={registerInputRef}>
@@ -652,7 +735,8 @@ export default function Asistencias() {
                   <thead>
                     <tr>
                       <th>Fecha</th>
-                      <th>Hora</th>
+                      <th>Ingreso / Salida</th>
+                      <th>Sucursal</th>
                       <th>Socio</th>
                       <th>DNI</th>
                       <th>Estado</th>
@@ -662,25 +746,34 @@ export default function Asistencias() {
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan="6" className="asist-empty-state">
+                        <td colSpan="7" className="asist-empty-state">
                           Cargando asistencias...
                         </td>
                       </tr>
                     ) : asistencias.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="asist-empty-state">
+                        <td colSpan="7" className="asist-empty-state">
                           No se encontraron asistencias registradas con los filtros actuales.
                         </td>
                       </tr>
                     ) : (
                       asistencias.map((item) => {
+                        const rowId = item.id_asistencia_socio || item.id_asistencia;
                         const fechaStr = formatFechaArgentina(item.hora_ingreso);
                         const horaStr = formatHoraArgentina(item.hora_ingreso);
+                        const salidaStr = item.hora_salida ? formatHoraArgentina(item.hora_salida) : null;
+                        const abierta = item.estado === 'presente' && !item.hora_salida;
 
                         return (
-                          <tr key={item.id_asistencia}>
+                          <tr key={rowId}>
                             <td>{fechaStr}</td>
-                            <td>{horaStr}</td>
+                            <td>
+                              <div>{horaStr} hs</div>
+                              <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>
+                                {salidaStr ? `Salida: ${salidaStr} hs` : 'En curso'}
+                              </div>
+                            </td>
+                            <td>{item.sucursal?.direccion || '-'}</td>
                             <td className="asist-table-socio-name">
                               {item.socio ? `${item.socio.nombre || ''} ${item.socio.apellido || ''}`.trim() : 'Socio'}
                             </td>
@@ -689,7 +782,7 @@ export default function Asistencias() {
                             </td>
                             <td>
                               <span className="asist-badge-status">
-                                {item.estado ? item.estado.charAt(0).toUpperCase() + item.estado.slice(1) : 'Registrada'}
+                                {item.estado ? item.estado.charAt(0).toUpperCase() + item.estado.slice(1) : 'Presente'}
                               </span>
                             </td>
                             <td className="asist-actions-cell">
@@ -697,15 +790,23 @@ export default function Asistencias() {
                                 type="button"
                                 className="asist-btn-actions"
                                 onClick={() =>
-                                  setActiveMenuId(activeMenuId === item.id_asistencia ? null : item.id_asistencia)
+                                  setActiveMenuId(activeMenuId === rowId ? null : rowId)
                                 }
                                 title="Acciones"
                               >
                                 <FaEllipsisV />
                               </button>
 
-                              {activeMenuId === item.id_asistencia && (
+                              {activeMenuId === rowId && (
                                 <div className="asist-action-menu">
+                                  {abierta && puedeGestionarAsistencia && (
+                                    <div
+                                      className="asist-action-menu-item"
+                                      onClick={() => handleCheckoutAsistencia(rowId)}
+                                    >
+                                      <FaSignOutAlt /> Registrar salida
+                                    </div>
+                                  )}
                                   {item.socio && (
                                     <div
                                       className="asist-action-menu-item"
@@ -714,12 +815,14 @@ export default function Asistencias() {
                                       <FaHistory /> Ver historial del socio
                                     </div>
                                   )}
-                                  <div
-                                    className="asist-action-menu-item delete"
-                                    onClick={() => handleEliminarAsistencia(item.id_asistencia)}
-                                  >
-                                    <FaTrashAlt /> Eliminar asistencia
-                                  </div>
+                                  {puedeGestionarAsistencia && item.estado !== 'anulada' && (
+                                    <div
+                                      className="asist-action-menu-item delete"
+                                      onClick={() => handleAnularAsistencia(rowId)}
+                                    >
+                                      <FaTrashAlt /> Anular asistencia
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </td>
@@ -827,9 +930,9 @@ export default function Asistencias() {
                 <p className="asist-empty-state">Este socio aún no registra asistencias.</p>
               ) : (
                 <div className="asist-modal-timeline">
-                  {historialSocio.map((h) => {
+                  {historialSocio.map((h, idx) => {
                     return (
-                      <div key={h.id_asistencia} className="asist-timeline-item">
+                      <div key={h.id_asistencia_socio || h.id_asistencia || idx} className="asist-timeline-item">
                         <span className="asist-timeline-date">
                           {formatFechaArgentina(h.hora_ingreso, {
                             weekday: 'short',
@@ -840,9 +943,11 @@ export default function Asistencias() {
                         </span>
                         <span className="asist-timeline-time">
                           {formatHoraArgentina(h.hora_ingreso)} hs
+                          {h.hora_salida ? ` → ${formatHoraArgentina(h.hora_salida)} hs` : ' (en curso)'}
+                          {h.sucursal?.direccion ? ` • ${h.sucursal.direccion}` : ''}
                         </span>
                         <span className="asist-badge-status">
-                          {h.estado ? h.estado.charAt(0).toUpperCase() + h.estado.slice(1) : 'Registrada'}
+                          {h.estado ? h.estado.charAt(0).toUpperCase() + h.estado.slice(1) : 'Presente'}
                         </span>
                       </div>
                     );

@@ -1,103 +1,151 @@
-const supabase = require('../config/supabase');
+// ==============================================================================
+// CONTROLADOR DE PAGOS — NUEVO ESQUEMA pago -> membresia_socio
+// - Aislamiento estricto por gimnasio activo (req.gimnasioId + RLS).
+// - Estados válidos por CHECK: 'pendiente' | 'aprobado' | 'rechazado' | 'anulado'.
+// - Conserva historial financiero: anula pagos en lugar de borrarlos físicamente.
+// ==============================================================================
 
-// 1. GET /api/pagos (Listado, Paginación y Filtros)
+const ESTADOS_PAGO_VALIDOS = ['pendiente', 'aprobado', 'rechazado', 'anulado'];
+
+function normalizarEstadoPago(estado) {
+  if (!estado) return null;
+  const s = String(estado).trim().toLowerCase();
+  if (s === 'pagado' || s === 'aprobado') return 'aprobado';
+  if (s === 'pendiente') return 'pendiente';
+  if (s === 'rechazado' || s === 'vencido') return 'rechazado';
+  if (s === 'anulado' || s === 'cancelado') return 'anulado';
+  return ESTADOS_PAGO_VALIDOS.includes(s) ? s : null;
+}
+
+function normalizarPagoRespuesta(p) {
+  if (!p) return null;
+  const ms = p.membresia_socio || null;
+  return {
+    ...p,
+    id_membresia: p.id_membresia_socio,
+    membresia: ms
+      ? {
+          ...ms,
+          id_membresia: ms.id_membresia_socio,
+          id_plan_membresia: ms.id_membresia_gimnasio,
+          plan_membresia: ms.membresia_gimnasio
+            ? {
+                ...ms.membresia_gimnasio,
+                id_plan_membresia: ms.membresia_gimnasio.id_membresia_gimnasio
+              }
+            : null
+        }
+      : null
+  };
+}
+
+/**
+ * 1. GET /api/pagos
+ */
 const getPagos = async (req, res) => {
   try {
-    const { page = 1, limit = 10, estado, desde, hasta, id_gimnasio } = req.query;
-    const offset = (page - 1) * limit;
+    const db = req.supabase;
+    const gymId = req.gimnasioId;
+    const { page = 1, limit = 10, estado, desde, hasta } = req.query;
+    const offset = (Number(page) - 1) * Number(limit);
 
-    let targetData = [];
-    let targetCount = 0;
+    let query = db
+      .from('pago')
+      .select(
+        `
+        *,
+        membresia_socio!inner (
+          id_membresia_socio,
+          id_socio,
+          id_gimnasio,
+          id_membresia_gimnasio,
+          precio,
+          fecha_inicio,
+          fecha_vencimiento,
+          estado,
+          membresia_gimnasio (id_membresia_gimnasio, nombre, duracion_dias),
+          socio (id_socio, nombre, apellido, dni, email)
+        )
+      `,
+        { count: 'exact' }
+      )
+      .eq('membresia_socio.id_gimnasio', gymId)
+      .order('id_pago', { ascending: false })
+      .range(offset, offset + Number(limit) - 1);
 
-    if (id_gimnasio) {
-      let gymQuery = supabase
-        .from('pago')
-        .select('*, membresia!inner(*, plan_membresia(*), socio!inner(*))', { count: 'exact' })
-        .order('id_pago', { ascending: false })
-        .range(offset, offset + Number(limit) - 1)
-        .eq('membresia.socio.id_gimnasio', id_gimnasio);
-
-      if (estado && estado !== 'todos') gymQuery = gymQuery.eq('estado', estado);
-      if (desde) gymQuery = gymQuery.gte('fecha_pago', desde);
-      if (hasta) gymQuery = gymQuery.lte('fecha_pago', hasta);
-
-      const { data: gymData, count: gymCount, error: gymErr } = await gymQuery;
-      if (gymErr) throw gymErr;
-
-      targetData = gymData || [];
-      targetCount = gymCount || 0;
-    } else {
-      let query = supabase
-        .from('pago')
-        .select('*, membresia(*, plan_membresia(*), socio(*))', { count: 'exact' })
-        .order('id_pago', { ascending: false })
-        .range(offset, offset + Number(limit) - 1);
-
-      if (estado && estado !== 'todos') query = query.eq('estado', estado);
-      if (desde) query = query.gte('fecha_pago', desde);
-      if (hasta) query = query.lte('fecha_pago', hasta);
-
-      const { data, count, error } = await query;
-      if (error) throw error;
-      targetData = data || [];
-      targetCount = count || 0;
+    if (estado && estado !== 'todos') {
+      const estNorm = normalizarEstadoPago(estado);
+      if (estNorm) query = query.eq('estado', estNorm);
+    }
+    if (desde) {
+      const d = desde.includes('T') ? desde : `${desde}T00:00:00.000Z`;
+      query = query.gte('fecha_pago', d);
+    }
+    if (hasta) {
+      const h = hasta.includes('T') ? hasta : `${hasta}T23:59:59.999Z`;
+      query = query.lte('fecha_pago', h);
     }
 
+    const { data, count, error } = await query;
+    if (error) throw error;
+
     return res.status(200).json({
-      total: targetCount,
+      total: count || 0,
       pagina: Number(page),
       limite: Number(limit),
-      datos: targetData
+      datos: (data || []).map(normalizarPagoRespuesta)
     });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
 };
 
-// 2. GET /api/pagos/resumen (Tarjetas de métricas)
+/**
+ * 2. GET /api/pagos/resumen
+ */
 const getResumenPagos = async (req, res) => {
   try {
-    const { desde, hasta, id_gimnasio } = req.query;
+    const db = req.supabase;
+    const gymId = req.gimnasioId;
+    const { desde, hasta } = req.query;
 
-    let targetData = [];
+    let query = db
+      .from('pago')
+      .select('monto, estado, fecha_pago, membresia_socio!inner(id_gimnasio)')
+      .eq('membresia_socio.id_gimnasio', gymId);
 
-    if (id_gimnasio) {
-      let gymQuery = supabase
-        .from('pago')
-        .select('monto, estado, membresia!inner(socio!inner(id_gimnasio))')
-        .eq('membresia.socio.id_gimnasio', id_gimnasio);
+    if (desde) query = query.gte('fecha_pago', desde.includes('T') ? desde : `${desde}T00:00:00.000Z`);
+    if (hasta) query = query.lte('fecha_pago', hasta.includes('T') ? hasta : `${hasta}T23:59:59.999Z`);
 
-      if (desde) gymQuery = gymQuery.gte('fecha_pago', desde);
-      if (hasta) gymQuery = gymQuery.lte('fecha_pago', hasta);
+    const { data, error } = await query;
+    if (error) throw error;
 
-      const { data: gymData, error: gymErr } = await gymQuery;
-      if (gymErr) throw gymErr;
-      targetData = gymData || [];
-    } else {
-      let query = supabase
-        .from('pago')
-        .select('monto, estado, membresia(socio(id_gimnasio))');
-
-      if (desde) query = query.gte('fecha_pago', desde);
-      if (hasta) query = query.lte('fecha_pago', hasta);
-
-      const { data, error } = await query;
-      if (error) throw error;
-      targetData = data || [];
-    }
-
-    const resumen = targetData.reduce((acc, pago) => {
-      const estadoNorm = (pago.estado || '').toLowerCase();
-      if (estadoNorm === 'pagado') {
-        acc.total_recaudado += Number(pago.monto);
-        acc.pagos_realizados += 1;
-      } else if (estadoNorm === 'pendiente') {
-        acc.pagos_pendientes += 1;
-      } else if (estadoNorm === 'vencido') {
-        acc.pagos_vencidos += 1;
+    const resumen = (data || []).reduce(
+      (acc, p) => {
+        if (p.estado === 'aprobado') {
+          acc.total_recaudado += Number(p.monto || 0);
+          acc.pagos_realizados += 1;
+          acc.pagos_aprobados += 1;
+        } else if (p.estado === 'pendiente') {
+          acc.pagos_pendientes += 1;
+        } else if (p.estado === 'rechazado') {
+          acc.pagos_rechazados += 1;
+          acc.pagos_vencidos += 1;
+        } else if (p.estado === 'anulado') {
+          acc.pagos_anulados += 1;
+        }
+        return acc;
+      },
+      {
+        total_recaudado: 0,
+        pagos_realizados: 0,
+        pagos_aprobados: 0,
+        pagos_pendientes: 0,
+        pagos_rechazados: 0,
+        pagos_vencidos: 0,
+        pagos_anulados: 0
       }
-      return acc;
-    }, { total_recaudado: 0, pagos_realizados: 0, pagos_pendientes: 0, pagos_vencidos: 0 });
+    );
 
     return res.status(200).json(resumen);
   } catch (error) {
@@ -105,80 +153,56 @@ const getResumenPagos = async (req, res) => {
   }
 };
 
-// 3. GET /api/pagos/membresias (Listado de socios y membresías del gimnasio para registrar pagos)
+/**
+ * 3. GET /api/pagos/membresias
+ * Lista socios y contrataciones del gimnasio activo para registrar un nuevo pago.
+ */
 const getMembresias = async (req, res) => {
   try {
-    const { id_gimnasio } = req.query;
+    const db = req.supabase;
+    const gymId = req.gimnasioId;
 
-    let query = supabase
-      .from('socio')
+    const { data: contrataciones, error } = await db
+      .from('membresia_socio')
       .select(`
+        id_membresia_socio,
         id_socio,
-        dni,
-        telefono,
-        nombre,
-        apellido,
-        email,
-        estado,
         id_gimnasio,
-        membresia (
-          id_membresia,
-          precio,
-          fecha_inicio,
-          fecha_vencimiento,
-          estado,
-          id_plan_membresia,
-          plan_membresia (
-            id_plan_membresia,
-            nombre,
-            precio,
-            duracion_dias
-          )
-        )
+        id_membresia_gimnasio,
+        precio,
+        fecha_inicio,
+        fecha_vencimiento,
+        estado,
+        membresia_gimnasio (id_membresia_gimnasio, nombre, precio, duracion_dias),
+        socio!inner (id_socio, dni, telefono, nombre, apellido, email, estado)
       `)
-      .order('id_socio', { ascending: false });
+      .eq('id_gimnasio', gymId)
+      .order('id_membresia_socio', { ascending: false });
 
-    if (id_gimnasio) {
-      query = query.eq('id_gimnasio', id_gimnasio);
-    }
-
-    const { data: socios, error } = await query;
     if (error) throw error;
 
-    const resultado = (socios || []).map((s) => {
-      const membList = Array.isArray(s.membresia) 
-        ? s.membresia 
-        : (s.membresia ? [s.membresia] : []);
-
-      const membresiaActiva = membList.length > 0
-        ? (membList.find((m) => ['activo', 'activa'].includes((m.estado || '').toLowerCase())) || membList[0])
-        : null;
-
-      return {
-        id_socio: s.id_socio,
-        dni: s.dni,
-        telefono: s.telefono,
-        nombre: s.nombre,
-        apellido: s.apellido,
-        email: s.email,
-        estado_socio: s.estado,
-        id_gimnasio: s.id_gimnasio,
-        socio: {
-          id_socio: s.id_socio,
-          dni: s.dni,
-          nombre: s.nombre,
-          apellido: s.apellido,
-          email: s.email,
-          id_gimnasio: s.id_gimnasio
-        },
-        id_membresia: membresiaActiva ? membresiaActiva.id_membresia : null,
-        precio: membresiaActiva?.precio != null ? membresiaActiva.precio : (membresiaActiva?.plan_membresia?.precio || null),
-        fecha_vencimiento: membresiaActiva?.fecha_vencimiento || null,
-        estado: membresiaActiva?.estado || 'sin_membresia',
-        id_plan_membresia: membresiaActiva?.id_plan_membresia || null,
-        plan_membresia: membresiaActiva?.plan_membresia || null
-      };
-    });
+    const resultado = (contrataciones || []).map((c) => ({
+      id_socio: c.socio.id_socio,
+      dni: c.socio.dni,
+      telefono: c.socio.telefono,
+      nombre: c.socio.nombre,
+      apellido: c.socio.apellido,
+      email: c.socio.email,
+      estado_socio: c.socio.estado,
+      id_gimnasio: c.id_gimnasio,
+      socio: c.socio,
+      id_membresia_socio: c.id_membresia_socio,
+      id_membresia: c.id_membresia_socio,
+      precio: c.precio,
+      fecha_inicio: c.fecha_inicio,
+      fecha_vencimiento: c.fecha_vencimiento,
+      estado: c.estado,
+      id_membresia_gimnasio: c.id_membresia_gimnasio,
+      id_plan_membresia: c.id_membresia_gimnasio,
+      plan_membresia: c.membresia_gimnasio
+        ? { ...c.membresia_gimnasio, id_plan_membresia: c.membresia_gimnasio.id_membresia_gimnasio }
+        : null
+    }));
 
     return res.status(200).json(resultado);
   } catch (error) {
@@ -186,336 +210,294 @@ const getMembresias = async (req, res) => {
   }
 };
 
-// 4. GET /api/pagos/:id (Detalle)
+/**
+ * 4. GET /api/pagos/planes
+ * Lista planes activos del gimnasio activo (sin seeding automático).
+ */
+const getPlanes = async (req, res) => {
+  try {
+    const db = req.supabase;
+    const gymId = req.gimnasioId;
+
+    const { data, error } = await db
+      .from('membresia_gimnasio')
+      .select('*')
+      .eq('id_gimnasio', gymId)
+      .eq('estado', true)
+      .order('id_membresia_gimnasio', { ascending: true });
+
+    if (error) throw error;
+
+    return res.status(200).json(
+      (data || []).map((p) => ({
+        ...p,
+        id_plan_membresia: p.id_membresia_gimnasio
+      }))
+    );
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * 5. GET /api/pagos/:id
+ */
 const getPagoById = async (req, res) => {
   try {
+    const db = req.supabase;
+    const gymId = req.gimnasioId;
     const { id } = req.params;
-    const { data, error } = await supabase
+
+    const { data, error } = await db
       .from('pago')
-      .select('*, membresia(*, plan_membresia(*), socio(*))')
+      .select(`
+        *,
+        membresia_socio!inner (
+          *,
+          membresia_gimnasio (*),
+          socio (*)
+        )
+      `)
       .eq('id_pago', id)
-      .single();
+      .eq('membresia_socio.id_gimnasio', gymId)
+      .maybeSingle();
 
-    if (error || !data) return res.status(404).json({ error: 'Pago no encontrado.' });
+    if (error || !data) {
+      return res.status(404).json({ error: 'Pago no encontrado en el gimnasio activo.' });
+    }
 
-    return res.status(200).json(data);
+    return res.status(200).json(normalizarPagoRespuesta(data));
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
 };
 
-// 5. POST /api/pagos (Registrar pago)
+/**
+ * 6. POST /api/pagos
+ * Registra un pago asociado a una contratación concreta (membresia_socio) del gimnasio activo.
+ * Si no se pasa id_membresia_socio pero sí id_socio + id_membresia_gimnasio, contrata y paga atómicamente vía RPC.
+ */
 const registrarPago = async (req, res) => {
   try {
-    let { 
+    const db = req.supabase;
+    const gymId = req.gimnasioId;
+    let {
       id_socio,
-      id_membresia, 
+      id_membresia_socio,
+      id_membresia,
+      id_membresia_gimnasio,
       id_plan_membresia,
-      monto, 
-      fecha_pago, 
-      metodo_pago, 
-      estado, 
-      comprobante,
-      nombreSocio,
-      dniSocio,
-      plan,
-      id_gimnasio
+      monto,
+      fecha_pago,
+      metodo_pago,
+      estado,
+      comprobante
     } = req.body;
 
-    const estadosPermitidos = ['pagado', 'pendiente', 'vencido'];
+    const contratoId = id_membresia_socio || id_membresia || null;
+    const planId = id_membresia_gimnasio || id_plan_membresia || null;
+    const estadoNormalizado = normalizarEstadoPago(estado || 'aprobado');
 
-    // Validaciones
-    if (!monto || !fecha_pago || !metodo_pago || !estado) {
-      return res.status(400).json({ error: 'Faltan campos obligatorios.' });
+    if (monto === undefined || isNaN(monto) || Number(monto) < 0) {
+      return res.status(400).json({ error: 'El monto debe ser un número mayor o igual a 0.' });
     }
-    if (isNaN(monto) || Number(monto) <= 0) {
-      return res.status(400).json({ error: 'El monto ingresado no es válido.' });
+    if (!metodo_pago || !String(metodo_pago).trim()) {
+      return res.status(400).json({ error: 'El método de pago es obligatorio.' });
     }
-    if (isNaN(Date.parse(fecha_pago))) {
-      return res.status(400).json({ error: 'La fecha no es válida.' });
-    }
-    if (!estadosPermitidos.includes(estado.toLowerCase())) {
-      return res.status(400).json({ error: 'El estado no es un valor permitido.' });
+    if (!estadoNormalizado) {
+      return res.status(400).json({
+        error: `Estado de pago inválido. Permitidos: ${ESTADOS_PAGO_VALIDOS.join(', ')}.`
+      });
     }
 
-    let socioId = id_socio || null;
+    // Caso A: Se crea contratación + pago atómicamente si no vino contratoId pero sí id_socio + planId
+    if (!contratoId && id_socio && planId) {
+      const { data: rpcRes, error: rpcErr } = await db.rpc('rpc_contratar_membresia', {
+        p_id_socio: Number(id_socio),
+        p_id_membresia_gimnasio: Number(planId),
+        p_fecha_inicio: fecha_pago ? String(fecha_pago).split('T')[0] : new Date().toISOString().split('T')[0],
+        p_estado: estadoNormalizado === 'aprobado' ? 'activa' : 'pendiente',
+        p_registrar_pago: true,
+        p_metodo_pago: String(metodo_pago).trim().toLowerCase(),
+        p_estado_pago: estadoNormalizado,
+        p_comprobante: comprobante || null,
+        p_monto_override: Number(monto)
+      });
 
-    // Si no se proporcionó id_socio pero sí DNI, buscar socio existente en este gimnasio
-    if (!socioId && dniSocio) {
-      const cleanDni = String(dniSocio).trim();
-      let socioQuery = supabase
-        .from('socio')
-        .select('id_socio, id_gimnasio, nombre, apellido')
-        .eq('dni', cleanDni);
-
-      if (id_gimnasio) {
-        socioQuery = socioQuery.eq('id_gimnasio', id_gimnasio);
+      if (rpcErr) {
+        return res.status(400).json({ error: rpcErr.message });
       }
 
-      const { data: socioExistente } = await socioQuery.maybeSingle();
+      const { data: pagoDetalle } = await db
+        .from('pago')
+        .select('*, membresia_socio(*, membresia_gimnasio(*), socio(*))')
+        .eq('id_pago', rpcRes.pago.id_pago)
+        .single();
 
-      if (socioExistente) {
-        socioId = socioExistente.id_socio;
-      } else {
-        // Registrar nuevo socio directamente en el gimnasio actual
-        const partesNombre = (nombreSocio || 'Socio').trim().split(' ');
-        const nombre = partesNombre[0] || 'Socio';
-        const apellido = partesNombre.slice(1).join(' ') || '';
-        const gymId = id_gimnasio;
-
-        if (!gymId) {
-          return res.status(400).json({ error: 'No se identificó el gimnasio para registrar el nuevo socio.' });
-        }
-
-        const { data: nuevoSocio, error: errSocio } = await supabase
-          .from('socio')
-          .insert([{
-            id_gimnasio: gymId,
-            nombre,
-            apellido,
-            dni: cleanDni,
-            telefono: 'Sin teléfono',
-            fecha_alta: new Date().toISOString().split('T')[0],
-            estado: 'activo'
-          }])
-          .select('id_socio')
-          .single();
-
-        if (errSocio) throw errSocio;
-        socioId = nuevoSocio.id_socio;
-      }
+      return res.status(201).json({
+        mensaje: 'Contratación y pago registrados con éxito.',
+        pago: normalizarPagoRespuesta(pagoDetalle || rpcRes.pago)
+      });
     }
 
-    if (!socioId && !id_membresia) {
-      return res.status(400).json({ error: 'Debes seleccionar o registrar un socio para procesar el pago.' });
-    }
+    // Caso B: Pago sobre una membresia_socio existente del gimnasio activo
+    let targetContratoId = contratoId ? Number(contratoId) : null;
 
-    // Gestionar membresía asociada
-    if (!id_membresia && socioId) {
-      // Buscar si el socio ya tiene membresía activa
-      let { data: membExistente } = await supabase
-        .from('membresia')
-        .select('id_membresia, id_plan_membresia')
-        .eq('id_socio', socioId)
-        .eq('estado', 'activo')
+    if (!targetContratoId && id_socio) {
+      const { data: ultContrato } = await db
+        .from('membresia_socio')
+        .select('id_membresia_socio')
+        .eq('id_socio', Number(id_socio))
+        .eq('id_gimnasio', gymId)
+        .order('fecha_vencimiento', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
-      if (membExistente) {
-        id_membresia = membExistente.id_membresia;
-      } else {
-        // Resolver id_plan_membresia
-        let planId = id_plan_membresia;
-        let duracionDias = 30;
-
-        if (planId) {
-          const { data: pObj } = await supabase
-            .from('plan_membresia')
-            .select('duracion_dias')
-            .eq('id_plan_membresia', planId)
-            .maybeSingle();
-          if (pObj?.duracion_dias) duracionDias = pObj.duracion_dias;
-        } else if (plan) {
-          let pQuery = supabase
-            .from('plan_membresia')
-            .select('id_plan_membresia, duracion_dias')
-            .ilike('nombre', `%${plan}%`);
-          if (id_gimnasio) {
-            pQuery = pQuery.eq('id_gimnasio', id_gimnasio);
-          }
-          const { data: pFound } = await pQuery.limit(1).maybeSingle();
-          if (pFound) {
-            planId = pFound.id_plan_membresia;
-            if (pFound.duracion_dias) duracionDias = pFound.duracion_dias;
-          }
-        }
-
-        if (!planId) {
-          let pDefQuery = supabase
-            .from('plan_membresia')
-            .select('id_plan_membresia, duracion_dias');
-          if (id_gimnasio) {
-            pDefQuery = pDefQuery.eq('id_gimnasio', id_gimnasio);
-          }
-          const { data: pDef } = await pDefQuery.limit(1).maybeSingle();
-          if (pDef) {
-            planId = pDef.id_plan_membresia;
-            if (pDef.duracion_dias) duracionDias = pDef.duracion_dias;
-          } else if (id_gimnasio) {
-            const { data: pNuevo } = await supabase
-              .from('plan_membresia')
-              .insert([{
-                id_gimnasio: Number(id_gimnasio),
-                nombre: plan || 'Plan Premium',
-                precio: Number(monto) || 18000,
-                duracion_dias: 30,
-                estado: 'Activo'
-              }])
-              .select('id_plan_membresia, duracion_dias')
-              .single();
-
-            if (pNuevo) {
-              planId = pNuevo.id_plan_membresia;
-              duracionDias = pNuevo.duracion_dias || 30;
-            }
-          }
-        }
-
-        const nuevaMembData = {
-          id_socio: socioId,
-          precio: Number(monto),
-          fecha_inicio: fecha_pago,
-          fecha_vencimiento: new Date(Date.now() + duracionDias * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          estado: estado === 'pagado' ? 'activo' : (estado === 'vencido' ? 'vencido' : 'activo')
-        };
-        if (planId) {
-          nuevaMembData.id_plan_membresia = planId;
-        }
-
-        const { data: nuevaMemb, error: errMemb } = await supabase
-          .from('membresia')
-          .insert([nuevaMembData])
-          .select('id_membresia')
-          .single();
-
-        if (errMemb) throw errMemb;
-        id_membresia = nuevaMemb.id_membresia;
+      if (ultContrato) {
+        targetContratoId = ultContrato.id_membresia_socio;
       }
     }
 
-    if (!id_membresia) {
-      return res.status(400).json({ error: 'No se pudo vincular una membresía para este socio.' });
+    if (!targetContratoId) {
+      return res.status(400).json({
+        error: 'Debes seleccionar una contratación (id_membresia_socio) o indicar socio y plan para registrar el pago.'
+      });
     }
 
-    // Inserción en tabla pago
-    const insertPago = {
-      id_membresia,
-      monto: Number(monto),
-      fecha_pago,
-      metodo_pago: metodo_pago.toLowerCase(),
-      estado: estado.toLowerCase(),
-      comprobante: comprobante || null
-    };
+    // Validar que la contratación pertenece al gimnasio activo
+    const { data: contratoCheck, error: checkErr } = await db
+      .from('membresia_socio')
+      .select('id_membresia_socio, id_gimnasio')
+      .eq('id_membresia_socio', targetContratoId)
+      .eq('id_gimnasio', gymId)
+      .maybeSingle();
 
-    const { data: pagoCreado, error: errPago } = await supabase
+    if (checkErr || !contratoCheck) {
+      return res.status(404).json({ error: 'La contratación de membresía no pertenece al gimnasio activo.' });
+    }
+
+    const { data: rpcPago, error: errRpcPago } = await db.rpc('rpc_registrar_pago', {
+      p_id_membresia_socio: targetContratoId,
+      p_monto: Number(monto),
+      p_metodo_pago: String(metodo_pago).trim().toLowerCase(),
+      p_estado: estadoNormalizado,
+      p_comprobante: comprobante ? String(comprobante).trim() : null,
+      p_fecha_pago: fecha_pago ? new Date(fecha_pago).toISOString() : new Date().toISOString()
+    });
+
+    if (errRpcPago) {
+      return res.status(400).json({ error: errRpcPago.message });
+    }
+
+    const { data: pagoCreado } = await db
       .from('pago')
-      .insert([insertPago])
-      .select('*, membresia(*, plan_membresia(*), socio(*))')
+      .select('*, membresia_socio(*, membresia_gimnasio(*), socio(*))')
+      .eq('id_pago', rpcPago.id_pago)
       .single();
 
-    if (errPago) throw errPago;
-
-    return res.status(201).json({ mensaje: 'Pago registrado con éxito.', pago: pagoCreado });
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
-  }
-};
-
-// 6. PATCH /api/pagos/:id/estado (Actualizar estado)
-const actualizarEstadoPago = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { estado } = req.body;
-    const estadosPermitidos = ['pagado', 'pendiente', 'vencido'];
-
-    if (!estado || !estadosPermitidos.includes(estado.toLowerCase())) {
-      return res.status(400).json({ error: 'Estado no válido o no proporcionado.' });
-    }
-
-    const nuevoEstado = estado.toLowerCase();
-
-    const { data: pagoActualizado, error } = await supabase
-      .from('pago')
-      .update({ estado: nuevoEstado })
-      .eq('id_pago', id)
-      .select('*, membresia(*, plan_membresia(*), socio(*))')
-      .single();
-
-    if (error || !pagoActualizado) {
-      return res.status(404).json({ error: 'Pago no encontrado para actualizar.' });
-    }
-
-    // Sincronizar estado en membresía y socio asociados
-    if (pagoActualizado.id_membresia) {
-      const estadoMemb = nuevoEstado === 'pagado' ? 'activo' : (nuevoEstado === 'vencido' ? 'vencido' : 'pendiente');
-      await supabase
-        .from('membresia')
-        .update({ estado: estadoMemb })
-        .eq('id_membresia', pagoActualizado.id_membresia);
-
-      const socioId = pagoActualizado.membresia?.id_socio;
-      if (socioId) {
-        const estadoSocio = nuevoEstado === 'pagado' ? 'activo' : (nuevoEstado === 'vencido' ? 'inactivo' : 'activo');
-        await supabase
-          .from('socio')
-          .update({ estado: estadoSocio })
-          .eq('id_socio', socioId);
-      }
-    }
-
-    return res.status(200).json({ 
-      mensaje: 'Estado actualizado correctamente.', 
-      pago: pagoActualizado 
+    return res.status(201).json({
+      mensaje: 'Pago registrado con éxito.',
+      pago: normalizarPagoRespuesta(pagoCreado || rpcPago)
     });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
 };
 
-// 7. DELETE /api/pagos/:id (Eliminar pago)
-const eliminarPago = async (req, res) => {
+/**
+ * 7. PATCH /api/pagos/:id/estado
+ */
+const actualizarEstadoPago = async (req, res) => {
   try {
+    const db = req.supabase;
+    const gymId = req.gimnasioId;
     const { id } = req.params;
+    const { estado } = req.body;
 
-    const { data, error } = await supabase
+    const nuevoEstado = normalizarEstadoPago(estado);
+    if (!nuevoEstado) {
+      return res.status(400).json({
+        error: `Estado de pago inválido. Valores permitidos: ${ESTADOS_PAGO_VALIDOS.join(', ')}.`
+      });
+    }
+
+    // Validar pertenencia al gimnasio activo
+    const { data: existente } = await db
       .from('pago')
-      .delete()
+      .select('id_pago, id_membresia_socio, membresia_socio!inner(id_gimnasio)')
       .eq('id_pago', id)
-      .select()
+      .eq('membresia_socio.id_gimnasio', gymId)
+      .maybeSingle();
+
+    if (!existente) {
+      return res.status(404).json({ error: 'Pago no encontrado en el gimnasio activo.' });
+    }
+
+    const { data: rpcUpdated, error } = await db.rpc('rpc_actualizar_estado_pago', {
+      p_id_pago: Number(id),
+      p_estado: nuevoEstado
+    });
+
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    const { data: pagoActualizado } = await db
+      .from('pago')
+      .select('*, membresia_socio(*, membresia_gimnasio(*), socio(*))')
+      .eq('id_pago', id)
       .single();
 
-    if (error) throw error;
-    if (!data) return res.status(404).json({ error: 'El pago que deseas eliminar no existe.' });
-
-    return res.status(200).json({ mensaje: 'Pago eliminado exitosamente.', pago: data });
+    return res.status(200).json({
+      mensaje: 'Estado del pago actualizado correctamente.',
+      pago: normalizarPagoRespuesta(pagoActualizado || rpcUpdated)
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
 };
 
-// 8. GET /api/pagos/planes (Listar planes de membresía disponibles)
-const getPlanes = async (req, res) => {
+/**
+ * 8. DELETE /api/pagos/:id
+ * Conserva historial financiero: marca el pago como 'anulado' en lugar de eliminarlo físicamente.
+ */
+const eliminarPago = async (req, res) => {
   try {
-    const { id_gimnasio } = req.query;
-    let query = supabase
-      .from('plan_membresia')
-      .select('*')
-      .order('id_plan_membresia', { ascending: true });
+    const db = req.supabase;
+    const gymId = req.gimnasioId;
+    const { id } = req.params;
 
-    if (id_gimnasio) {
-      query = query.eq('id_gimnasio', id_gimnasio);
+    const { data: existente } = await db
+      .from('pago')
+      .select('id_pago, membresia_socio!inner(id_gimnasio)')
+      .eq('id_pago', id)
+      .eq('membresia_socio.id_gimnasio', gymId)
+      .maybeSingle();
+
+    if (!existente) {
+      return res.status(404).json({ error: 'Pago no encontrado en el gimnasio activo.' });
     }
 
-    let { data, error } = await query;
-    if (error) throw error;
+    const { data: rpcAnulado, error } = await db.rpc('rpc_actualizar_estado_pago', {
+      p_id_pago: Number(id),
+      p_estado: 'anulado'
+    });
 
-    // Si el gimnasio aún no tiene planes configurados, sembrar 3 planes iniciales
-    if ((!data || data.length === 0) && id_gimnasio) {
-      const planesIniciales = [
-        { id_gimnasio: Number(id_gimnasio), nombre: 'Plan Básico', precio: 15000, duracion_dias: 30, estado: 'Activo' },
-        { id_gimnasio: Number(id_gimnasio), nombre: 'Plan Premium', precio: 22000, duracion_dias: 30, estado: 'Activo' },
-        { id_gimnasio: Number(id_gimnasio), nombre: 'Pase Libre', precio: 28000, duracion_dias: 30, estado: 'Activo' }
-      ];
-      const { data: insertados, error: errInsert } = await supabase
-        .from('plan_membresia')
-        .insert(planesIniciales)
-        .select('*');
-
-      if (!errInsert && insertados) {
-        data = insertados;
-      }
+    if (error) {
+      return res.status(400).json({ error: error.message });
     }
 
-    return res.status(200).json(data || []);
+    const { data: anulado } = await db
+      .from('pago')
+      .select('*, membresia_socio(*, membresia_gimnasio(*), socio(*))')
+      .eq('id_pago', id)
+      .single();
+
+    return res.status(200).json({
+      mensaje: 'Pago anulado correctamente (el registro se conserva en el historial financiero).',
+      anulado: true,
+      pago: normalizarPagoRespuesta(anulado || rpcAnulado)
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

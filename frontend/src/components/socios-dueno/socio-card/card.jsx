@@ -11,7 +11,7 @@ function SocioCard({ socio, onClick }) {
     ? (socio.membresia[0] || null)
     : (socio.membresia || null);
 
-  const planNombre = memb?.plan_membresia?.nombre || memb?.tipo || 'Sin Plan';
+  const planNombre = memb?.membresia_gimnasio?.nombre || memb?.tipo || 'Sin Plan';
   const vencimiento = memb?.fecha_vencimiento
     ? new Date(memb.fecha_vencimiento).toLocaleDateString('es-AR')
     : 'N/A';

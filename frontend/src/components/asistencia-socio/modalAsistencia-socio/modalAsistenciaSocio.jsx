@@ -89,22 +89,28 @@ function ModalHistorialAsistencias({ idSocio, onClose }) {
                 <thead>
                   <tr>
                     <th>Fecha</th>
-                    <th>Hora de Ingreso</th>
+                    <th>Sucursal</th>
+                    <th>Ingreso</th>
+                    <th>Salida</th>
                     <th>Estado</th>
                   </tr>
                 </thead>
                 <tbody>
                   {historial.map((item, index) => (
-                    <tr key={item.id_asistencia || index}>
+                    <tr key={item.id_asistencia_socio || item.id_asistencia || index}>
                       <td>{formatearFecha(item.hora_ingreso)}</td>
+                      <td>{item.sucursal?.direccion || '-'}</td>
                       <td>
                         <span className="modal-historial-hora">
                           <FaClock /> {formatearHora(item.hora_ingreso)} hs
                         </span>
                       </td>
                       <td>
+                        {item.hora_salida ? `${formatearHora(item.hora_salida)} hs` : 'En curso'}
+                      </td>
+                      <td>
                         <span className="modal-historial-badge">
-                          {item.estado || 'Presente'}
+                          {item.estado || 'presente'}
                         </span>
                       </td>
                     </tr>

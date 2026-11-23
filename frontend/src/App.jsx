@@ -47,6 +47,9 @@ import Register from './pages/register-dueno/register'
 // Páginas del Rol Dueño / Administrador
 import Dashboard from './pages/dashboard-dueno/dashboard'
 import CrearGimnasio from './pages/crear-gimnasio-dueno/crear-gimnasio'
+import SucursalesDueno from './pages/sucursales-dueno/sucursales'
+import AdministradoresDueno from './pages/administradores-dueno/administradores'
+import EmpleadosDueno from './pages/empleados-dueno/empleados'
 import Socios from './pages/socios-dueno/socios'
 import Pagos from './pages/pagos-dueno/pagos'
 import MembresiaAdmin from './pages/membresia-dueno/membresia-admin'
@@ -65,7 +68,27 @@ import SocioRutinas from './pages/rutinas-socio/socio-rutinas'
 
 // Componente Guardián de Rutas y Estilos Generales
 import ProtectedRoute from './components/ProtectedRoute'
+import { useGymContext } from './context/GymContext'
 import './App.css'
+
+function RoleAwareRoute({ socioElement, staffElement, publicElement = null, staffPermiso = null }) {
+  const { isAuthenticated, esSocio } = useGymContext()
+
+  if (!isAuthenticated) {
+    if (publicElement) return publicElement
+    return <ProtectedRoute>{staffElement}</ProtectedRoute>
+  }
+
+  if (esSocio) {
+    return <ProtectedRoute rolRequerido="socio">{socioElement}</ProtectedRoute>
+  }
+
+  return (
+    <ProtectedRoute rolRequerido="staff" permisoRequerido={staffPermiso}>
+      {staffElement}
+    </ProtectedRoute>
+  )
+}
 
 function App() {
   return (
@@ -107,7 +130,7 @@ function App() {
         <Route
           path="/dashboard-dueño"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff">
               <Dashboard />
             </ProtectedRoute>
           }
@@ -115,7 +138,7 @@ function App() {
         <Route
           path="/dashboard-dueno"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff">
               <Dashboard />
             </ProtectedRoute>
           }
@@ -123,8 +146,83 @@ function App() {
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff">
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/sucursales-dueño"
+          element={
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_sucursales">
+              <SucursalesDueno />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/sucursales-dueno"
+          element={
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_sucursales">
+              <SucursalesDueno />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/sucursales"
+          element={
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_sucursales">
+              <SucursalesDueno />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/administradores-dueño"
+          element={
+            <ProtectedRoute rolRequerido="dueño">
+              <AdministradoresDueno />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/administradores-dueno"
+          element={
+            <ProtectedRoute rolRequerido="dueño">
+              <AdministradoresDueno />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/administradores"
+          element={
+            <ProtectedRoute rolRequerido="dueño">
+              <AdministradoresDueno />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/empleados-dueño"
+          element={
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_empleados">
+              <EmpleadosDueno />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/empleados-dueno"
+          element={
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_empleados">
+              <EmpleadosDueno />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/empleados"
+          element={
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_empleados">
+              <EmpleadosDueno />
             </ProtectedRoute>
           }
         />
@@ -157,7 +255,7 @@ function App() {
         <Route
           path="/socios-dueño"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff">
               <Socios />
             </ProtectedRoute>
           }
@@ -165,7 +263,7 @@ function App() {
         <Route
           path="/socios-dueno"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff">
               <Socios />
             </ProtectedRoute>
           }
@@ -173,7 +271,7 @@ function App() {
         <Route
           path="/socios"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff">
               <Socios />
             </ProtectedRoute>
           }
@@ -182,7 +280,7 @@ function App() {
         <Route
           path="/membresia-dueño"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias">
               <MembresiaAdmin />
             </ProtectedRoute>
           }
@@ -190,7 +288,7 @@ function App() {
         <Route
           path="/membresia-dueno"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias">
               <MembresiaAdmin />
             </ProtectedRoute>
           }
@@ -198,7 +296,7 @@ function App() {
         <Route
           path="/membresias-dueño"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias">
               <MembresiaAdmin />
             </ProtectedRoute>
           }
@@ -206,7 +304,7 @@ function App() {
         <Route
           path="/membresias-dueno"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias">
               <MembresiaAdmin />
             </ProtectedRoute>
           }
@@ -214,7 +312,7 @@ function App() {
         <Route
           path="/membresia-admin"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias">
               <MembresiaAdmin />
             </ProtectedRoute>
           }
@@ -222,7 +320,7 @@ function App() {
         <Route
           path="/membresias"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias">
               <MembresiaAdmin />
             </ProtectedRoute>
           }
@@ -230,7 +328,7 @@ function App() {
         <Route
           path="/membresias-admin"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias">
               <MembresiaAdmin />
             </ProtectedRoute>
           }
@@ -239,7 +337,7 @@ function App() {
         <Route
           path="/asistencias-dueño"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff">
               <Asistencias />
             </ProtectedRoute>
           }
@@ -247,7 +345,7 @@ function App() {
         <Route
           path="/asistencias-dueno"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff">
               <Asistencias />
             </ProtectedRoute>
           }
@@ -256,7 +354,7 @@ function App() {
         <Route
           path="/rutinas-dueño"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff">
               <Rutinas />
             </ProtectedRoute>
           }
@@ -264,7 +362,7 @@ function App() {
         <Route
           path="/rutinas-dueno"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff">
               <Rutinas />
             </ProtectedRoute>
           }
@@ -273,7 +371,7 @@ function App() {
         <Route
           path="/ejercicios-dueño"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_ejercicios">
               <EjerciciosDueno />
             </ProtectedRoute>
           }
@@ -281,7 +379,7 @@ function App() {
         <Route
           path="/ejercicios-dueno"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_ejercicios">
               <EjerciciosDueno />
             </ProtectedRoute>
           }
@@ -290,7 +388,7 @@ function App() {
         <Route
           path="/pagos-dueño"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_pagos">
               <Pagos />
             </ProtectedRoute>
           }
@@ -298,7 +396,7 @@ function App() {
         <Route
           path="/pagos-dueno"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_pagos">
               <Pagos />
             </ProtectedRoute>
           }
@@ -306,7 +404,7 @@ function App() {
         <Route
           path="/pagos"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_pagos">
               <Pagos />
             </ProtectedRoute>
           }
@@ -315,7 +413,7 @@ function App() {
         <Route
           path="/perfil-dueño"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff">
               <PerfilDueno />
             </ProtectedRoute>
           }
@@ -323,7 +421,7 @@ function App() {
         <Route
           path="/perfil-dueno"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff">
               <PerfilDueno />
             </ProtectedRoute>
           }
@@ -332,7 +430,7 @@ function App() {
         <Route
           path="/support-dueño"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff">
               <Soporte />
             </ProtectedRoute>
           }
@@ -340,7 +438,7 @@ function App() {
         <Route
           path="/support-dueno"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff">
               <Soporte />
             </ProtectedRoute>
           }
@@ -348,7 +446,7 @@ function App() {
         <Route
           path="/soporte-dueño"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff">
               <Soporte />
             </ProtectedRoute>
           }
@@ -356,7 +454,7 @@ function App() {
         <Route
           path="/soporte-dueno"
           element={
-            <ProtectedRoute rolRequerido="dueño">
+            <ProtectedRoute rolRequerido="staff">
               <Soporte />
             </ProtectedRoute>
           }
@@ -483,69 +581,53 @@ function App() {
         <Route
           path="/ejercicios"
           element={
-            localStorage.getItem('rol') === 'socio' || Boolean(localStorage.getItem('socio')) ? (
-              <ProtectedRoute rolRequerido="socio">
-                <SocioEjercicios />
-              </ProtectedRoute>
-            ) : localStorage.getItem('token') ? (
-              <ProtectedRoute rolRequerido="dueño">
-                <EjerciciosDueno />
-              </ProtectedRoute>
-            ) : (
-              <Ejercicios />
-            )
+            <RoleAwareRoute
+              socioElement={<SocioEjercicios />}
+              staffElement={<EjerciciosDueno />}
+              publicElement={<Ejercicios />}
+              staffPermiso="gestionar_ejercicios"
+            />
           }
         />
 
         <Route
           path="/membresia"
           element={
-            <ProtectedRoute>
-              {localStorage.getItem('rol') === 'socio' || Boolean(localStorage.getItem('socio')) ? (
-                <SocioMembresia />
-              ) : (
-                <MembresiaAdmin />
-              )}
-            </ProtectedRoute>
+            <RoleAwareRoute
+              socioElement={<SocioMembresia />}
+              staffElement={<MembresiaAdmin />}
+              staffPermiso="gestionar_membresias"
+            />
           }
         />
 
         <Route
           path="/asistencias"
           element={
-            <ProtectedRoute>
-              {localStorage.getItem('rol') === 'socio' || Boolean(localStorage.getItem('socio')) ? (
-                <AsistenciaSocio />
-              ) : (
-                <Asistencias />
-              )}
-            </ProtectedRoute>
+            <RoleAwareRoute
+              socioElement={<AsistenciaSocio />}
+              staffElement={<Asistencias />}
+            />
           }
         />
 
         <Route
           path="/rutinas"
           element={
-            <ProtectedRoute>
-              {localStorage.getItem('rol') === 'socio' || Boolean(localStorage.getItem('socio')) ? (
-                <SocioRutinas />
-              ) : (
-                <Rutinas />
-              )}
-            </ProtectedRoute>
+            <RoleAwareRoute
+              socioElement={<SocioRutinas />}
+              staffElement={<Rutinas />}
+            />
           }
         />
 
         <Route
           path="/perfil"
           element={
-            <ProtectedRoute>
-              {localStorage.getItem('rol') === 'socio' || Boolean(localStorage.getItem('socio')) ? (
-                <Perfil />
-              ) : (
-                <PerfilDueno />
-              )}
-            </ProtectedRoute>
+            <RoleAwareRoute
+              socioElement={<Perfil />}
+              staffElement={<PerfilDueno />}
+            />
           }
         />
 

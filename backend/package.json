@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test tests/migration.unit.test.js",
+    "test:integration": "node --test tests/integration.supabase.test.js"
   },
   "keywords": [],
   "author": "",

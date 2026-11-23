@@ -3,36 +3,33 @@
  * ARCHIVO: socio-rutinas.jsx
  * RUTA: frontend/src/pages/rutinas-socio/socio-rutinas.jsx
  * PROYECTO: GYMTRACK - Frontend
- * DESCRIPCIÓN: Módulo interactivo de Rutinas para el Socio / Alumno.
+ * DESCRIPCIÓN: Módulo interactivo de Rutinas del Socio:
+ *   - Pestaña 1: Mis Rutinas Personales (`rutina_socio`, usando exclusivamente `ejercicio_socio`)
+ *   - Pestaña 2: Rutinas Asignadas por el Gimnasio (`rutinas_asignadas_socio_gimnasio`, solo lectura)
+ *   - Modo Entrenamiento Interactivo con cronómetro de sesión y descanso.
  * =========================================================================================
- * 
- * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
- * 1. PASO 1 (Rutinas Asignadas vs Plantillas del Gimnasio):
- *    - El alumno puede visualizar la rutina personalizada asignada por su profesor.
- *    - Pestaña para explorar y "adoptar" rutinas modelo creadas por el gimnasio (hipertrofia, definición, fuerza).
- * 2. PASO 2 (Modo Entrenamiento Activo):
- *    - Cronómetro de descanso entre series integrado (`FaStopwatch`).
- *    - Seguimiento de repeticiones y cargas efectivas levantadas.
- * 3. PASO 3 (Rutinas Propias):
- *    - Permite al alumno crear sus propias secuencias de ejercicios personalizadas si lo desea.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
 import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
+import { useGymContext } from '../../context/GymContext';
 import {
-  fetchRutinas,
-  fetchRutinaById,
-  createRutina,
-  updateRutina,
-  deleteRutina,
-  addEjercicioToRutina,
-  updateEjercicioEnRutina,
-  removeEjercicioFromRutina,
-  fetchCatalogoEjercicios,
-  createEjercicioPersonalizado,
-  activarRutina
+  fetchRutinasResumen,
+  fetchRutinaPersonalById,
+  createRutinaPersonal,
+  updateRutinaPersonal,
+  deleteRutinaPersonal,
+  addEjercicioRutinaPersonal,
+  updateEjercicioRutinaPersonal,
+  removeEjercicioRutinaPersonal,
+  reordenarRutinaPersonal
 } from '../../services/rutinaService';
+import {
+  getEjerciciosSocio,
+  crearEjercicioSocio
+} from '../../services/socioEjercicioService';
+import { formatFechaArgentina } from '../../utils/dateUtils';
 
 import {
   FaDumbbell,
@@ -52,42 +49,66 @@ import {
   FaLayerGroup,
   FaCrown,
   FaListUl,
-  FaStopwatch
+  FaStopwatch,
+  FaArrowUp,
+  FaArrowDown,
+  FaBuilding,
+  FaUserTie
 } from 'react-icons/fa';
 
 import './socio-rutinas.css';
 
-export default function SocioRutinas() {
-
-
-  // Datos del socio desde sesión
-  const socioLocal = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem('socio') || localStorage.getItem('usuario') || '{}');
-    } catch {
-      return {};
+function parseDescripcion(desc) {
+  const defaults = {
+    tipo: 'Personalizada',
+    dificultad: 'Intermedia',
+    duracion: '60 min',
+    dias: 'Lunes, Miércoles, Viernes',
+    notas: '',
+    objetivo: 'Entrenamiento general'
+  };
+  if (!desc) return defaults;
+  try {
+    const parsed = JSON.parse(desc);
+    if (parsed && typeof parsed === 'object') {
+      return {
+        tipo: parsed.tipo || defaults.tipo,
+        dificultad: parsed.dificultad || defaults.dificultad,
+        duracion: parsed.duracion || defaults.duracion,
+        dias: parsed.dias || defaults.dias,
+        notas: parsed.notas || '',
+        objetivo: parsed.objetivo || defaults.objetivo
+      };
     }
-  }, []);
+  } catch {
+    return { ...defaults, notas: String(desc) };
+  }
+  return defaults;
+}
 
-  const socioIdActual = socioLocal?.id_socio || 1;
+export default function SocioRutinas() {
+  const { usuario, gimnasioActivo, gimnasioActivoId, contextVersion } = useGymContext();
+  const socioIdActual = usuario?.id_socio || null;
 
-  // Estados de datos
-  const [misRutinas, setMisRutinas] = useState([]);
-  const [catalogoEjercicios, setCatalogoEjercicios] = useState([]);
+  // Pestaña activa: 'personales' | 'asignadas'
+  const [tabActiva, setTabActiva] = useState('personales');
+
+  // Datos
+  const [rutinasPersonales, setRutinasPersonales] = useState([]);
+  const [rutinasAsignadas, setRutinasAsignadas] = useState([]);
+  const [ejerciciosPropios, setEjerciciosPropios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notificacion, setNotificacion] = useState('');
 
-  // Rutina seleccionada para vista de detalle en "Mis Rutinas"
-  const [selectedRutina, setSelectedRutina] = useState(null);
+  // Selección
+  const [selectedPersonal, setSelectedPersonal] = useState(null);
+  const [selectedAsignada, setSelectedAsignada] = useState(null);
 
   // Filtros
-  const [searchMisRutinas, setSearchMisRutinas] = useState('');
-  const [filtroEstado, setFiltroEstado] = useState('todos'); // 'todos' | 'activa' | 'asignada'
+  const [searchText, setSearchText] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('todos'); // 'todos' | 'activa' | 'inactiva'
 
-  // --------------------------------------------------------------------------
-  // Modales
-  // --------------------------------------------------------------------------
-  // 1. Modal Crear / Editar Mi Rutina
+  // Modal 1: Crear / Editar Rutina Personal (`rutina_socio`)
   const [showRutinaModal, setShowRutinaModal] = useState(false);
   const [editingRutina, setEditingRutina] = useState(null);
   const [rutinaFormData, setRutinaFormData] = useState({
@@ -102,14 +123,13 @@ export default function SocioRutinas() {
   const [modalEjerciciosSeleccionados, setModalEjerciciosSeleccionados] = useState([]);
   const [modalSearchEj, setModalSearchEj] = useState('');
   const [modalFiltroGrupo, setModalFiltroGrupo] = useState('todos');
-  const [modalFiltroOrigen, setModalFiltroOrigen] = useState('todos'); // 'todos' | 'gimnasio' | 'propio'
   const [guardandoRutina, setGuardandoRutina] = useState(false);
 
-  // 2. Modal Agregar Ejercicio a la Rutina Seleccionada
+  // Modal 2: Agregar / Editar Ejercicio Personal en Rutina Personal
   const [showAddEjModal, setShowAddEjModal] = useState(false);
   const [editingEjercicioItem, setEditingEjercicioItem] = useState(null);
   const [ejercicioFormData, setEjercicioFormData] = useState({
-    id_ejercicio: '',
+    id_ejercicio_socio: '',
     series: 4,
     repeticiones: 10,
     peso: 20,
@@ -118,7 +138,7 @@ export default function SocioRutinas() {
   });
   const [guardandoEjercicio, setGuardandoEjercicio] = useState(false);
 
-  // 3. Modal Crear Ejercicio Personalizado Propio
+  // Modal 3: Crear Ejercicio Personal Propio (`ejercicio_socio`)
   const [showCustomEjModal, setShowCustomEjModal] = useState(false);
   const [customEjFormData, setCustomEjFormData] = useState({
     nombre: '',
@@ -128,114 +148,72 @@ export default function SocioRutinas() {
   });
   const [guardandoCustomEj, setGuardandoCustomEj] = useState(false);
 
-  // 4. Modo Entrenamiento Interactivo (Workout Mode)
+  // Modal 4: Modo Entrenamiento Interactivo (sirve para personales y asignadas)
   const [workoutModalOpen, setWorkoutModalOpen] = useState(false);
-  const [workoutRutina, setWorkoutRutina] = useState(null);
+  const [workoutPayload, setWorkoutPayload] = useState(null); // { nombre, items: [{ key, nombre, grupo, series, repeticiones, peso, descanso }] }
   const [ejerciciosCompletados, setEjerciciosCompletados] = useState({});
   const [workoutTimerSeconds, setWorkoutTimerSeconds] = useState(0);
   const [restTimerSeconds, setRestTimerSeconds] = useState(null);
   const [timerActivo, setTimerActivo] = useState(false);
 
-  // --------------------------------------------------------------------------
-  // Carga de Datos
-  // --------------------------------------------------------------------------
   const showToast = (msg) => {
     setNotificacion(msg);
     setTimeout(() => setNotificacion(''), 5000);
   };
 
-  const parseDescripcion = (desc) => {
-    if (!desc) {
-      return {
-        tipo: 'Full Body',
-        dificultad: 'Intermedia',
-        duracion: '60 min',
-        dias: 'Lunes, Miércoles, Viernes',
-        notas: 'Mantener buena técnica en todos los ejercicios.',
-        objetivo: 'Entrenamiento general'
-      };
+  const cargarTodo = useCallback(async (preservarPersonalId = null) => {
+    if (!socioIdActual) {
+      setLoading(false);
+      return;
     }
-    try {
-      const parsed = JSON.parse(desc);
-      return {
-        tipo: parsed.tipo || 'Full Body',
-        dificultad: parsed.dificultad || 'Intermedia',
-        duracion: parsed.duracion || '60 min',
-        dias: parsed.dias || 'Lunes, Miércoles, Viernes',
-        notas: parsed.notas || 'Mantener buena técnica en todos los ejercicios.',
-        objetivo: parsed.objetivo || 'Entrenamiento general'
-      };
-    } catch {
-      return {
-        tipo: 'Personalizada',
-        dificultad: 'Intermedia',
-        duracion: '60 min',
-        dias: 'Semanal',
-        notas: desc,
-        objetivo: 'Personalizado'
-      };
-    }
-  };
-
-  // Cargar mis rutinas
-  const loadMisRutinas = async (preservarSeleccionId = null) => {
     try {
       setLoading(true);
-      const data = await fetchRutinas({
-        id_socio: socioIdActual,
-        search: searchMisRutinas,
-        estado: filtroEstado
+      const [resumen, misEj] = await Promise.all([
+        fetchRutinasResumen().catch(() => ({ rutinas_personales: [], rutinas_asignadas: [] })),
+        getEjerciciosSocio({ origen: 'propio' }).catch(() => [])
+      ]);
+
+      const personales = Array.isArray(resumen?.rutinas_personales) ? resumen.rutinas_personales : [];
+      const asignadas = Array.isArray(resumen?.rutinas_asignadas) ? resumen.rutinas_asignadas : [];
+
+      setRutinasPersonales(personales);
+      setRutinasAsignadas(asignadas);
+      setEjerciciosPropios(Array.isArray(misEj) ? misEj : []);
+
+      setSelectedPersonal((prev) => {
+        if (personales.length === 0) return null;
+        if (preservarPersonalId) {
+          return personales.find((r) => String(r.id_rutina_socio) === String(preservarPersonalId)) || personales[0];
+        }
+        if (prev) {
+          return personales.find((r) => r.id_rutina_socio === prev.id_rutina_socio) || personales[0];
+        }
+        return personales.find((r) => r.estado === true) || personales[0];
       });
 
-      const list = data || [];
-      setMisRutinas(list);
-
-      if (list.length > 0) {
-        if (preservarSeleccionId) {
-          const match = list.find((r) => r.id_rutina === preservarSeleccionId);
-          setSelectedRutina(match || list[0]);
-        } else if (selectedRutina) {
-          const stillExists = list.find((r) => r.id_rutina === selectedRutina.id_rutina);
-          setSelectedRutina(stillExists || list[0]);
-        } else {
-          // Por defecto seleccionar la activa si existe, o la primera
-          const activa = list.find((r) => r.estado === 'activa');
-          setSelectedRutina(activa || list[0]);
+      setSelectedAsignada((prev) => {
+        if (asignadas.length === 0) return null;
+        if (prev) {
+          return asignadas.find((a) => a.id_rutina_asignada === prev.id_rutina_asignada) || asignadas[0];
         }
-      } else {
-        setSelectedRutina(null);
-      }
+        return asignadas.find((a) => a.estado === true) || asignadas[0];
+      });
     } catch (err) {
       console.error('Error cargando rutinas del socio:', err);
     } finally {
       setLoading(false);
     }
-  };
-
-  // Cargar catálogo de ejercicios para modales
-  const loadCatalogo = async () => {
-    try {
-      const data = await fetchCatalogoEjercicios({ id_socio: socioIdActual });
-      setCatalogoEjercicios(data || []);
-    } catch (err) {
-      console.warn('Error cargando catálogo:', err);
-    }
-  };
+  }, [socioIdActual]);
 
   useEffect(() => {
-    loadMisRutinas();
-    loadCatalogo();
-  }, [searchMisRutinas, filtroEstado]);
+    cargarTodo();
+  }, [cargarTodo, gimnasioActivoId, contextVersion]);
 
-  // --------------------------------------------------------------------------
-  // Cronómetro del Modo Entrenamiento
-  // --------------------------------------------------------------------------
+  // Cronómetro de sesión
   useEffect(() => {
     let interval = null;
     if (workoutModalOpen) {
-      interval = setInterval(() => {
-        setWorkoutTimerSeconds((sec) => sec + 1);
-      }, 1000);
+      interval = setInterval(() => setWorkoutTimerSeconds((s) => s + 1), 1000);
     }
     return () => {
       if (interval) clearInterval(interval);
@@ -256,7 +234,9 @@ export default function SocioRutinas() {
         });
       }, 1000);
     }
-    return () => clearInterval(restInterval);
+    return () => {
+      if (restInterval) clearInterval(restInterval);
+    };
   }, [timerActivo, restTimerSeconds]);
 
   const iniciarTimerDescanso = (segundos) => {
@@ -264,33 +244,50 @@ export default function SocioRutinas() {
     setTimerActivo(true);
   };
 
-  // --------------------------------------------------------------------------
-  // Métricas
-  // --------------------------------------------------------------------------
-  const rutinaActivaActual = useMemo(() => {
-    return misRutinas.find((r) => r.estado === 'activa') || null;
-  }, [misRutinas]);
+  // Listas filtradas
+  const personalesFiltradas = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    return rutinasPersonales.filter((r) => {
+      if (filtroEstado === 'activa' && r.estado !== true) return false;
+      if (filtroEstado === 'inactiva' && r.estado !== false) return false;
+      if (q && !(r.nombre || '').toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [rutinasPersonales, filtroEstado, searchText]);
 
-  const totalEjerciciosRutinaActiva = useMemo(() => {
-    return rutinaActivaActual?.rutina_ejercicio?.length || 0;
-  }, [rutinaActivaActual]);
+  const asignadasFiltradas = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    return rutinasAsignadas.filter((a) => {
+      if (filtroEstado === 'activa' && a.estado !== true) return false;
+      if (filtroEstado === 'inactiva' && a.estado !== false) return false;
+      if (q) {
+        const nom = (a.rutina_gimnasio?.nombre || '').toLowerCase();
+        const obs = (a.observaciones || '').toLowerCase();
+        if (!nom.includes(q) && !obs.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [rutinasAsignadas, filtroEstado, searchText]);
+
+  const asignadasActivasCount = useMemo(
+    () => rutinasAsignadas.filter((a) => a.estado === true).length,
+    [rutinasAsignadas]
+  );
 
   // --------------------------------------------------------------------------
-  // Acciones sobre Rutinas
+  // Acciones sobre Rutinas Personales (`rutina_socio`)
   // --------------------------------------------------------------------------
-
-  // Activar una rutina
-  const handleActivarRutina = async (rutinaId) => {
+  const handleToggleEstadoPersonal = async (rutina) => {
     try {
-      await activarRutina(rutinaId);
-      showToast('¡Rutina marcada como ACTIVA! Se mostrará en tu panel principal.');
-      await loadMisRutinas(rutinaId);
+      const nuevoEstado = !rutina.estado;
+      await updateRutinaPersonal(rutina.id_rutina_socio, { estado: nuevoEstado });
+      showToast(nuevoEstado ? 'Rutina personal activada.' : 'Rutina personal pausada.');
+      await cargarTodo(rutina.id_rutina_socio);
     } catch (err) {
-      alert(err.message || 'Error al activar la rutina.');
+      alert(err.message || 'No se pudo actualizar el estado de la rutina.');
     }
   };
 
-  // Abrir modal de creación de rutina propia
   const handleOpenCrearRutina = () => {
     setEditingRutina(null);
     setRutinaFormData({
@@ -305,11 +302,9 @@ export default function SocioRutinas() {
     setModalEjerciciosSeleccionados([]);
     setModalSearchEj('');
     setModalFiltroGrupo('todos');
-    setModalFiltroOrigen('todos');
     setShowRutinaModal(true);
   };
 
-  // Abrir modal de edición de rutina
   const handleOpenEditarRutina = (rutina) => {
     setEditingRutina(rutina);
     const meta = parseDescripcion(rutina.descripcion);
@@ -322,50 +317,31 @@ export default function SocioRutinas() {
       notas: meta.notas,
       objetivo: meta.objetivo
     });
-
-    const existentes = (rutina.rutina_ejercicio || []).map((re) => ({
-      id_ejercicio: re.id_ejercicio,
-      nombre: re.ejercicio?.nombre || 'Ejercicio',
-      grupo_muscular: re.ejercicio?.grupo_muscular || 'General',
-      es_propio: Boolean(re.es_propio || re.ejercicio?.id_socio),
-      series: re.series || 4,
-      repeticiones: re.repeticiones || 10,
-      peso: re.peso || 0,
-      descanso: re.descanso || 60,
-      orden: re.orden || 1
-    }));
-
-    setModalEjerciciosSeleccionados(existentes);
-    setModalSearchEj('');
-    setModalFiltroGrupo('todos');
-    setModalFiltroOrigen('todos');
+    setModalEjerciciosSeleccionados([]);
     setShowRutinaModal(true);
   };
 
-  // Alternar selección de un ejercicio dentro del modal de rutina
   const handleToggleEjercicioModal = (ej) => {
-    const yaExiste = modalEjerciciosSeleccionados.find((item) => item.id_ejercicio === ej.id_ejercicio);
-    if (yaExiste) {
-      setModalEjerciciosSeleccionados(
-        modalEjerciciosSeleccionados.filter((item) => item.id_ejercicio !== ej.id_ejercicio)
-      );
+    const idEj = ej.id_ejercicio_socio;
+    const existe = modalEjerciciosSeleccionados.some((it) => it.id_ejercicio_socio === idEj);
+    if (existe) {
+      setModalEjerciciosSeleccionados((prev) => prev.filter((it) => it.id_ejercicio_socio !== idEj));
     } else {
-      const nuevo = {
-        id_ejercicio: ej.id_ejercicio,
-        nombre: ej.nombre,
-        grupo_muscular: ej.grupo_muscular || 'General',
-        es_propio: Boolean(ej.es_propio || ej.id_socio),
-        series: 4,
-        repeticiones: 10,
-        peso: 20,
-        descanso: 60,
-        orden: modalEjerciciosSeleccionados.length + 1
-      };
-      setModalEjerciciosSeleccionados([...modalEjerciciosSeleccionados, nuevo]);
+      setModalEjerciciosSeleccionados((prev) => [
+        ...prev,
+        {
+          id_ejercicio_socio: idEj,
+          nombre: ej.nombre,
+          grupo_muscular: ej.grupo_muscular || 'General',
+          series: 4,
+          repeticiones: 10,
+          peso: 20,
+          descanso: 60
+        }
+      ]);
     }
   };
 
-  // Guardar Rutina (Crear o Editar)
   const handleSaveRutina = async (e) => {
     e.preventDefault();
     if (!rutinaFormData.nombre.trim()) {
@@ -375,50 +351,49 @@ export default function SocioRutinas() {
 
     setGuardandoRutina(true);
     try {
-      const payload = {
-        nombre: rutinaFormData.nombre.trim(),
-        id_socio: socioIdActual,
-        estado: editingRutina ? editingRutina.estado : (misRutinas.length === 0 ? 'activa' : 'asignada'),
-        descripcion: JSON.stringify({
-          tipo: rutinaFormData.tipo,
-          dificultad: rutinaFormData.dificultad,
-          duracion: rutinaFormData.duracion,
-          dias: rutinaFormData.dias,
-          notas: rutinaFormData.notas,
-          objetivo: rutinaFormData.objetivo
-        })
-      };
+      const descripcion = JSON.stringify({
+        tipo: rutinaFormData.tipo,
+        dificultad: rutinaFormData.dificultad,
+        duracion: rutinaFormData.duracion,
+        dias: rutinaFormData.dias,
+        notas: rutinaFormData.notas,
+        objetivo: rutinaFormData.objetivo
+      });
 
-      let resRutina;
+      let saved;
       if (editingRutina) {
-        resRutina = await updateRutina(editingRutina.id_rutina, payload);
-        showToast('¡Rutina actualizada con éxito!');
+        saved = await updateRutinaPersonal(editingRutina.id_rutina_socio, {
+          nombre: rutinaFormData.nombre.trim(),
+          descripcion
+        });
+        showToast('¡Rutina personal actualizada con éxito!');
       } else {
-        resRutina = await createRutina(payload);
+        saved = await createRutinaPersonal({
+          nombre: rutinaFormData.nombre.trim(),
+          descripcion,
+          estado: true
+        });
 
-        // Asociar ejercicios seleccionados
-        if (resRutina?.id_rutina && modalEjerciciosSeleccionados.length > 0) {
+        const newId = saved?.id_rutina_socio;
+        if (newId && modalEjerciciosSeleccionados.length > 0) {
           for (let i = 0; i < modalEjerciciosSeleccionados.length; i++) {
             const ej = modalEjerciciosSeleccionados[i];
-            try {
-              await addEjercicioToRutina(resRutina.id_rutina, {
-                id_ejercicio: ej.id_ejercicio,
-                series: Number(ej.series || 4),
-                repeticiones: Number(ej.repeticiones || 10),
-                peso: Number(ej.peso || 0),
-                descanso: Number(ej.descanso || 60),
-                orden: i + 1
-              });
-            } catch (errAsoc) {
-              console.warn('Error asociando ejercicio:', errAsoc);
-            }
+            await addEjercicioRutinaPersonal(newId, {
+              id_ejercicio_socio: ej.id_ejercicio_socio,
+              series: Number(ej.series || 4),
+              repeticiones: Number(ej.repeticiones || 10),
+              peso: Number(ej.peso || 0),
+              descanso: Number(ej.descanso || 60),
+              orden: i + 1
+            });
           }
         }
-        showToast('¡Tu nueva rutina fue creada con éxito!');
+        showToast('¡Tu nueva rutina personal fue creada con éxito!');
       }
 
       setShowRutinaModal(false);
-      await loadMisRutinas(resRutina?.id_rutina);
+      setTabActiva('personales');
+      await cargarTodo(saved?.id_rutina_socio || editingRutina?.id_rutina_socio);
     } catch (err) {
       alert(err.message || 'Error al guardar la rutina.');
     } finally {
@@ -426,32 +401,33 @@ export default function SocioRutinas() {
     }
   };
 
-  // Eliminar Rutina
   const handleDeleteRutina = async (rutina) => {
-    if (!window.confirm(`¿Seguro que deseás eliminar tu rutina "${rutina.nombre}"?`)) return;
+    if (!window.confirm(`¿Seguro que deseás eliminar tu rutina personal "${rutina.nombre}"?`)) return;
     try {
-      await deleteRutina(rutina.id_rutina);
+      await deleteRutinaPersonal(rutina.id_rutina_socio);
       showToast(`Rutina "${rutina.nombre}" eliminada.`);
-      await loadMisRutinas();
+      await cargarTodo();
     } catch (err) {
       alert(err.message || 'Error al eliminar la rutina.');
     }
   };
 
   // --------------------------------------------------------------------------
-  // Gestión de Ejercicios en la Rutina Seleccionada
+  // Ejercicios en Rutina Personal (`rutina_ejercicio_socio` -> `ejercicio_socio`)
   // --------------------------------------------------------------------------
   const handleOpenAddEjercicio = () => {
-    if (!selectedRutina) return;
+    if (!selectedPersonal) return;
     setEditingEjercicioItem(null);
-    const primerEjId = catalogoEjercicios.length > 0 ? catalogoEjercicios[0].id_ejercicio : '';
+    const items = selectedPersonal.rutina_ejercicio_socio || [];
+    const usados = new Set(items.map((it) => it.id_ejercicio_socio));
+    const primero = ejerciciosPropios.find((e) => !usados.has(e.id_ejercicio_socio));
     setEjercicioFormData({
-      id_ejercicio: primerEjId,
+      id_ejercicio_socio: primero?.id_ejercicio_socio || '',
       series: 4,
       repeticiones: 10,
       peso: 20,
       descanso: 60,
-      orden: (selectedRutina.rutina_ejercicio?.length || 0) + 1
+      orden: items.length + 1
     });
     setShowAddEjModal(true);
   };
@@ -459,7 +435,7 @@ export default function SocioRutinas() {
   const handleOpenEditEjercicio = (item) => {
     setEditingEjercicioItem(item);
     setEjercicioFormData({
-      id_ejercicio: item.id_ejercicio,
+      id_ejercicio_socio: item.id_ejercicio_socio,
       series: item.series || 4,
       repeticiones: item.repeticiones || 10,
       peso: item.peso || 0,
@@ -471,35 +447,36 @@ export default function SocioRutinas() {
 
   const handleSaveEjercicioEnRutina = async (e) => {
     e.preventDefault();
-    if (!selectedRutina) return;
+    if (!selectedPersonal) return;
 
     setGuardandoEjercicio(true);
     try {
+      const rutId = selectedPersonal.id_rutina_socio;
       if (editingEjercicioItem) {
-        await updateEjercicioEnRutina(selectedRutina.id_rutina, editingEjercicioItem.id_rutina_ejercicio, {
+        await updateEjercicioRutinaPersonal(rutId, editingEjercicioItem.id_rutina_ejercicio_socio, {
           series: Number(ejercicioFormData.series),
           repeticiones: Number(ejercicioFormData.repeticiones),
           peso: Number(ejercicioFormData.peso),
           descanso: Number(ejercicioFormData.descanso),
           orden: Number(ejercicioFormData.orden)
         });
-        showToast('Parámetros de ejercicio actualizados.');
+        showToast('Parámetros del ejercicio actualizados.');
       } else {
-        await addEjercicioToRutina(selectedRutina.id_rutina, {
-          id_ejercicio: Number(ejercicioFormData.id_ejercicio),
+        await addEjercicioRutinaPersonal(rutId, {
+          id_ejercicio_socio: Number(ejercicioFormData.id_ejercicio_socio),
           series: Number(ejercicioFormData.series),
           repeticiones: Number(ejercicioFormData.repeticiones),
           peso: Number(ejercicioFormData.peso),
           descanso: Number(ejercicioFormData.descanso),
           orden: Number(ejercicioFormData.orden)
         });
-        showToast('¡Ejercicio agregado a la rutina!');
+        showToast('¡Ejercicio personal agregado a tu rutina!');
       }
 
       setShowAddEjModal(false);
-      const updated = await fetchRutinaById(selectedRutina.id_rutina);
-      setSelectedRutina(updated);
-      loadMisRutinas(selectedRutina.id_rutina);
+      const updated = await fetchRutinaPersonalById(rutId);
+      setSelectedPersonal(updated);
+      await cargarTodo(rutId);
     } catch (err) {
       alert(err.message || 'Error al guardar el ejercicio en la rutina.');
     } finally {
@@ -508,123 +485,163 @@ export default function SocioRutinas() {
   };
 
   const handleDeleteEjercicioDeRutina = async (item) => {
-    if (!window.confirm(`¿Quitar "${item.ejercicio?.nombre || 'este ejercicio'}" de la rutina?`)) return;
+    if (!selectedPersonal) return;
+    if (!window.confirm(`¿Quitar "${item.ejercicio_socio?.nombre || 'este ejercicio'}" de la rutina?`)) return;
     try {
-      await removeEjercicioFromRutina(selectedRutina.id_rutina, item.id_rutina_ejercicio);
+      const rutId = selectedPersonal.id_rutina_socio;
+      await removeEjercicioRutinaPersonal(rutId, item.id_rutina_ejercicio_socio);
       showToast('Ejercicio quitado de la rutina.');
-      const updated = await fetchRutinaById(selectedRutina.id_rutina);
-      setSelectedRutina(updated);
-      loadMisRutinas(selectedRutina.id_rutina);
+      const updated = await fetchRutinaPersonalById(rutId);
+      setSelectedPersonal(updated);
+      await cargarTodo(rutId);
     } catch (err) {
       alert(err.message || 'Error al quitar el ejercicio.');
     }
   };
 
-  // Crear Ejercicio Propio
-  const handleOpenCrearEjercicioPropio = () => {
-    setCustomEjFormData({
-      nombre: '',
-      grupo_muscular: 'Pecho',
-      dificultad: 'Intermedia',
-      descripcion: ''
-    });
-    setShowCustomEjModal(true);
+  const handleMoverEjercicio = async (index, direccion) => {
+    if (!selectedPersonal) return;
+    const lista = [...(selectedPersonal.rutina_ejercicio_socio || [])];
+    const targetIdx = index + direccion;
+    if (targetIdx < 0 || targetIdx >= lista.length) return;
+
+    const [movido] = lista.splice(index, 1);
+    lista.splice(targetIdx, 0, movido);
+    const idsOrdenados = lista.map((it) => it.id_rutina_ejercicio_socio);
+
+    try {
+      const rutId = selectedPersonal.id_rutina_socio;
+      await reordenarRutinaPersonal(rutId, idsOrdenados);
+      const updated = await fetchRutinaPersonalById(rutId);
+      setSelectedPersonal(updated);
+      await cargarTodo(rutId);
+      showToast('Orden de ejercicios actualizado.');
+    } catch (err) {
+      alert(err.message || 'No se pudo reordenar la rutina.');
+    }
   };
 
+  // Crear Ejercicio Personal (`ejercicio_socio`)
   const handleSaveCustomEjercicio = async (e) => {
     e.preventDefault();
-    if (!customEjFormData.nombre.trim()) {
-      alert('Ingresá el nombre del ejercicio.');
-      return;
-    }
-
+    if (!customEjFormData.nombre.trim()) return;
     setGuardandoCustomEj(true);
     try {
-      const nuevo = await createEjercicioPersonalizado({
-        ...customEjFormData,
-        id_socio: socioIdActual
+      const nuevo = await crearEjercicioSocio({
+        nombre: customEjFormData.nombre.trim(),
+        grupo_muscular: customEjFormData.grupo_muscular,
+        dificultad: customEjFormData.dificultad,
+        descripcion: customEjFormData.descripcion.trim() || null
       });
 
-      showToast(`¡Ejercicio "${nuevo.nombre}" creado exitosamente!`);
+      showToast(`¡Ejercicio personal "${nuevo.nombre}" creado!`);
       setShowCustomEjModal(false);
-      await loadCatalogo();
+      setCustomEjFormData({ nombre: '', grupo_muscular: 'Pecho', dificultad: 'Intermedia', descripcion: '' });
 
-      // Si el modal de rutina está abierto, seleccionarlo
-      if (showRutinaModal && nuevo?.id_ejercicio) {
+      const misEj = await getEjerciciosSocio({ origen: 'propio' }).catch(() => []);
+      setEjerciciosPropios(Array.isArray(misEj) ? misEj : []);
+
+      if (showRutinaModal && nuevo?.id_ejercicio_socio) {
         setModalEjerciciosSeleccionados((prev) => [
           ...prev,
           {
-            id_ejercicio: nuevo.id_ejercicio,
+            id_ejercicio_socio: nuevo.id_ejercicio_socio,
             nombre: nuevo.nombre,
-            grupo_muscular: nuevo.grupo_muscular,
-            es_propio: true,
+            grupo_muscular: nuevo.grupo_muscular || 'General',
             series: 4,
             repeticiones: 10,
             peso: 0,
-            descanso: 60,
-            orden: prev.length + 1
+            descanso: 60
           }
         ]);
       }
+      if (showAddEjModal && nuevo?.id_ejercicio_socio) {
+        setEjercicioFormData((prev) => ({
+          ...prev,
+          id_ejercicio_socio: nuevo.id_ejercicio_socio
+        }));
+      }
     } catch (err) {
-      alert(err.message || 'Error al crear el ejercicio.');
+      alert(err.message || 'Error al crear el ejercicio personal.');
     } finally {
       setGuardandoCustomEj(false);
     }
   };
 
-  // Iniciar Modo Entrenamiento
-  const handleIniciarEntrenamiento = (rutina) => {
-    setWorkoutRutina(rutina);
+  // Iniciar Modo Entrenamiento (soporta rutina personal o asignada)
+  const handleIniciarEntrenamientoPersonal = (rutina) => {
+    const items = (rutina.rutina_ejercicio_socio || []).map((it, idx) => ({
+      key: it.id_rutina_ejercicio_socio || idx,
+      nombre: it.ejercicio_socio?.nombre || 'Ejercicio',
+      grupo: it.ejercicio_socio?.grupo_muscular || 'General',
+      series: it.series || 4,
+      repeticiones: it.repeticiones || 10,
+      peso: it.peso || 0,
+      descanso: it.descanso || 60
+    }));
+    setWorkoutPayload({ nombre: rutina.nombre, items });
     setEjerciciosCompletados({});
     setWorkoutTimerSeconds(0);
-    setWorkoutModalOpen(true);
     setRestTimerSeconds(null);
     setTimerActivo(false);
+    setWorkoutModalOpen(true);
   };
 
-  // Cerrar Modo Entrenamiento
+  const handleIniciarEntrenamientoAsignada = (asig) => {
+    const rg = asig.rutina_gimnasio || {};
+    const items = (rg.rutina_ejercicio_gimnasio || []).map((it, idx) => ({
+      key: it.id_rutina_ejercicio_gimnasio || idx,
+      nombre: it.ejercicio_gimnasio?.nombre || 'Ejercicio',
+      grupo: it.ejercicio_gimnasio?.grupo_muscular || 'General',
+      series: it.series || 4,
+      repeticiones: it.repeticiones || 10,
+      peso: it.peso || 0,
+      descanso: it.descanso || 60
+    }));
+    setWorkoutPayload({ nombre: rg.nombre || 'Rutina Asignada', items });
+    setEjerciciosCompletados({});
+    setWorkoutTimerSeconds(0);
+    setRestTimerSeconds(null);
+    setTimerActivo(false);
+    setWorkoutModalOpen(true);
+  };
+
   const handleCerrarEntrenamiento = () => {
     setWorkoutModalOpen(false);
     setTimerActivo(false);
     setRestTimerSeconds(null);
   };
 
-  const toggleEjercicioCompletado = (idRe, descansoSegundos = 60) => {
-    const estaCompletado = Boolean(ejerciciosCompletados[idRe]);
-    setEjerciciosCompletados((prev) => ({
-      ...prev,
-      [idRe]: !estaCompletado
-    }));
-
-    if (!estaCompletado) {
-      iniciarTimerDescanso(Number(descansoSegundos) || 60);
-    }
+  const toggleEjercicioCompletado = (key, descansoSegundos = 60) => {
+    const ya = Boolean(ejerciciosCompletados[key]);
+    setEjerciciosCompletados((prev) => ({ ...prev, [key]: !ya }));
+    if (!ya) iniciarTimerDescanso(Number(descansoSegundos) || 60);
   };
 
-  // Formato para segundos en reloj
   const formatTime = (totalSeconds) => {
     const mins = Math.floor(totalSeconds / 60);
     const secs = totalSeconds % 60;
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // Filtros del catálogo para el modal de rutina
-  const catalogoFiltradoModal = catalogoEjercicios.filter((ej) => {
-    if (modalFiltroOrigen === 'gimnasio' && ej.es_propio) return false;
-    if (modalFiltroOrigen === 'propio' && !ej.es_propio) return false;
+  const catalogoPropioFiltrado = ejerciciosPropios.filter((ej) => {
     if (modalFiltroGrupo !== 'todos' && ej.grupo_muscular !== modalFiltroGrupo) return false;
     if (modalSearchEj.trim()) {
       const q = modalSearchEj.toLowerCase();
-      const matchName = ej.nombre?.toLowerCase().includes(q);
-      const matchGroup = ej.grupo_muscular?.toLowerCase().includes(q);
-      if (!matchName && !matchGroup) return false;
+      return (
+        (ej.nombre || '').toLowerCase().includes(q) ||
+        (ej.grupo_muscular || '').toLowerCase().includes(q)
+      );
     }
     return true;
   });
 
-  const selectedMeta = selectedRutina ? parseDescripcion(selectedRutina.descripcion) : null;
-  const ejerciciosDeRutina = selectedRutina?.rutina_ejercicio || [];
+  const selectedPersonalMeta = selectedPersonal ? parseDescripcion(selectedPersonal.descripcion) : null;
+  const ejerciciosDePersonal = selectedPersonal?.rutina_ejercicio_socio || [];
+
+  const selectedAsignadaRut = selectedAsignada?.rutina_gimnasio || null;
+  const selectedAsignadaMeta = selectedAsignadaRut ? parseDescripcion(selectedAsignadaRut.descripcion) : null;
+  const ejerciciosDeAsignada = selectedAsignadaRut?.rutina_ejercicio_gimnasio || [];
 
   return (
     <div className="sr-page-layout">
@@ -634,7 +651,6 @@ export default function SocioRutinas() {
         <SidebarSocio />
 
         <main className="sr-main-area">
-          {/* TOAST / ALERTA DE NOTIFICACIÓN */}
           {notificacion && (
             <div className="sr-alert-banner">
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -647,9 +663,7 @@ export default function SocioRutinas() {
             </div>
           )}
 
-          {/* ================================================================
-              1. HERO HEADER
-              ================================================================ */}
+          {/* HERO HEADER */}
           <section className="sr-header-section">
             <div className="sr-header-topbar">
               <div className="sr-title-wrap">
@@ -657,9 +671,9 @@ export default function SocioRutinas() {
                   <FaDumbbell />
                 </div>
                 <div>
-                  <h1>Panel de Rutinas de Entrenamiento</h1>
+                  <h1>Mis Rutinas de Entrenamiento</h1>
                   <p>
-                    Gestioná las rutinas asignadas por tu gimnasio o creá tus propias rutinas a medida y llevá el registro de cada entrenamiento.
+                    Gestioná tus rutinas personales (con tus propios ejercicios) y consultá las rutinas asignadas por {gimnasioActivo?.nombre || 'tus gimnasios'}.
                   </p>
                 </div>
               </div>
@@ -668,12 +682,10 @@ export default function SocioRutinas() {
                 <button
                   type="button"
                   className="sr-btn-custom-ej"
-                  onClick={handleOpenCrearEjercicioPropio}
-                  title="Crear un nuevo ejercicio que no esté en el catálogo"
+                  onClick={() => setShowCustomEjModal(true)}
                 >
                   <FaPlus /> Crear mi ejercicio
                 </button>
-
                 <button
                   type="button"
                   className="sr-btn-primary"
@@ -684,15 +696,15 @@ export default function SocioRutinas() {
               </div>
             </div>
 
-            {/* TARJETAS DE MÉTRICAS RÁPIDAS */}
+            {/* MÉTRICAS */}
             <div className="sr-metrics-grid">
               <div className="sr-metric-card">
                 <div className="sr-metric-icon-wrap" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e' }}>
                   <FaDumbbell />
                 </div>
                 <div className="sr-metric-data">
-                  <h3>{misRutinas.length}</h3>
-                  <p>Mis Rutinas Guardadas</p>
+                  <h3>{rutinasPersonales.length}</h3>
+                  <p>Rutinas Personales</p>
                 </div>
               </div>
 
@@ -701,10 +713,8 @@ export default function SocioRutinas() {
                   <FaCrown />
                 </div>
                 <div className="sr-metric-data">
-                  <h3 style={{ fontSize: '18px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {rutinaActivaActual ? rutinaActivaActual.nombre : 'Ninguna activa'}
-                  </h3>
-                  <p>Rutina Activa Hoy</p>
+                  <h3>{asignadasActivasCount}</h3>
+                  <p>Asignadas Activas por Gimnasio</p>
                 </div>
               </div>
 
@@ -713,105 +723,107 @@ export default function SocioRutinas() {
                   <FaLayerGroup />
                 </div>
                 <div className="sr-metric-data">
-                  <h3>{totalEjerciciosRutinaActiva}</h3>
-                  <p>Ejercicios en Rutina Activa</p>
+                  <h3>{ejerciciosPropios.length}</h3>
+                  <p>Mis Ejercicios Propios</p>
                 </div>
               </div>
             </div>
           </section>
 
-          {/* ================================================================
-              2. MIS RUTINAS (ASIGNADAS POR EL GIMNASIO Y PROPIAS)
-              ================================================================ */}
+          {/* TABS + FILTROS */}
           <div className="sr-tab-content">
-              {/* Barra de Filtros para Mis Rutinas */}
-              <div className="sr-filters-bar">
-                <div className="sr-search-box">
-                  <FaSearch style={{ color: '#64748b' }} />
-                  <input
-                    type="text"
-                    placeholder="Buscar entre mis rutinas..."
-                    value={searchMisRutinas}
-                    onChange={(e) => setSearchMisRutinas(e.target.value)}
-                  />
-                </div>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className={tabActiva === 'personales' ? 'sr-btn-primary' : 'sr-btn-secondary'}
+                onClick={() => setTabActiva('personales')}
+              >
+                <FaStar /> Mis Rutinas Personales ({rutinasPersonales.length})
+              </button>
+              <button
+                type="button"
+                className={tabActiva === 'asignadas' ? 'sr-btn-primary' : 'sr-btn-secondary'}
+                onClick={() => setTabActiva('asignadas')}
+              >
+                <FaBuilding /> Asignadas por Gimnasio ({rutinasAsignadas.length})
+              </button>
+            </div>
 
-                <div className="sr-filter-select-wrap">
-                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>Estado:</span>
-                  <select
-                    value={filtroEstado}
-                    onChange={(e) => setFiltroEstado(e.target.value)}
-                    className="sr-select-filter"
-                  >
-                    <option value="todos">Todas las rutinas</option>
-                    <option value="activa">Solo activa</option>
-                    <option value="asignada">Asignadas</option>
-                  </select>
-                </div>
-
-                <button
-                  type="button"
-                  className="sr-btn-refresh"
-                  onClick={() => loadMisRutinas()}
-                  title="Refrescar rutinas"
-                >
-                  <FaSyncAlt />
-                </button>
+            <div className="sr-filters-bar">
+              <div className="sr-search-box">
+                <FaSearch style={{ color: '#64748b' }} />
+                <input
+                  type="text"
+                  placeholder="Buscar rutina..."
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                />
               </div>
 
-              {/* Grid Maestro-Detalle (Izquierda: Rutinas, Derecha: Detalle de Ejercicios) */}
+              <div className="sr-filter-select-wrap">
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>Estado:</span>
+                <select
+                  value={filtroEstado}
+                  onChange={(e) => setFiltroEstado(e.target.value)}
+                  className="sr-select-filter"
+                >
+                  <option value="todos">Todas</option>
+                  <option value="activa">Solo activas</option>
+                  <option value="inactiva">{tabActiva === 'personales' ? 'Pausadas' : 'Finalizadas'}</option>
+                </select>
+              </div>
+
+              <button
+                type="button"
+                className="sr-btn-refresh"
+                onClick={() => cargarTodo()}
+                title="Refrescar rutinas"
+              >
+                <FaSyncAlt />
+              </button>
+            </div>
+
+            {/* PESTAÑA 1: RUTINAS PERSONALES */}
+            {tabActiva === 'personales' ? (
               <div className="sr-master-detail-grid">
-                
-                {/* COLUMNA IZQUIERDA: LISTA DE RUTINAS */}
                 <div className="sr-left-panel">
                   <div className="sr-panel-header">
-                    <h2>Mis Rutinas Registradas</h2>
-                    <span className="sr-count-pill">{misRutinas.length}</span>
+                    <h2>Mis Rutinas Personales</h2>
+                    <span className="sr-count-pill">{personalesFiltradas.length}</span>
                   </div>
 
                   {loading ? (
-                    <div style={{ textAlign: 'center', padding: '50px 0', color: '#94a3b8' }}>
-                      <p>Cargando tus rutinas...</p>
-                    </div>
-                  ) : misRutinas.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '50px 0', color: '#94a3b8' }}>Cargando rutinas...</div>
+                  ) : personalesFiltradas.length === 0 ? (
                     <div className="sr-empty-card">
                       <FaDumbbell style={{ fontSize: '42px', opacity: 0.3, marginBottom: '12px' }} />
-                      <h3>No tenés rutinas registradas aún</h3>
-                      <p>
-                        Cuando tu gimnasio te asigne una rutina o cuando crees una propia, aparecerá aquí.
-                      </p>
-                      <div style={{ display: 'flex', gap: '10px', marginTop: '16px', justifyContent: 'center' }}>
-                        <button type="button" className="sr-btn-primary" onClick={handleOpenCrearRutina}>
-                          <FaPlus /> Crear mi primera rutina
-                        </button>
-                      </div>
+                      <h3>Aún no tenés rutinas personales</h3>
+                      <p>Armá tus propias rutinas con tus ejercicios personalizados.</p>
+                      <button type="button" className="sr-btn-primary" style={{ marginTop: '14px' }} onClick={handleOpenCrearRutina}>
+                        <FaPlus /> Crear mi primera rutina
+                      </button>
                     </div>
                   ) : (
                     <div className="sr-cards-stack">
-                      {misRutinas.map((r) => {
-                        const isSelected = selectedRutina?.id_rutina === r.id_rutina;
-                        const esActiva = r.estado === 'activa';
+                      {personalesFiltradas.map((r) => {
+                        const isSelected = selectedPersonal?.id_rutina_socio === r.id_rutina_socio;
+                        const esActiva = r.estado === true;
                         const meta = parseDescripcion(r.descripcion);
-                        const cantEjercicios = r.rutina_ejercicio?.length || 0;
+                        const cantEj = r.rutina_ejercicio_socio?.length || 0;
 
                         return (
                           <div
-                            key={r.id_rutina}
+                            key={r.id_rutina_socio}
                             className={`sr-routine-card ${isSelected ? 'selected' : ''} ${esActiva ? 'is-active-card' : ''}`}
-                            onClick={() => setSelectedRutina(r)}
+                            onClick={() => setSelectedPersonal(r)}
                           >
                             <div className="sr-routine-card-top">
-                              <div className="sr-routine-card-icon">
-                                <FaDumbbell />
-                              </div>
-
+                              <div className="sr-routine-card-icon"><FaDumbbell /></div>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                   <h4 className="sr-routine-card-title">{r.nombre}</h4>
                                   {esActiva && (
-                                    <span className="sr-badge-activa">
-                                      <FaBolt style={{ fontSize: '10px' }} /> ACTIVA HOY
-                                    </span>
+                                    <span className="sr-badge-activa"><FaBolt style={{ fontSize: '10px' }} /> ACTIVA</span>
                                   )}
                                 </div>
                                 <p className="sr-routine-card-type">{meta.tipo} • {meta.dificultad}</p>
@@ -819,49 +831,32 @@ export default function SocioRutinas() {
                             </div>
 
                             <div className="sr-routine-card-details">
-                              <div className="sr-detail-item">
-                                <FaCalendarAlt style={{ color: '#22c55e' }} />
-                                <span>{meta.dias}</span>
-                              </div>
-                              <div className="sr-detail-item">
-                                <FaClock style={{ color: '#38bdf8' }} />
-                                <span>{meta.duracion}</span>
-                              </div>
-                              <div className="sr-detail-item">
-                                <FaListUl style={{ color: '#c084fc' }} />
-                                <span>{cantEjercicios} ejercicios</span>
-                              </div>
+                              <div className="sr-detail-item"><FaCalendarAlt style={{ color: '#22c55e' }} /><span>{meta.dias}</span></div>
+                              <div className="sr-detail-item"><FaClock style={{ color: '#38bdf8' }} /><span>{meta.duracion}</span></div>
+                              <div className="sr-detail-item"><FaListUl style={{ color: '#c084fc' }} /><span>{cantEj} ejercicios</span></div>
                             </div>
 
                             <div className="sr-routine-card-actions">
-                              {/* Botón Entrenar Ahora */}
                               <button
                                 type="button"
                                 className="sr-btn-card-action train"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleIniciarEntrenamiento(r);
+                                  handleIniciarEntrenamientoPersonal(r);
                                 }}
-                                title="Abrir modo entrenamiento guiado para hoy"
                               >
                                 <FaPlay style={{ fontSize: '10px' }} /> Entrenar
                               </button>
-
-                              {/* Botón Activar (si no es la activa) */}
-                              {!esActiva && (
-                                <button
-                                  type="button"
-                                  className="sr-btn-card-action activate"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleActivarRutina(r.id_rutina);
-                                  }}
-                                  title="Establecer como rutina activa principal"
-                                >
-                                  <FaBolt style={{ fontSize: '11px' }} /> Activar
-                                </button>
-                              )}
-
+                              <button
+                                type="button"
+                                className="sr-btn-card-action activate"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleEstadoPersonal(r);
+                                }}
+                              >
+                                <FaBolt style={{ fontSize: '11px' }} /> {esActiva ? 'Pausar' : 'Activar'}
+                              </button>
                               <button
                                 type="button"
                                 className="sr-btn-card-icon"
@@ -869,11 +864,10 @@ export default function SocioRutinas() {
                                   e.stopPropagation();
                                   handleOpenEditarRutina(r);
                                 }}
-                                title="Editar rutina"
+                                title="Editar"
                               >
                                 <FaEdit />
                               </button>
-
                               <button
                                 type="button"
                                 className="sr-btn-card-icon delete"
@@ -881,7 +875,7 @@ export default function SocioRutinas() {
                                   e.stopPropagation();
                                   handleDeleteRutina(r);
                                 }}
-                                title="Eliminar rutina"
+                                title="Eliminar"
                               >
                                 <FaTrashAlt />
                               </button>
@@ -893,134 +887,85 @@ export default function SocioRutinas() {
                   )}
                 </div>
 
-                {/* COLUMNA DERECHA: DETALLE COMPLETO DE EJERCICIOS */}
+                {/* DETALLE RUTINA PERSONAL */}
                 <div className="sr-right-panel">
-                  {selectedRutina ? (
+                  {selectedPersonal ? (
                     <div>
-                      {/* Banner de la Rutina Seleccionada */}
                       <div className="sr-detail-header-card">
                         <div className="sr-detail-header-top">
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                              <h2>{selectedRutina.nombre}</h2>
-                              {selectedRutina.estado === 'activa' ? (
-                                <span className="sr-badge-activa">
-                                  <FaBolt style={{ fontSize: '10px' }} /> RUTINA ACTIVA
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="sr-btn-make-active"
-                                  onClick={() => handleActivarRutina(selectedRutina.id_rutina)}
-                                >
-                                  <FaBolt /> Establecer como Activa
-                                </button>
-                              )}
+                              <h2>{selectedPersonal.nombre}</h2>
+                              <span className="sr-badge-activa">
+                                <FaBolt style={{ fontSize: '10px' }} /> {selectedPersonal.estado ? 'ACTIVA' : 'PAUSADA'}
+                              </span>
                             </div>
                             <p style={{ color: '#94a3b8', fontSize: '13.5px', margin: '6px 0 0 0' }}>
-                              {selectedMeta?.objetivo || 'Plan de entrenamiento personalizado'}
+                              {selectedPersonalMeta?.objetivo || 'Rutina personal del socio'}
                             </p>
                           </div>
 
-                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                             <button
                               type="button"
                               className="sr-btn-primary"
-                              onClick={() => handleIniciarEntrenamiento(selectedRutina)}
+                              onClick={() => handleIniciarEntrenamientoPersonal(selectedPersonal)}
                             >
                               <FaPlay /> Iniciar Entrenamiento
                             </button>
-                            <button
-                              type="button"
-                              className="sr-btn-secondary"
-                              onClick={handleOpenAddEjercicio}
-                            >
+                            <button type="button" className="sr-btn-secondary" onClick={handleOpenAddEjercicio}>
                               <FaPlus /> Agregar Ejercicio
-                            </button>
-                            <button
-                              type="button"
-                              className="sr-btn-close-detail"
-                              onClick={() => setSelectedRutina(null)}
-                              title="Cerrar panel de rutina"
-                            >
-                              <FaTimes /> Cerrar
                             </button>
                           </div>
                         </div>
 
-                        {/* Metadatos en Fila */}
                         <div className="sr-detail-pills-row">
-                          <span className="sr-meta-pill">
-                            <strong>Tipo:</strong> {selectedMeta?.tipo}
-                          </span>
-                          <span className="sr-meta-pill">
-                            <strong>Nivel:</strong> {selectedMeta?.dificultad}
-                          </span>
-                          <span className="sr-meta-pill">
-                            <strong>Días:</strong> {selectedMeta?.dias}
-                          </span>
-                          <span className="sr-meta-pill">
-                            <strong>Duración:</strong> {selectedMeta?.duracion}
-                          </span>
+                          <span className="sr-meta-pill"><strong>Tipo:</strong> {selectedPersonalMeta?.tipo}</span>
+                          <span className="sr-meta-pill"><strong>Nivel:</strong> {selectedPersonalMeta?.dificultad}</span>
+                          <span className="sr-meta-pill"><strong>Días:</strong> {selectedPersonalMeta?.dias}</span>
+                          <span className="sr-meta-pill"><strong>Duración:</strong> {selectedPersonalMeta?.duracion}</span>
                         </div>
 
-                        {selectedMeta?.notas && (
+                        {selectedPersonalMeta?.notas && (
                           <div className="sr-detail-notes-box">
                             <FaInfoCircle style={{ color: '#38bdf8', marginTop: '3px', flexShrink: 0 }} />
-                            <span>{selectedMeta.notas}</span>
+                            <span>{selectedPersonalMeta.notas}</span>
                           </div>
                         )}
                       </div>
 
-                      {/* Lista de Ejercicios */}
                       <div className="sr-exercises-section">
                         <div className="sr-section-title-row">
-                          <h3>Ejercicios Asignados ({ejerciciosDeRutina.length})</h3>
-                          <button
-                            type="button"
-                            className="sr-link-btn"
-                            onClick={handleOpenAddEjercicio}
-                          >
-                            + Sumar ejercicio
+                          <h3>Ejercicios en tu Rutina ({ejerciciosDePersonal.length})</h3>
+                          <button type="button" className="sr-link-btn" onClick={handleOpenAddEjercicio}>
+                            + Sumar ejercicio propio
                           </button>
                         </div>
 
-                        {ejerciciosDeRutina.length === 0 ? (
+                        {ejerciciosDePersonal.length === 0 ? (
                           <div className="sr-empty-exercises">
                             <FaDumbbell style={{ fontSize: '30px', opacity: 0.3 }} />
-                            <p>Esta rutina no tiene ejercicios agregados todavía.</p>
-                            <button
-                              type="button"
-                              className="sr-btn-primary"
-                              onClick={handleOpenAddEjercicio}
-                            >
+                            <p>Esta rutina personal no tiene ejercicios todavía.</p>
+                            <button type="button" className="sr-btn-primary" onClick={handleOpenAddEjercicio}>
                               <FaPlus /> Agregar primer ejercicio
                             </button>
                           </div>
                         ) : (
                           <div className="sr-exercise-items-list">
-                            {ejerciciosDeRutina.map((item, index) => {
-                              const ej = item.ejercicio || {};
-                              const esPropio = Boolean(item.es_propio || ej.id_socio);
-
+                            {ejerciciosDePersonal.map((item, index) => {
+                              const ej = item.ejercicio_socio || {};
                               return (
-                                <div key={item.id_rutina_ejercicio || index} className="sr-exercise-item-card">
-                                  <div className="sr-exercise-order-badge">
-                                    {index + 1}
-                                  </div>
-
+                                <div key={item.id_rutina_ejercicio_socio || index} className="sr-exercise-item-card">
+                                  <div className="sr-exercise-order-badge">{item.orden || index + 1}</div>
                                   <div className="sr-exercise-item-info">
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                      <h4>{ej.nombre || 'Ejercicio'}</h4>
-                                      <span className={`sr-tag-origen ${esPropio ? 'propio' : 'gimnasio'}`}>
-                                        {esPropio ? 'Mi ejercicio' : 'Gym oficial'}
-                                      </span>
+                                      <h4>{ej.nombre || 'Ejercicio personal'}</h4>
+                                      <span className="sr-tag-origen propio">Mi ejercicio</span>
                                     </div>
                                     <p className="sr-exercise-item-muscle">
-                                      {ej.grupo_muscular || 'Musculación'} • {ej.dificultad || 'Intermedia'}
+                                      {ej.grupo_muscular || 'General'} • {ej.dificultad || 'Intermedia'}
                                     </p>
                                   </div>
-
                                   <div className="sr-exercise-stats-box">
                                     <div className="sr-stat-col">
                                       <span className="label">Series × Reps</span>
@@ -1032,16 +977,33 @@ export default function SocioRutinas() {
                                     </div>
                                     <div className="sr-stat-col">
                                       <span className="label">Descanso</span>
-                                      <span className="value">{item.descanso || 60}s</span>
+                                      <span className="value">{item.descanso ?? 60}s</span>
                                     </div>
                                   </div>
-
                                   <div className="sr-exercise-item-actions">
                                     <button
                                       type="button"
                                       className="sr-btn-card-icon"
+                                      disabled={index === 0}
+                                      onClick={() => handleMoverEjercicio(index, -1)}
+                                      title="Subir orden"
+                                    >
+                                      <FaArrowUp />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="sr-btn-card-icon"
+                                      disabled={index === ejerciciosDePersonal.length - 1}
+                                      onClick={() => handleMoverEjercicio(index, 1)}
+                                      title="Bajar orden"
+                                    >
+                                      <FaArrowDown />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="sr-btn-card-icon"
                                       onClick={() => handleOpenEditEjercicio(item)}
-                                      title="Editar series, repeticiones o peso"
+                                      title="Editar parámetros"
                                     >
                                       <FaEdit />
                                     </button>
@@ -1049,7 +1011,7 @@ export default function SocioRutinas() {
                                       type="button"
                                       className="sr-btn-card-icon delete"
                                       onClick={() => handleDeleteEjercicioDeRutina(item)}
-                                      title="Quitar de la rutina"
+                                      title="Quitar"
                                     >
                                       <FaTrashAlt />
                                     </button>
@@ -1064,27 +1026,215 @@ export default function SocioRutinas() {
                   ) : (
                     <div className="sr-no-selection">
                       <FaDumbbell style={{ fontSize: '48px', opacity: 0.3, marginBottom: '14px' }} />
-                      <h3>Seleccioná una rutina</h3>
-                      <p>Hacé clic en cualquier rutina del listado izquierdo para ver y gestionar sus ejercicios.</p>
+                      <h3>Seleccioná una rutina personal</h3>
+                      <p>Hacé clic en cualquiera de tus rutinas para ver, editar o reordenar sus ejercicios.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* PESTAÑA 2: RUTINAS ASIGNADAS POR EL GIMNASIO (SOLO LECTURA + WORKOUT MODE) */
+              <div className="sr-master-detail-grid">
+                <div className="sr-left-panel">
+                  <div className="sr-panel-header">
+                    <h2>Asignadas por tu Gimnasio</h2>
+                    <span className="sr-count-pill">{asignadasFiltradas.length}</span>
+                  </div>
+
+                  {loading ? (
+                    <div style={{ textAlign: 'center', padding: '50px 0', color: '#94a3b8' }}>Cargando asignaciones...</div>
+                  ) : asignadasFiltradas.length === 0 ? (
+                    <div className="sr-empty-card">
+                      <FaBuilding style={{ fontSize: '42px', opacity: 0.3, marginBottom: '12px' }} />
+                      <h3>Sin rutinas asignadas</h3>
+                      <p>Cuando un entrenador o administrador de tu gimnasio te asigne una plantilla, aparecerá aquí.</p>
+                    </div>
+                  ) : (
+                    <div className="sr-cards-stack">
+                      {asignadasFiltradas.map((asig) => {
+                        const isSelected = selectedAsignada?.id_rutina_asignada === asig.id_rutina_asignada;
+                        const rg = asig.rutina_gimnasio || {};
+                        const cantEj = rg.rutina_ejercicio_gimnasio?.length || 0;
+                        const emp = asig.empleado || null;
+
+                        return (
+                          <div
+                            key={asig.id_rutina_asignada}
+                            className={`sr-routine-card ${isSelected ? 'selected' : ''} ${asig.estado ? 'is-active-card' : ''}`}
+                            onClick={() => setSelectedAsignada(asig)}
+                          >
+                            <div className="sr-routine-card-top">
+                              <div className="sr-routine-card-icon"><FaBuilding /></div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                  <h4 className="sr-routine-card-title">{rg.nombre || 'Rutina del Gimnasio'}</h4>
+                                  <span className="sr-badge-activa">
+                                    {asig.estado ? 'ACTIVA' : 'FINALIZADA'}
+                                  </span>
+                                </div>
+                                <p className="sr-routine-card-type">
+                                  Nivel: {rg.nivel || 'General'} • {cantEj} ejercicios
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="sr-routine-card-details">
+                              {emp && (
+                                <div className="sr-detail-item">
+                                  <FaUserTie style={{ color: '#38bdf8' }} />
+                                  <span>{emp.nombre} {emp.apellido}</span>
+                                </div>
+                              )}
+                              <div className="sr-detail-item">
+                                <FaCalendarAlt style={{ color: '#22c55e' }} />
+                                <span>
+                                  {asig.fecha_asignacion ? formatFechaArgentina(asig.fecha_asignacion) : 'Reciente'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="sr-routine-card-actions">
+                              <button
+                                type="button"
+                                className="sr-btn-card-action train"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleIniciarEntrenamientoAsignada(asig);
+                                }}
+                              >
+                                <FaPlay style={{ fontSize: '10px' }} /> Entrenar
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
 
+                {/* DETALLE ASIGNADA */}
+                <div className="sr-right-panel">
+                  {selectedAsignada && selectedAsignadaRut ? (
+                    <div>
+                      <div className="sr-detail-header-card">
+                        <div className="sr-detail-header-top">
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                              <h2>{selectedAsignadaRut.nombre}</h2>
+                              <span className="sr-badge-activa">
+                                {selectedAsignada.estado ? 'ASIGNADA ACTIVA' : 'FINALIZADA'}
+                              </span>
+                            </div>
+                            <p style={{ color: '#94a3b8', fontSize: '13.5px', margin: '6px 0 0 0' }}>
+                              Plantilla oficial asignada por tu gimnasio (solo lectura)
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            className="sr-btn-primary"
+                            onClick={() => handleIniciarEntrenamientoAsignada(selectedAsignada)}
+                          >
+                            <FaPlay /> Iniciar Entrenamiento
+                          </button>
+                        </div>
+
+                        <div className="sr-detail-pills-row">
+                          <span className="sr-meta-pill"><strong>Nivel:</strong> {selectedAsignadaRut.nivel || 'General'}</span>
+                          {selectedAsignada.empleado && (
+                            <span className="sr-meta-pill">
+                              <strong>Responsable:</strong> {selectedAsignada.empleado.nombre} {selectedAsignada.empleado.apellido}
+                            </span>
+                          )}
+                          {selectedAsignada.fecha_asignacion && (
+                            <span className="sr-meta-pill">
+                              <strong>Asignada:</strong> {formatFechaArgentina(selectedAsignada.fecha_asignacion)}
+                            </span>
+                          )}
+                          {selectedAsignada.fecha_finalizacion && (
+                            <span className="sr-meta-pill">
+                              <strong>Fin:</strong> {formatFechaArgentina(selectedAsignada.fecha_finalizacion)}
+                            </span>
+                          )}
+                        </div>
+
+                        {(selectedAsignada.observaciones || selectedAsignadaMeta?.notas) && (
+                          <div className="sr-detail-notes-box">
+                            <FaInfoCircle style={{ color: '#38bdf8', marginTop: '3px', flexShrink: 0 }} />
+                            <span>{selectedAsignada.observaciones || selectedAsignadaMeta?.notas}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="sr-exercises-section">
+                        <div className="sr-section-title-row">
+                          <h3>Ejercicios del Plan ({ejerciciosDeAsignada.length})</h3>
+                        </div>
+
+                        {ejerciciosDeAsignada.length === 0 ? (
+                          <div className="sr-empty-exercises">
+                            <FaDumbbell style={{ fontSize: '30px', opacity: 0.3 }} />
+                            <p>Esta plantilla aún no tiene ejercicios cargados.</p>
+                          </div>
+                        ) : (
+                          <div className="sr-exercise-items-list">
+                            {ejerciciosDeAsignada.map((item, idx) => {
+                              const ej = item.ejercicio_gimnasio || {};
+                              return (
+                                <div key={item.id_rutina_ejercicio_gimnasio || idx} className="sr-exercise-item-card">
+                                  <div className="sr-exercise-order-badge">{item.orden || idx + 1}</div>
+                                  <div className="sr-exercise-item-info">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <h4>{ej.nombre || 'Ejercicio del gimnasio'}</h4>
+                                      <span className="sr-tag-origen gimnasio">Gym oficial</span>
+                                    </div>
+                                    <p className="sr-exercise-item-muscle">
+                                      {ej.grupo_muscular || 'General'} • {ej.dificultad || 'Intermedia'}
+                                    </p>
+                                  </div>
+                                  <div className="sr-exercise-stats-box">
+                                    <div className="sr-stat-col">
+                                      <span className="label">Series × Reps</span>
+                                      <span className="value">{item.series || 4} × {item.repeticiones || 10}</span>
+                                    </div>
+                                    <div className="sr-stat-col">
+                                      <span className="label">Carga</span>
+                                      <span className="value">{item.peso && item.peso > 0 ? `${item.peso} kg` : 'Corporal'}</span>
+                                    </div>
+                                    <div className="sr-stat-col">
+                                      <span className="label">Descanso</span>
+                                      <span className="value">{item.descanso ?? 60}s</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="sr-no-selection">
+                      <FaBuilding style={{ fontSize: '48px', opacity: 0.3, marginBottom: '14px' }} />
+                      <h3>Seleccioná una rutina asignada</h3>
+                      <p>Aquí podrás ver el detalle completo de los planes asignados por tus profesores.</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
+          </div>
         </main>
       </div>
 
-      {/* ================================================================
-          MODAL 1: CREAR / EDITAR MI RUTINA
-          ================================================================ */}
+      {/* MODAL 1: CREAR / EDITAR RUTINA PERSONAL */}
       {showRutinaModal && (
         <div className="sr-modal-overlay" onClick={() => setShowRutinaModal(false)}>
           <div className="sr-modal-card large" onClick={(e) => e.stopPropagation()}>
             <div className="sr-modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <FaDumbbell style={{ color: '#22c55e' }} />
-                <h3>{editingRutina ? 'Editar Mi Rutina' : 'Crear Mi Rutina Personalizada'}</h3>
+                <h3>{editingRutina ? 'Editar Mi Rutina Personal' : 'Crear Mi Rutina Personal'}</h3>
               </div>
               <button type="button" className="sr-modal-close-btn" onClick={() => setShowRutinaModal(false)}>
                 <FaTimes />
@@ -1093,20 +1243,18 @@ export default function SocioRutinas() {
 
             <form onSubmit={handleSaveRutina}>
               <div className="sr-modal-body">
-                {/* Campos Básicos */}
                 <div className="sr-form-grid-2">
                   <div className="sr-form-field">
                     <label>Nombre de la Rutina *</label>
                     <input
                       type="text"
                       className="sr-form-input"
-                      placeholder="Ej: Piernas & Core Potente"
+                      placeholder="Ej: Piernas & Core"
                       value={rutinaFormData.nombre}
                       onChange={(e) => setRutinaFormData({ ...rutinaFormData, nombre: e.target.value })}
                       required
                     />
                   </div>
-
                   <div className="sr-form-field">
                     <label>Tipo / División</label>
                     <select
@@ -1114,13 +1262,11 @@ export default function SocioRutinas() {
                       value={rutinaFormData.tipo}
                       onChange={(e) => setRutinaFormData({ ...rutinaFormData, tipo: e.target.value })}
                     >
-                      <option value="Full Body">Full Body (Cuerpo Completo)</option>
+                      <option value="Full Body">Full Body</option>
                       <option value="Torso - Pierna">Torso - Pierna</option>
-                      <option value="Push - Pull - Legs">Push - Pull - Legs (Empuje / Jalón / Pierna)</option>
+                      <option value="Push - Pull - Legs">Push - Pull - Legs</option>
                       <option value="Tren Superior">Tren Superior</option>
-                      <option value="Tren Inferior & Glúteos">Tren Inferior & Glúteos</option>
-                      <option value="Fuerza 5x5">Fuerza 5×5</option>
-                      <option value="Funcional & HIIT">Funcional & HIIT</option>
+                      <option value="Tren Inferior">Tren Inferior</option>
                       <option value="Personalizada">Personalizada</option>
                     </select>
                   </div>
@@ -1139,24 +1285,20 @@ export default function SocioRutinas() {
                       <option value="Avanzada">Avanzada</option>
                     </select>
                   </div>
-
                   <div className="sr-form-field">
                     <label>Duración Estimada</label>
                     <input
                       type="text"
                       className="sr-form-input"
-                      placeholder="Ej: 60 min"
                       value={rutinaFormData.duracion}
                       onChange={(e) => setRutinaFormData({ ...rutinaFormData, duracion: e.target.value })}
                     />
                   </div>
-
                   <div className="sr-form-field">
                     <label>Días Sugeridos</label>
                     <input
                       type="text"
                       className="sr-form-input"
-                      placeholder="Ej: Lun, Mié, Vie"
                       value={rutinaFormData.dias}
                       onChange={(e) => setRutinaFormData({ ...rutinaFormData, dias: e.target.value })}
                     />
@@ -1168,55 +1310,49 @@ export default function SocioRutinas() {
                   <input
                     type="text"
                     className="sr-form-input"
-                    placeholder="Ej: Hipertrofia y aumento de fuerza en tren superior"
                     value={rutinaFormData.objetivo}
                     onChange={(e) => setRutinaFormData({ ...rutinaFormData, objetivo: e.target.value })}
                   />
                 </div>
 
                 <div className="sr-form-field">
-                  <label>Notas Técnicas / Consejos de Descanso</label>
+                  <label>Notas Técnicas</label>
                   <textarea
                     rows="2"
                     className="sr-form-textarea"
-                    placeholder="Instrucciones sobre descansos, técnica o cuidados..."
                     value={rutinaFormData.notas}
                     onChange={(e) => setRutinaFormData({ ...rutinaFormData, notas: e.target.value })}
                   />
                 </div>
 
-                {/* SELECTOR DE EJERCICIOS PARA LA RUTINA (Solo si es nueva o quiere editar selección) */}
                 {!editingRutina && (
                   <div className="sr-modal-exercises-selector">
                     <div className="sr-selector-header">
                       <div>
-                        <h4>Seleccioná los ejercicios para tu rutina</h4>
+                        <h4>Seleccioná tus ejercicios personales</h4>
                         <p style={{ margin: 0, fontSize: '12.5px', color: '#94a3b8' }}>
-                          Podés elegir del catálogo del gimnasio o de tus propios ejercicios ({modalEjerciciosSeleccionados.length} seleccionados)
+                          Las rutinas personales utilizan tus ejercicios propios ({modalEjerciciosSeleccionados.length} seleccionados)
                         </p>
                       </div>
-
                       <button
                         type="button"
                         className="sr-btn-custom-ej-sm"
-                        onClick={handleOpenCrearEjercicioPropio}
+                        onClick={() => setShowCustomEjModal(true)}
                       >
                         <FaPlus /> Crear mi ejercicio
                       </button>
                     </div>
 
-                    {/* Barra de filtros del selector */}
                     <div className="sr-selector-filter-row">
                       <div className="sr-search-box-sm">
                         <FaSearch style={{ color: '#64748b' }} />
                         <input
                           type="text"
-                          placeholder="Buscar ejercicio..."
+                          placeholder="Buscar entre mis ejercicios..."
                           value={modalSearchEj}
                           onChange={(e) => setModalSearchEj(e.target.value)}
                         />
                       </div>
-
                       <select
                         className="sr-select-filter-sm"
                         value={modalFiltroGrupo}
@@ -1230,46 +1366,29 @@ export default function SocioRutinas() {
                         <option value="Brazos">Brazos</option>
                         <option value="Abdomen">Abdomen</option>
                       </select>
-
-                      <select
-                        className="sr-select-filter-sm"
-                        value={modalFiltroOrigen}
-                        onChange={(e) => setModalFiltroOrigen(e.target.value)}
-                      >
-                        <option value="todos">Todos los orígenes</option>
-                        <option value="gimnasio">Gimnasio Oficial</option>
-                        <option value="propio">Mis Ejercicios</option>
-                      </select>
                     </div>
 
-                    {/* Lista con Checkbox de Ejercicios */}
                     <div className="sr-selector-list">
-                      {catalogoFiltradoModal.length === 0 ? (
+                      {catalogoPropioFiltrado.length === 0 ? (
                         <p style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>
-                          No hay ejercicios que coincidan con la búsqueda.
+                          Todavía no tenés ejercicios propios cargados. Creá uno desde "+ Crear mi ejercicio".
                         </p>
                       ) : (
-                        catalogoFiltradoModal.map((ej) => {
+                        catalogoPropioFiltrado.map((ej) => {
                           const isSelected = modalEjerciciosSeleccionados.some(
-                            (item) => item.id_ejercicio === ej.id_ejercicio
+                            (it) => it.id_ejercicio_socio === ej.id_ejercicio_socio
                           );
-
                           return (
                             <div
-                              key={ej.id_ejercicio}
+                              key={ej.id_ejercicio_socio}
                               className={`sr-selector-item ${isSelected ? 'selected' : ''}`}
                               onClick={() => handleToggleEjercicioModal(ej)}
                             >
-                              <div className="sr-selector-checkbox">
-                                {isSelected ? <FaCheck /> : null}
-                              </div>
-
+                              <div className="sr-selector-checkbox">{isSelected ? <FaCheck /> : null}</div>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                   <span className="sr-item-name">{ej.nombre}</span>
-                                  <span className={`sr-tag-origen-sm ${ej.es_propio ? 'propio' : 'gym'}`}>
-                                    {ej.es_propio ? 'Propio' : 'Gym'}
-                                  </span>
+                                  <span className="sr-tag-origen-sm propio">Propio</span>
                                 </div>
                                 <span className="sr-item-muscle">{ej.grupo_muscular} • {ej.dificultad}</span>
                               </div>
@@ -1287,7 +1406,7 @@ export default function SocioRutinas() {
                   Cancelar
                 </button>
                 <button type="submit" className="sr-btn-primary" disabled={guardandoRutina}>
-                  <FaCheck /> {guardandoRutina ? 'Guardando...' : (editingRutina ? 'Guardar Cambios' : 'Crear Rutina')}
+                  <FaCheck /> {guardandoRutina ? 'Guardando...' : editingRutina ? 'Guardar Cambios' : 'Crear Rutina'}
                 </button>
               </div>
             </form>
@@ -1295,16 +1414,14 @@ export default function SocioRutinas() {
         </div>
       )}
 
-      {/* ================================================================
-          MODAL 2: AGREGAR / EDITAR EJERCICIO EN RUTINA SELECCIONADA
-          ================================================================ */}
+      {/* MODAL 2: AGREGAR / EDITAR EJERCICIO PROPIO EN RUTINA PERSONAL */}
       {showAddEjModal && (
         <div className="sr-modal-overlay" onClick={() => setShowAddEjModal(false)}>
           <div className="sr-modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="sr-modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <FaDumbbell style={{ color: '#22c55e' }} />
-                <h3>{editingEjercicioItem ? 'Modificar Parámetros de Ejercicio' : 'Agregar Ejercicio a la Rutina'}</h3>
+                <h3>{editingEjercicioItem ? 'Modificar Parámetros' : 'Agregar Ejercicio Personal'}</h3>
               </div>
               <button type="button" className="sr-modal-close-btn" onClick={() => setShowAddEjModal(false)}>
                 <FaTimes />
@@ -1315,17 +1432,26 @@ export default function SocioRutinas() {
               <div className="sr-modal-body">
                 {!editingEjercicioItem && (
                   <div className="sr-form-field">
-                    <label>Seleccionar Ejercicio *</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label>Seleccionar Mi Ejercicio *</label>
+                      <button
+                        type="button"
+                        style={{ background: 'none', border: 'none', color: '#a3e635', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
+                        onClick={() => setShowCustomEjModal(true)}
+                      >
+                        + Crear nuevo ejercicio
+                      </button>
+                    </div>
                     <select
                       className="sr-form-select"
-                      value={ejercicioFormData.id_ejercicio}
-                      onChange={(e) => setEjercicioFormData({ ...ejercicioFormData, id_ejercicio: e.target.value })}
+                      value={ejercicioFormData.id_ejercicio_socio}
+                      onChange={(e) => setEjercicioFormData({ ...ejercicioFormData, id_ejercicio_socio: e.target.value })}
                       required
                     >
-                      <option value="">-- Elegí un ejercicio del catálogo --</option>
-                      {catalogoEjercicios.map((ej) => (
-                        <option key={ej.id_ejercicio} value={ej.id_ejercicio}>
-                          {ej.nombre} ({ej.grupo_muscular}) {ej.es_propio ? '★ Mi ejercicio' : '• Gym'}
+                      <option value="">-- Elegí uno de tus ejercicios propios --</option>
+                      {ejerciciosPropios.map((ej) => (
+                        <option key={ej.id_ejercicio_socio} value={ej.id_ejercicio_socio}>
+                          {ej.nombre} ({ej.grupo_muscular || 'General'})
                         </option>
                       ))}
                     </select>
@@ -1334,7 +1460,7 @@ export default function SocioRutinas() {
 
                 <div className="sr-form-grid-2">
                   <div className="sr-form-field">
-                    <label>Series (Sets)</label>
+                    <label>Series</label>
                     <input
                       type="number"
                       min="1"
@@ -1345,9 +1471,8 @@ export default function SocioRutinas() {
                       required
                     />
                   </div>
-
                   <div className="sr-form-field">
-                    <label>Repeticiones (Reps)</label>
+                    <label>Repeticiones</label>
                     <input
                       type="number"
                       min="1"
@@ -1371,14 +1496,12 @@ export default function SocioRutinas() {
                       value={ejercicioFormData.peso}
                       onChange={(e) => setEjercicioFormData({ ...ejercicioFormData, peso: e.target.value })}
                     />
-                    <small style={{ color: '#64748b', fontSize: '11px' }}>Ingresá 0 para peso corporal</small>
                   </div>
-
                   <div className="sr-form-field">
-                    <label>Descanso entre series (segundos)</label>
+                    <label>Descanso (segundos)</label>
                     <input
                       type="number"
-                      min="15"
+                      min="0"
                       step="5"
                       className="sr-form-input"
                       value={ejercicioFormData.descanso}
@@ -1401,11 +1524,9 @@ export default function SocioRutinas() {
         </div>
       )}
 
-      {/* ================================================================
-          MODAL 3: CREAR EJERCICIO PERSONALIZADO PROPIO
-          ================================================================ */}
+      {/* MODAL 3: CREAR EJERCICIO PERSONAL PROPIO */}
       {showCustomEjModal && (
-        <div className="sr-modal-overlay" onClick={() => setShowCustomEjModal(false)}>
+        <div className="sr-modal-overlay" style={{ zIndex: 10000 }} onClick={() => setShowCustomEjModal(false)}>
           <div className="sr-modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="sr-modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1424,7 +1545,7 @@ export default function SocioRutinas() {
                   <input
                     type="text"
                     className="sr-form-input"
-                    placeholder="Ej: Press de pecho en máquina divergente"
+                    placeholder="Ej: Press de pecho con mancuernas"
                     value={customEjFormData.nombre}
                     onChange={(e) => setCustomEjFormData({ ...customEjFormData, nombre: e.target.value })}
                     required
@@ -1449,7 +1570,6 @@ export default function SocioRutinas() {
                       <option value="Cuerpo Completo">Cuerpo Completo</option>
                     </select>
                   </div>
-
                   <div className="sr-form-field">
                     <label>Dificultad</label>
                     <select
@@ -1465,11 +1585,10 @@ export default function SocioRutinas() {
                 </div>
 
                 <div className="sr-form-field">
-                  <label>Instrucciones de Técnica o Variación</label>
+                  <label>Instrucciones de Técnica (Opcional)</label>
                   <textarea
                     rows="2"
                     className="sr-form-textarea"
-                    placeholder="Ej: Agarre prono cerrado, pausar 1 segundo abajo..."
                     value={customEjFormData.descripcion}
                     onChange={(e) => setCustomEjFormData({ ...customEjFormData, descripcion: e.target.value })}
                   />
@@ -1489,28 +1608,22 @@ export default function SocioRutinas() {
         </div>
       )}
 
-      {/* ================================================================
-          MODAL 4: MODO ENTRENAMIENTO INTERACTIVO (WORKOUT MODE)
-          ================================================================ */}
-      {workoutModalOpen && workoutRutina && (
+      {/* MODAL 4: MODO ENTRENAMIENTO INTERACTIVO */}
+      {workoutModalOpen && workoutPayload && (
         <div className="sr-modal-overlay" onClick={handleCerrarEntrenamiento}>
           <div className="sr-workout-modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="sr-workout-header">
               <div>
-                <span className="sr-badge-live">
-                  <span className="live-dot"></span> EN SESIÓN
-                </span>
-                <h2>{workoutRutina.nombre}</h2>
+                <span className="sr-badge-live"><span className="live-dot"></span> EN SESIÓN</span>
+                <h2>{workoutPayload.nombre}</h2>
               </div>
 
               <div className="sr-workout-timers-bar">
-                {/* Cronómetro General */}
                 <div className="sr-timer-box main">
                   <FaStopwatch />
                   <span>{formatTime(workoutTimerSeconds)}</span>
                 </div>
 
-                {/* Temporizador de Descanso */}
                 {restTimerSeconds !== null && (
                   <div className={`sr-timer-box rest ${timerActivo ? 'active' : 'finished'}`}>
                     <FaClock />
@@ -1523,100 +1636,61 @@ export default function SocioRutinas() {
                   className="sr-btn-finish-workout"
                   onClick={() => {
                     const hechos = Object.values(ejerciciosCompletados).filter(Boolean).length;
-                    const total = workoutRutina.rutina_ejercicio?.length || 0;
-                    alert(`¡Entrenamiento finalizado! 🏆\nTiempo: ${formatTime(workoutTimerSeconds)}\nEjercicios completados: ${hechos} de ${total}.\n¡Excelente trabajo! 💪`);
+                    const total = workoutPayload.items.length;
+                    alert(`¡Entrenamiento finalizado!\nTiempo: ${formatTime(workoutTimerSeconds)}\nEjercicios completados: ${hechos} de ${total}.`);
                     handleCerrarEntrenamiento();
                   }}
                 >
                   <FaCheck /> Terminar Sesión
                 </button>
 
-                {/* Botón Cerrar / Salir del Entrenamiento */}
-                <button
-                  type="button"
-                  className="sr-btn-close-workout"
-                  onClick={handleCerrarEntrenamiento}
-                  title="Cerrar panel de entrenamiento"
-                >
-                  <FaTimes /> Cerrar
-                </button>
-
-                {/* Botón X de Cierre Rápido */}
-                <button
-                  type="button"
-                  className="sr-workout-close-x"
-                  onClick={handleCerrarEntrenamiento}
-                  title="Cerrar ventana"
-                >
+                <button type="button" className="sr-workout-close-x" onClick={handleCerrarEntrenamiento}>
                   <FaTimes />
                 </button>
               </div>
             </div>
 
-            {/* Selector Rápido de Descanso */}
             <div className="sr-rest-quick-bar">
               <span style={{ fontSize: '12px', color: '#94a3b8' }}>Descansar:</span>
               <button onClick={() => iniciarTimerDescanso(30)} className="sr-quick-rest-btn">30s</button>
-              <button onClick={() => iniciarTimerDescanso(45)} className="sr-quick-rest-btn">45s</button>
               <button onClick={() => iniciarTimerDescanso(60)} className="sr-quick-rest-btn">60s</button>
               <button onClick={() => iniciarTimerDescanso(90)} className="sr-quick-rest-btn">90s</button>
-              <button onClick={() => iniciarTimerDescanso(120)} className="sr-quick-rest-btn">2m</button>
-              {timerActivo && (
-                <button onClick={() => setTimerActivo(false)} className="sr-quick-rest-btn stop">
-                  Pausar
-                </button>
-              )}
+              <button onClick={() => iniciarTimerDescanso(120)} className="sr-quick-rest-btn">120s</button>
             </div>
 
-            {/* Lista de Ejercicios del Entrenamiento */}
-            <div className="sr-workout-exercises-body">
-              {workoutRutina.rutina_ejercicio?.map((item, idx) => {
-                const ej = item.ejercicio || {};
-                const isChecked = Boolean(ejerciciosCompletados[item.id_rutina_ejercicio || idx]);
-
-                return (
-                  <div
-                    key={item.id_rutina_ejercicio || idx}
-                    className={`sr-workout-row ${isChecked ? 'completed' : ''}`}
-                    onClick={() => toggleEjercicioCompletado(item.id_rutina_ejercicio || idx, item.descanso || 60)}
-                  >
-                    <div className="sr-workout-checkbox">
-                      {isChecked && <FaCheck />}
-                    </div>
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <h4 style={{ textDecoration: isChecked ? 'line-through' : 'none' }}>
-                          {ej.nombre || 'Ejercicio'}
-                        </h4>
-                        <span className="sr-tag-muscle">{ej.grupo_muscular}</span>
-                      </div>
-                      <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#94a3b8' }}>
-                        {item.series || 4} series × {item.repeticiones || 10} reps •{' '}
-                        {item.peso && item.peso > 0 ? `${item.peso} kg` : 'Peso corporal'} •{' '}
-                        Descanso {item.descanso || 60}s
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="sr-btn-trigger-rest"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        iniciarTimerDescanso(item.descanso || 60);
-                      }}
-                      title="Iniciar descanso de este ejercicio"
+            <div className="sr-workout-exercises-list">
+              {workoutPayload.items.length === 0 ? (
+                <p style={{ color: '#94a3b8', textAlign: 'center', padding: '24px' }}>
+                  Esta rutina aún no tiene ejercicios cargados.
+                </p>
+              ) : (
+                workoutPayload.items.map((item, idx) => {
+                  const hecho = Boolean(ejerciciosCompletados[item.key]);
+                  return (
+                    <div
+                      key={item.key}
+                      className={`sr-workout-ej-row ${hecho ? 'done' : ''}`}
+                      onClick={() => toggleEjercicioCompletado(item.key, item.descanso)}
                     >
-                      <FaStopwatch /> Descansar {item.descanso || 60}s
-                    </button>
-                  </div>
-                );
-              })}
+                      <div className={`sr-workout-check-circle ${hecho ? 'checked' : ''}`}>
+                        {hecho && <FaCheck />}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <h4 style={{ margin: 0, textDecoration: hecho ? 'line-through' : 'none' }}>
+                          {idx + 1}. {item.nombre}
+                        </h4>
+                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                          {item.grupo} • {item.series}×{item.repeticiones} • {item.peso > 0 ? `${item.peso} kg` : 'Corporal'} • Descanso {item.descanso}s
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }

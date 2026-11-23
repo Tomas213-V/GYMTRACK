@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
 import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
+import { useGymContext } from '../../context/GymContext';
 import {
   getEjerciciosSocio,
   crearEjercicioSocio,
@@ -25,6 +26,7 @@ import {
 import './socio-ejercicios.css';
 
 export default function SocioEjercicios() {
+  const { gimnasioActivoId, contextVersion } = useGymContext();
   const [ejercicios, setEjercicios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
@@ -46,26 +48,29 @@ export default function SocioEjercicios() {
     descripcion: ''
   });
 
-  // Cargar ejercicios del socio (Gimnasio + Propios)
-  const loadEjercicios = useCallback(async () => {
+  const loadEjercicios = useCallback(async (signal) => {
     setLoading(true);
     setErrorMsg('');
     try {
       const data = await getEjerciciosSocio({
         origen: filtroOrigen,
         grupo_muscular: filtroGrupo,
-        search: searchTerm
+        search: searchTerm,
+        signal
       });
       setEjercicios(data || []);
     } catch (err) {
+      if (err.name === 'AbortError') return;
       setErrorMsg(err.message || 'Error al cargar los ejercicios.');
     } finally {
       setLoading(false);
     }
-  }, [filtroOrigen, filtroGrupo, searchTerm]);
+  }, [filtroOrigen, filtroGrupo, searchTerm, gimnasioActivoId, contextVersion]);
 
   useEffect(() => {
-    loadEjercicios();
+    const controller = new AbortController();
+    loadEjercicios(controller.signal);
+    return () => controller.abort();
   }, [loadEjercicios]);
 
   // Contadores para las tarjetas de métricas
@@ -108,7 +113,7 @@ export default function SocioEjercicios() {
     setGuardando(true);
     try {
       if (editingItem) {
-        await actualizarEjercicioSocio(editingItem.id_ejercicio, formData);
+        await actualizarEjercicioSocio(editingItem.id_ejercicio_socio, formData);
         setExitoMsg('¡Ejercicio personalizado actualizado con éxito!');
       } else {
         await crearEjercicioSocio(formData);
@@ -131,7 +136,7 @@ export default function SocioEjercicios() {
     }
 
     try {
-      await eliminarEjercicioSocio(item.id_ejercicio);
+      await eliminarEjercicioSocio(item.id_ejercicio_socio);
       setExitoMsg(`El ejercicio "${item.nombre}" ha sido eliminado.`);
       await loadEjercicios();
       setTimeout(() => setExitoMsg(''), 4000);
@@ -286,7 +291,7 @@ export default function SocioEjercicios() {
           ) : errorMsg ? (
             <div style={{ color: '#ef4444', textAlign: 'center', padding: '30px 0' }}>
               <p>{errorMsg}</p>
-              <button type="button" className="se-btn-primary" style={{ margin: '0 auto' }} onClick={loadEjercicios}>
+              <button type="button" className="se-btn-primary" style={{ margin: '0 auto' }} onClick={() => loadEjercicios()}>
                 Reintentar
               </button>
             </div>
@@ -320,7 +325,10 @@ export default function SocioEjercicios() {
                 const esPropio = ej.es_propio;
 
                 return (
-                  <div key={ej.id_ejercicio} className={`se-exercise-card ${esPropio ? 'propio' : 'gimnasio'}`}>
+                  <div
+                    key={esPropio ? `propio-${ej.id_ejercicio_socio}` : `gym-${ej.id_ejercicio_gimnasio}`}
+                    className={`se-exercise-card ${esPropio ? 'propio' : 'gimnasio'}`}
+                  >
                     <div>
                       <div className="se-card-header">
                         <span className="se-card-muscle-pill">{ej.grupo_muscular}</span>

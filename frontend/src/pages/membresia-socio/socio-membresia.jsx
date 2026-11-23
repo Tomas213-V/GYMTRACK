@@ -24,15 +24,16 @@
  *    - Lista de cuotas abonadas con fecha, importe en ARS formateado y visor de recibo imprimible.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
 import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
+import { useGymContext } from '../../context/GymContext';
+import { listarCatalogoGimnasios } from '../../services/gimnasioService';
 import {
   getMiMembresia,
   getPlanesDisponibles,
-  iniciarPagoMembresia,
-  confirmarPagoMembresia,
-  verificarPagoMercadoPago
+  solicitarMembresiaPendiente,
+  iniciarPagoMembresia
 } from '../../services/socioMembresiaService';
 import {
   MercadoPagoLogo,
@@ -51,15 +52,22 @@ import {
   FaWallet,
   FaReceipt,
   FaPrint,
-  FaCopy,
   FaExternalLinkAlt,
   FaInfoCircle,
-  FaSyncAlt
+  FaSyncAlt,
+  FaBuilding
 } from 'react-icons/fa';
 
 import './socio-membresia.css';
 
 export default function SocioMembresia() {
+  const {
+    gimnasioActivo,
+    gimnasioActivoId,
+    contextVersion,
+    refreshProfile,
+    seleccionarGimnasio
+  } = useGymContext();
 
   // --------------------------------------------------------------------------
   // Estados Principales
@@ -67,18 +75,18 @@ export default function SocioMembresia() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [notificacion, setNotificacion] = useState('');
-  const [copiadoKey, setCopiadoKey] = useState('');
 
-  // Estados excluidos que representan que una membresía o plan está pausado, cancelado o inactivo
   const ESTADOS_EXCLUIDOS = ['inactivo', 'inactiva', 'pausa', 'pausado', 'pausada', 'cancelado', 'cancelada', 'eliminado', 'eliminada', 'sin_membresia'];
 
   // Datos de la membresía y socio
   const [socio, setSocio] = useState(null);
-  const [gimnasio, setGimnasio] = useState(null);
+  const [gimnasio, setGimnasio] = useState(gimnasioActivo || null);
   const [membresia, setMembresia] = useState(null);
   const [historialPagos, setHistorialPagos] = useState([]);
 
-  // Planes disponibles en el gimnasio
+  // Catálogo multigimnasio y planes disponibles
+  const [catalogoGimnasios, setCatalogoGimnasios] = useState([]);
+  const [gimnasioModalId, setGimnasioModalId] = useState(gimnasioActivoId || '');
   const [planesDisponibles, setPlanesDisponibles] = useState([]);
   const [loadingPlanes, setLoadingPlanes] = useState(false);
 
@@ -98,23 +106,22 @@ export default function SocioMembresia() {
   const [pagoSeleccionado, setPagoSeleccionado] = useState(null);
 
   // --------------------------------------------------------------------------
-  // Carga Inicial de Datos y Detección de Retorno de Mercado Pago
+  // Carga de Datos (reactiva al gimnasio activo del contexto)
   // --------------------------------------------------------------------------
-  const cargarMembresia = async () => {
+  const cargarMembresia = useCallback(async () => {
     try {
       setLoading(true);
       setErrorMsg('');
       const data = await getMiMembresia();
 
       if (data.socio) setSocio(data.socio);
-      if (data.gimnasio) setGimnasio(data.gimnasio);
-      if (data.membresia && data.membresia.tiene_membresia && data.membresia.id_membresia) {
+      setGimnasio(data.gimnasio || gimnasioActivo || null);
+      if (data.membresia && data.membresia.tiene_membresia && (data.membresia.id_membresia_socio || data.membresia.id_membresia)) {
         setMembresia(data.membresia);
       } else {
         setMembresia(null);
       }
-      if (data.historial_pagos) setHistorialPagos(data.historial_pagos);
-
+      setHistorialPagos(Array.isArray(data.historial_pagos) ? data.historial_pagos : []);
     } catch (err) {
       console.warn('Error al cargar membresía del socio:', err.message);
       setErrorMsg(err.message);
@@ -122,244 +129,223 @@ export default function SocioMembresia() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [gimnasioActivo]);
 
   useEffect(() => {
-    // 1. Detectar si el usuario retorna desde el checkout de Mercado Pago
     const params = new URLSearchParams(window.location.search);
     const pagoStatus = params.get('pago_status') || params.get('collection_status') || params.get('status');
-    const ref = params.get('ref') || params.get('external_reference');
-    const paymentId = params.get('payment_id') || params.get('collection_id');
 
     const verificarAlMontar = async () => {
-      if (pagoStatus === 'approved') {
-        try {
-          const res = await verificarPagoMercadoPago({
-            external_reference: ref || '',
-            payment_id: paymentId || ''
-          });
-          if (res.aprobado) {
-            setNotificacion(res.mensaje || '¡Pago aprobado por Mercado Pago! Tu membresía ha sido renovada.');
-          }
-        } catch (e) {
-          console.error('Error al confirmar retorno de Mercado Pago:', e);
-        } finally {
-          window.history.replaceState({}, document.title, window.location.pathname);
-          setTimeout(() => setNotificacion(''), 7000);
-        }
-      } else {
-        // Verificar silenciosamente si hay algún pago aprobado en Mercado Pago de este socio pendiente de acreditar
-        try {
-          const res = await verificarPagoMercadoPago();
-          if (res.aprobado && !res.ya_registrado) {
-            setNotificacion(res.mensaje || '¡Se acreditó tu último pago de Mercado Pago!');
-            setTimeout(() => setNotificacion(''), 7000);
-          }
-        } catch {
-          // silencioso
-        }
+      if (pagoStatus) {
+        setNotificacion(
+          pagoStatus === 'approved'
+            ? 'Pago enviado a la pasarela. Tu membresía se activará automáticamente en cuanto el backend confirme la acreditación.'
+            : 'Estado de pago actualizado desde la pasarela. Revisá el estado de tu membresía.'
+        );
+        window.history.replaceState({}, document.title, window.location.pathname);
+        await refreshProfile();
+        setTimeout(() => setNotificacion(''), 7000);
       }
       await cargarMembresia();
     };
 
     verificarAlMontar();
-  }, []);
+  }, [gimnasioActivoId, contextVersion, cargarMembresia, refreshProfile]);
 
   // --------------------------------------------------------------------------
-  // Polling automático mientras el modal de checkout de MP esté abierto
+  // Cargar Planes Disponibles (del gimnasio actual o de otro gimnasio del catálogo)
   // --------------------------------------------------------------------------
-  useEffect(() => {
-    let intervalId = null;
-    if (modalCheckoutAbierto && metodoPagoSeleccionado === 'mercadopago' && checkoutData?.external_reference) {
-      intervalId = setInterval(async () => {
-        try {
-          const res = await verificarPagoMercadoPago({
-            external_reference: checkoutData.external_reference
-          });
-          if (res.aprobado) {
-            setNotificacion(res.mensaje || '¡Pago detectado y acreditado con éxito desde Mercado Pago!');
-            setModalCheckoutAbierto(false);
-            await cargarMembresia();
-            setTimeout(() => setNotificacion(''), 7000);
-          }
-        } catch {
-          // continuar polling
-        }
-      }, 3500);
-    }
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [modalCheckoutAbierto, metodoPagoSeleccionado, checkoutData]);
-
-  // --------------------------------------------------------------------------
-  // Cargar Planes Disponibles del Gimnasio
-  // --------------------------------------------------------------------------
-  const abrirModalPlanes = async () => {
-    setModalPlanesAbierto(true);
+  const cargarPlanesDeGimnasio = async (idGymTarget) => {
     try {
       setLoadingPlanes(true);
-      const data = await getPlanesDisponibles();
-      if (data.planes) {
-        // Filtrar estrictamente para que NO aparezcan planes pausados, inactivos, cancelados o eliminados
-        const planesActivos = (data.planes || []).filter(plan => {
-          const est = (plan.estado || '').toLowerCase().trim();
-          return (est === 'activo' || est === 'activa' || !est) && !ESTADOS_EXCLUIDOS.includes(est);
-        });
-        setPlanesDisponibles(planesActivos);
-      } else {
-        setPlanesDisponibles([]);
-      }
+      const data = await getPlanesDisponibles({ id_gimnasio: idGymTarget || null });
+      const rawPlanes = data.planes || [];
+      const planesActivos = rawPlanes.filter((plan) => {
+        if (plan.estado === false) return false;
+        const est = String(plan.estado ?? 'activo').toLowerCase().trim();
+        return est !== 'false' && !ESTADOS_EXCLUIDOS.includes(est);
+      });
+      setPlanesDisponibles(planesActivos);
     } catch (err) {
       console.error('Error al cargar planes disponibles:', err);
+      setPlanesDisponibles([]);
     } finally {
       setLoadingPlanes(false);
     }
   };
 
+  const abrirModalPlanes = async (preferirOtroGimnasio = false) => {
+    setModalPlanesAbierto(true);
+    setLoadingPlanes(true);
+    try {
+      const catResp = await listarCatalogoGimnasios().catch(() => ({ gimnasios: [] }));
+      const gyms = catResp.gimnasios || [];
+      setCatalogoGimnasios(gyms);
+
+      let targetId = gimnasioActivoId || gyms[0]?.id_gimnasio || '';
+      if (preferirOtroGimnasio && gyms.length > 1) {
+        const otro = gyms.find((g) => String(g.id_gimnasio) !== String(gimnasioActivoId));
+        if (otro) targetId = otro.id_gimnasio;
+      }
+
+      setGimnasioModalId(targetId ? String(targetId) : '');
+      await cargarPlanesDeGimnasio(targetId);
+    } catch (err) {
+      console.error('Error al cargar catálogo de gimnasios:', err);
+      setLoadingPlanes(false);
+    }
+  };
+
+  const handleCambiarGimnasioEnModal = async (nuevoId) => {
+    setGimnasioModalId(nuevoId);
+    await cargarPlanesDeGimnasio(nuevoId);
+  };
+
   // --------------------------------------------------------------------------
-  // Iniciar Proceso de Pago / Checkout
+  // Iniciar Proceso de Pago / Checkout (contrato real FastAPI: { id_membresia_gimnasio, proveedor })
   // --------------------------------------------------------------------------
   const prepararPagoPlan = async (plan) => {
+    const planId = plan.id_membresia_gimnasio;
     setPlanParaPagar(plan);
     setModalPlanesAbierto(false);
     setModalCheckoutAbierto(true);
     setCheckoutData(null);
+    setErrorMsg('');
 
     try {
       setProcesandoPago(true);
       const res = await iniciarPagoMembresia({
-        id_plan_membresia: plan.id_plan_membresia,
-        metodo_pago: metodoPagoSeleccionado,
-        tipo_operacion: plan.es_superior ? 'upgrade' : 'renovacion'
+        id_membresia_gimnasio: planId,
+        proveedor: metodoPagoSeleccionado === 'uala' ? 'uala' : 'mercadopago'
       });
-      if (res.checkout) {
-        setCheckoutData(res.checkout);
+      if (res?.orden) {
+        setCheckoutData(res.orden);
       }
     } catch (err) {
-      console.error('Error al iniciar preferencia de pago:', err);
+      setErrorMsg(err.message || 'No se pudo iniciar la orden de pago.');
     } finally {
       setProcesandoPago(false);
     }
   };
 
   const handleCambiarMetodo = async (nuevoMetodo) => {
-    setMetodoPagoSeleccionado(nuevoMetodo);
+    const prov = nuevoMetodo === 'uala' ? 'uala' : 'mercadopago';
+    setMetodoPagoSeleccionado(prov);
     if (!planParaPagar) return;
+    const planId = planParaPagar.id_membresia_gimnasio;
 
     try {
       setProcesandoPago(true);
+      setCheckoutData(null);
+      setErrorMsg('');
       const res = await iniciarPagoMembresia({
-        id_plan_membresia: planParaPagar.id_plan_membresia,
-        metodo_pago: nuevoMetodo,
-        tipo_operacion: planParaPagar.es_superior ? 'upgrade' : 'renovacion'
+        id_membresia_gimnasio: planId,
+        proveedor: prov
       });
-      if (res.checkout) {
-        setCheckoutData(res.checkout);
+      if (res?.orden) {
+        setCheckoutData(res.orden);
       }
     } catch (err) {
-      console.error('Error al actualizar método:', err);
+      setErrorMsg(err.message || 'No se pudo actualizar el proveedor de pago.');
     } finally {
       setProcesandoPago(false);
     }
   };
 
-  // Abrir Mercado Pago Oficial o Sandbox
-  const handlePagarConPasarela = () => {
-    if (metodoPagoSeleccionado === 'mercadopago') {
-      const urlMP = checkoutData?.sandbox_init_point || checkoutData?.init_point;
-      if (urlMP) {
-        window.open(urlMP, '_blank');
-        return;
-      }
+  const getCheckoutUrl = () => {
+    if (!checkoutData) return null;
+    const candidate =
+      checkoutData.checkout_url ||
+      checkoutData.init_point ||
+      checkoutData.sandbox_init_point ||
+      checkoutData.links?.checkout ||
+      null;
+    if (!candidate || typeof candidate !== 'string') return null;
+    try {
+      const parsed = new URL(candidate);
+      return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : null;
+    } catch {
+      return null;
     }
-    // Si no hay URL directa, ejecutar confirmación directa
-    ejecutarConfirmacionPago();
   };
 
-  // Verificar manualmente si el pago en Mercado Pago se completó
-  const handleVerificarPagoMP = async () => {
+  const handlePagarConPasarela = () => {
+    const urlCheckout = getCheckoutUrl();
+    if (!urlCheckout) {
+      setErrorMsg(
+        checkoutData?.mensaje ||
+          'La pasarela de pago no está configurada o no devolvió una URL de checkout válida. Podés solicitar la membresía en estado pendiente para abonarla en recepción.'
+      );
+      return;
+    }
+    window.open(urlCheckout, '_blank', 'noopener,noreferrer');
+    setNotificacion(
+      'Se abrió la pasarela de pago. Tu membresía permanecerá en estado pendiente hasta que el backend confirme la acreditación.'
+    );
+  };
+
+  const handleActualizarEstadoPago = async () => {
     try {
       setVerificandoPago(true);
-      const res = await verificarPagoMercadoPago({
-        external_reference: checkoutData?.external_reference || ''
-      });
-
-      if (res.aprobado) {
-        setNotificacion(res.mensaje || '¡Pago verificado y acreditado exitosamente!');
-        setModalCheckoutAbierto(false);
-        await cargarMembresia();
-        setTimeout(() => setNotificacion(''), 7000);
-      } else {
-        alert(res.mensaje || 'Aún no se detecta la acreditación de tu pago en Mercado Pago. Si acabas de abonar, aguarda unos segundos y vuelve a presionar el botón.');
-      }
+      await refreshProfile();
+      await cargarMembresia();
+      setNotificacion('Estado de membresía y pagos actualizado desde el servidor.');
+      setTimeout(() => setNotificacion(''), 5000);
     } catch (e) {
-      alert('Error al verificar pago: ' + e.message);
+      setErrorMsg(e.message || 'No se pudo actualizar el estado de la membresía.');
     } finally {
       setVerificandoPago(false);
     }
   };
 
-  // --------------------------------------------------------------------------
-  // Confirmar Pago Directo (Simulación de Sandbox o Aprobación)
-  // --------------------------------------------------------------------------
-  const ejecutarConfirmacionPago = async () => {
+  const handleSolicitarMembresiaPendiente = async () => {
     if (!planParaPagar) return;
+    const planId = planParaPagar.id_membresia_gimnasio;
+    const targetGymId = planParaPagar.id_gimnasio || (gimnasioModalId ? Number(gimnasioModalId) : gimnasioActivoId);
 
     try {
       setProcesandoPago(true);
-      const refPago = checkoutData?.external_reference || `PAY-${Date.now()}`;
-      const compPago = `${metodoPagoSeleccionado.toUpperCase()}-${Math.floor(10000000 + Math.random() * 90000000)}`;
-
-      const res = await confirmarPagoMembresia({
-        id_plan_membresia: planParaPagar.id_plan_membresia,
-        monto: planParaPagar.precio,
-        metodo_pago: metodoPagoSeleccionado,
-        referencia_pago: refPago,
-        comprobante: compPago
+      setErrorMsg('');
+      const res = await solicitarMembresiaPendiente({
+        id_membresia_gimnasio: planId
       });
 
-      setNotificacion(res.mensaje || '¡Pago procesado con éxito!');
+      setNotificacion(
+        res?.mensaje ||
+          'Solicitud registrada en estado pendiente. Quedará activa cuando el gimnasio o la pasarela acrediten el pago.'
+      );
       setModalCheckoutAbierto(false);
 
-      // Recargar datos actualizados desde el backend
-      await cargarMembresia();
+      await refreshProfile();
+      if (targetGymId && String(targetGymId) !== String(gimnasioActivoId)) {
+        seleccionarGimnasio(Number(targetGymId));
+      } else {
+        await cargarMembresia();
+      }
 
-      setTimeout(() => {
-        setNotificacion('');
-      }, 5000);
-
+      setTimeout(() => setNotificacion(''), 6000);
     } catch (err) {
-      alert('Error al confirmar el pago: ' + err.message);
+      setErrorMsg(err.message || 'No se pudo registrar la solicitud de membresía.');
     } finally {
       setProcesandoPago(false);
     }
   };
 
-  // --------------------------------------------------------------------------
-  // Copiar Credenciales de Prueba al Portapapeles
-  // --------------------------------------------------------------------------
-  const copiarTexto = (texto, key) => {
-    navigator.clipboard.writeText(texto);
-    setCopiadoKey(key);
-    setTimeout(() => setCopiadoKey(''), 2000);
-  };
-
-  // --------------------------------------------------------------------------
-  // Ver Detalle / Comprobante de un Pago del Historial
-  // --------------------------------------------------------------------------
   const abrirDetallePago = (pago) => {
     setPagoSeleccionado(pago);
     setModalComprobanteAbierto(true);
   };
 
-  // Determinar si el socio posee una membresía activa y visible
   const tieneMembresiaActiva = Boolean(
     membresia &&
     membresia.tiene_membresia !== false &&
-    membresia.id_membresia &&
+    (membresia.id_membresia_socio || membresia.id_membresia) &&
     !ESTADOS_EXCLUIDOS.includes((membresia.estado || '').toLowerCase().trim())
   );
+
+  const gymSeleccionadoModal = catalogoGimnasios.find(
+    (g) => String(g.id_gimnasio) === String(gimnasioModalId)
+  ) || gimnasio;
 
   return (
     <div className="socio-membresia-page">
@@ -457,12 +443,14 @@ export default function SocioMembresia() {
                     </span>
                   </div>
 
-                  {/* Precio Mensual */}
+                  {/* Precio Contratado (snapshot histórico) */}
                   <div className="membresia-precio-container">
                     <span className="membresia-precio-val">
                       {membresia.precio_formateado || '$0'}
                     </span>
-                    <span className="membresia-precio-mes">/ mes</span>
+                    <span className="membresia-precio-mes">
+                      / {membresia.duracion_contratada_dias ? `${membresia.duracion_contratada_dias} días` : 'período'}
+                    </span>
                   </div>
 
                   {/* Métricas en 3 Columnas */}
@@ -524,7 +512,7 @@ export default function SocioMembresia() {
 
                   <div className="membresia-sin-activo-footer">
                     <button
-                      onClick={abrirModalPlanes}
+                      onClick={() => abrirModalPlanes(false)}
                       className="btn-ver-membresias"
                       style={{ width: '100%', justifyContent: 'center' }}
                     >
@@ -536,21 +524,31 @@ export default function SocioMembresia() {
               )}
             </div>
 
-            {/* Card 2: ¿Querés mejorar tu membresía? */}
+            {/* Card 2: ¿Querés mejorar tu membresía o sumar otro gimnasio? */}
             <div className="membresia-card membresia-upgrade-card">
               <div className="upgrade-card-content">
-                <h3>¿Querés mejorar tu membresía?</h3>
+                <h3>¿Querés renovar o sumar otro gimnasio?</h3>
                 <p>
-                  Conocé las membresías disponibles en tu gimnasio y accedé a más beneficios.
+                  Con tu cuenta de GymTrack podés contratar membresías en {gimnasio?.nombre || 'tu gimnasio'} o en cualquier otro gimnasio disponible.
                 </p>
 
-                <button
-                  onClick={abrirModalPlanes}
-                  className="btn-ver-membresias"
-                >
-                  <span>Ver membresías disponibles</span>
-                  <FaChevronRight style={{ fontSize: '12px' }} />
-                </button>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => abrirModalPlanes(false)}
+                    className="btn-ver-membresias"
+                  >
+                    <span>Ver planes de este gimnasio</span>
+                    <FaChevronRight style={{ fontSize: '12px' }} />
+                  </button>
+                  <button
+                    onClick={() => abrirModalPlanes(true)}
+                    className="btn-ver-membresias"
+                    style={{ background: 'rgba(158, 240, 26, 0.12)', color: '#9EF01A', border: '1px solid rgba(158, 240, 26, 0.35)' }}
+                  >
+                    <FaBuilding style={{ fontSize: '12px' }} />
+                    <span>Explorar otros gimnasios</span>
+                  </button>
+                </div>
               </div>
 
               <div className="upgrade-card-footer">
@@ -608,8 +606,14 @@ export default function SocioMembresia() {
                     </div>
 
                     <div className="pago-badge-col">
-                      <span className={`pago-badge-${(pago.estado || 'pagado').toLowerCase()}`}>
-                        {pago.estado_etiqueta || 'Pagado'}
+                      <span
+                        className={`pago-badge-${
+                          (pago.estado || '').toLowerCase() === 'aprobado' || (pago.estado || '').toLowerCase() === 'pagado'
+                            ? 'pagado'
+                            : (pago.estado || 'pendiente').toLowerCase()
+                        }`}
+                      >
+                        {pago.estado_etiqueta || 'Pendiente'}
                       </span>
                     </div>
 
@@ -623,7 +627,7 @@ export default function SocioMembresia() {
                   <FaReceipt style={{ fontSize: '32px', color: '#64748b' }} />
                   <p>Aún no tienes registros de pagos cargados.</p>
                   <button
-                    onClick={abrirModalPlanes}
+                    onClick={() => abrirModalPlanes(false)}
                     className="btn-ver-membresias"
                     style={{ width: 'auto', display: 'inline-flex', padding: '10px 20px', margin: 0 }}
                   >
@@ -649,7 +653,7 @@ export default function SocioMembresia() {
               <div>
                 <h2>Membresías Disponibles</h2>
                 <p>
-                  Opciones exclusivas de {gimnasio?.nombre || 'tu gimnasio'} para renovar o mejorar tu plan.
+                  Elegí un gimnasio y seleccioná el plan que quieras contratar o renovar.
                 </p>
               </div>
               <button
@@ -660,13 +664,41 @@ export default function SocioMembresia() {
               </button>
             </div>
 
+            {catalogoGimnasios.length > 0 && (
+              <div style={{ marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <label htmlFor="modal-gym-select" style={{ fontSize: '13px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <FaBuilding style={{ color: '#9EF01A' }} /> Gimnasio:
+                </label>
+                <select
+                  id="modal-gym-select"
+                  value={gimnasioModalId}
+                  onChange={(e) => handleCambiarGimnasioEnModal(e.target.value)}
+                  style={{
+                    background: '#141a21',
+                    color: '#f8fafc',
+                    border: '1px solid rgba(158, 240, 26, 0.35)',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    fontSize: '13.5px',
+                    minWidth: '240px'
+                  }}
+                >
+                  {catalogoGimnasios.map((g) => (
+                    <option key={g.id_gimnasio} value={g.id_gimnasio}>
+                      {g.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {loadingPlanes ? (
               <div className="loading-spinner"></div>
             ) : planesDisponibles.length > 0 ? (
               <div className="planes-modal-grid">
                 {planesDisponibles.map((plan) => (
                   <div
-                    key={plan.id_plan_membresia}
+                    key={plan.id_membresia_gimnasio}
                     className={`plan-modal-card ${plan.es_superior ? 'plan-destacado' : ''}`}
                   >
                     {plan.es_superior && (
@@ -676,11 +708,11 @@ export default function SocioMembresia() {
                     <div>
                       <h3 className="plan-modal-title">{plan.nombre}</h3>
                       <div className="plan-modal-precio">
-                        {plan.precio_formateado} <span>/ {plan.duracion_texto}</span>
+                        {plan.precio_formateado} <span>/ {plan.duracion_texto || `${plan.duracion_dias} días`}</span>
                       </div>
 
                       <ul className="plan-modal-beneficios">
-                        {plan.beneficios.map((b, idx) => (
+                        {(plan.beneficios || []).map((b, idx) => (
                           <li key={idx}>
                             <FaCheck />
                             <span>{b}</span>
@@ -696,7 +728,7 @@ export default function SocioMembresia() {
                       >
                         {plan.es_plan_actual
                           ? 'Renovar este Plan'
-                          : (plan.es_superior ? 'Mejorar a este Plan' : 'Seleccionar Plan')}
+                          : (plan.es_superior ? 'Mejorar a este Plan' : 'Contratar Plan')}
                       </button>
                     </div>
                   </div>
@@ -707,7 +739,7 @@ export default function SocioMembresia() {
                 <FaCrown style={{ fontSize: '38px', color: '#64748b', marginBottom: '10px' }} />
                 <h3>No hay membresías activas disponibles</h3>
                 <p>
-                  En este momento {gimnasio?.nombre || 'el gimnasio'} no posee membresías activas habilitadas para suscripción (pueden encontrarse pausadas temporalmente). Por favor, consulta directamente en recepción.
+                  En este momento {gymSeleccionadoModal?.nombre || 'el gimnasio seleccionado'} no posee planes activos habilitados para contratación.
                 </p>
               </div>
             )}
@@ -780,118 +812,92 @@ export default function SocioMembresia() {
               </div>
             </div>
 
-            {/* Panel de Credenciales de Prueba para Comprador */}
-            {metodoPagoSeleccionado === 'mercadopago' && (
-              <div
-                style={{
-                  background: 'rgba(0, 158, 227, 0.08)',
-                  border: '1px solid rgba(0, 158, 227, 0.25)',
-                  borderRadius: '10px',
-                  padding: '14px 16px',
-                  marginBottom: '20px'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#009ee3', fontWeight: '700', fontSize: '13px', marginBottom: '8px' }}>
-                  <FaInfoCircle />
-                  <span>Datos de Comprador de Prueba para Mercado Pago</span>
-                </div>
-                <p style={{ margin: '0 0 10px 0', fontSize: '12.5px', color: '#94a3b8' }}>
-                  Al abrirse la pasarela de Mercado Pago, podés iniciar sesión con este usuario de prueba:
-                </p>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '12.5px' }}>
-                  <div style={{ background: '#11161b', padding: '8px 12px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Usuario: <strong style={{ color: '#ffffff' }}>TESTUSER225610921</strong></span>
-                    <button
-                      onClick={() => copiarTexto('TESTUSER225610921', 'user')}
-                      style={{ background: 'none', border: 'none', color: copiadoKey === 'user' ? '#22c55e' : '#94a3b8', cursor: 'pointer' }}
-                      title="Copiar usuario"
-                    >
-                      <FaCopy />
-                    </button>
-                  </div>
-
-                  <div style={{ background: '#11161b', padding: '8px 12px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Clave: <strong style={{ color: '#ffffff' }}>7oW55vd3jW</strong></span>
-                    <button
-                      onClick={() => copiarTexto('7oW55vd3jW', 'pass')}
-                      style={{ background: 'none', border: 'none', color: copiadoKey === 'pass' ? '#22c55e' : '#94a3b8', cursor: 'pointer' }}
-                      title="Copiar contraseña"
-                    >
-                      <FaCopy />
-                    </button>
-                  </div>
-                </div>
-
-                <div style={{ marginTop: '8px', fontSize: '11.5px', color: '#64748b' }}>
-                  Código de verificación SMS (si lo solicita): <strong style={{ color: '#cbd5e1' }}>355000</strong>
-                </div>
+            {/* Información de acreditación segura */}
+            <div
+              style={{
+                background: 'rgba(56, 189, 248, 0.08)',
+                border: '1px solid rgba(56, 189, 248, 0.25)',
+                borderRadius: '10px',
+                padding: '12px 14px',
+                marginBottom: '18px',
+                fontSize: '12.5px',
+                color: '#cbd5e1'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#38bdf8', fontWeight: '700', marginBottom: '4px' }}>
+                <FaInfoCircle />
+                <span>Acreditación verificada por el servidor</span>
               </div>
-            )}
+              <p style={{ margin: 0, color: '#94a3b8' }}>
+                El monto proviene del plan vigente en el gimnasio. Tu membresía quedará en estado pendiente hasta que el backend confirme la acreditación del pago.
+              </p>
+            </div>
 
             {/* Acciones de Pago */}
             <div className="checkout-actions-col">
               {metodoPagoSeleccionado === 'mercadopago' ? (
-                <>
-                  <button
-                    onClick={handlePagarConPasarela}
-                    disabled={procesandoPago}
-                    className="btn-checkout-mp"
-                  >
-                    <MercadoPagoLogo height={20} />
-                    <span>{procesandoPago ? 'Generando checkout...' : `Pagar con Mercado Pago`}</span>
-                    <FaExternalLinkAlt style={{ fontSize: '12px' }} />
-                  </button>
-
-                  {/* Botón para verificar estado de Mercado Pago si ya pagó */}
-                  {checkoutData && (
-                    <button
-                      onClick={handleVerificarPagoMP}
-                      disabled={verificandoPago}
-                      style={{
-                        background: 'rgba(34, 197, 94, 0.15)',
-                        color: '#22c55e',
-                        border: '1.5px solid #22c55e',
-                        padding: '13px',
-                        borderRadius: '10px',
-                        fontSize: '14px',
-                        fontWeight: '700',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '10px',
-                        boxShadow: '0 0 15px rgba(34, 197, 94, 0.2)',
-                        transition: 'all 0.2s ease'
-                      }}
-                    >
-                      {verificandoPago ? <FaSyncAlt className="spin-icon" /> : <FaCheck />}
-                      <span>
-                        {verificandoPago ? 'Consultando Mercado Pago...' : '¿Ya pagaste en Mercado Pago? Verificar y Acreditar Pago'}
-                      </span>
-                    </button>
-                  )}
-                </>
+                <button
+                  onClick={handlePagarConPasarela}
+                  disabled={procesandoPago || !getCheckoutUrl()}
+                  className="btn-checkout-mp"
+                >
+                  <MercadoPagoLogo height={20} />
+                  <span>
+                    {procesandoPago
+                      ? 'Generando orden...'
+                      : getCheckoutUrl()
+                      ? 'Ir a pagar en Mercado Pago'
+                      : 'Mercado Pago no configurado en servidor'}
+                  </span>
+                  <FaExternalLinkAlt style={{ fontSize: '12px' }} />
+                </button>
               ) : (
                 <button
                   onClick={handlePagarConPasarela}
-                  disabled={procesandoPago}
+                  disabled={procesandoPago || !getCheckoutUrl()}
                   className="btn-checkout-uala"
                 >
                   <UalaLogo height={20} />
-                  <span>{procesandoPago ? 'Generando checkout...' : `Pagar con Ualá Bis`}</span>
+                  <span>
+                    {procesandoPago
+                      ? 'Generando orden...'
+                      : getCheckoutUrl()
+                      ? 'Ir a pagar en Ualá Bis'
+                      : 'Ualá Bis no configurado en servidor'}
+                  </span>
                   <FaExternalLinkAlt style={{ fontSize: '12px' }} />
                 </button>
               )}
 
-              {/* Botón de Test / Sandbox Instantáneo */}
               <button
-                onClick={ejecutarConfirmacionPago}
+                onClick={handleSolicitarMembresiaPendiente}
                 disabled={procesandoPago}
                 className="btn-simular-aprobado"
               >
                 <FaCheck />
-                <span>Simular Pago Aprobado (Test Rápido Sin Salir)</span>
+                <span>Solicitar Membresía Pendiente (Pagar en Recepción)</span>
+              </button>
+
+              <button
+                onClick={handleActualizarEstadoPago}
+                disabled={verificandoPago}
+                style={{
+                  background: 'rgba(148, 163, 184, 0.12)',
+                  color: '#e2e8f0',
+                  border: '1px solid rgba(148, 163, 184, 0.25)',
+                  padding: '11px',
+                  borderRadius: '10px',
+                  fontSize: '13.5px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                <FaSyncAlt className={verificandoPago ? 'spin-icon' : ''} />
+                <span>{verificandoPago ? 'Consultando estado...' : 'Actualizar estado desde el servidor'}</span>
               </button>
             </div>
           </div>
@@ -923,7 +929,7 @@ export default function SocioMembresia() {
             <div className="comprobante-card">
               <div className="comprobante-header-gym">
                 <h3>{gimnasio?.nombre || 'GymTrack Fitness Club'}</h3>
-                <p>{gimnasio?.direccion || 'Sede Central'}</p>
+                <p>{gimnasio?.telefono || gimnasio?.email || 'Comprobante digital'}</p>
               </div>
 
               <div className="comprobante-detalles-grid">
@@ -956,8 +962,17 @@ export default function SocioMembresia() {
               <div className="comprobante-total-box">
                 <span>
                   Estado:{' '}
-                  <strong style={{ color: pagoSeleccionado.estado === 'pagado' ? '#22c55e' : '#f59e0b' }}>
-                    {pagoSeleccionado.estado === 'pagado' ? 'Aprobado' : (pagoSeleccionado.estado_etiqueta || 'Pendiente')}
+                  <strong
+                    style={{
+                      color:
+                        pagoSeleccionado.estado === 'aprobado' || pagoSeleccionado.estado === 'pagado'
+                          ? '#22c55e'
+                          : pagoSeleccionado.estado === 'rechazado' || pagoSeleccionado.estado === 'anulado'
+                          ? '#ef4444'
+                          : '#f59e0b'
+                    }}
+                  >
+                    {pagoSeleccionado.estado_etiqueta || pagoSeleccionado.estado || 'Pendiente'}
                   </strong>
                 </span>
                 <span>{pagoSeleccionado.monto_formateado}</span>

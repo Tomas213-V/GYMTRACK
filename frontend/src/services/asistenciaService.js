@@ -1,117 +1,96 @@
-/**
- * =========================================================================================
- * ARCHIVO: asistenciaService.js
- * PROYECTO: GYMTRACK - Frontend
- * DESCRIPCIÓN: Servicio para el registro de ingresos/check-ins y estadísticas de concurrencia.
- * =========================================================================================
- * 
- * GUÍA PASO A PASO PARA EL DESARROLLADOR:
- * 1. Control de accesos: Permite registrar asistencias tanto por el ID numérico de socio
- *    como mediante su número de documento (DNI) para mayor velocidad en el mostrador del gimnasio.
- * 2. Manejo robusto de respuestas: Implementa `parseAsistenciaResponse` para garantizar mensajes de
- *    error claros incluso cuando el servidor responde con formatos no convencionales.
- * 3. Analítica: Provee estadísticas comparativas entre el mes en curso y el mes anterior para
- *    medir la retención de los socios.
- */
+// ==============================================================================
+// SERVICIO DE ASISTENCIAS — SUCURSALES, INGRESO, SALIDA, ANULACIÓN Y FILTROS
+// ==============================================================================
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+import { apiRequest } from './apiClient';
 
-const getHeaders = () => {
-  const token = localStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`
-  };
-};
-
-
-async function parseAsistenciaResponse(response, fallbackMessage) {
-  let data;
-
-  try {
-    data = await response.json();
-  } catch {
-    if (!response.ok) {
-      throw new Error(`${fallbackMessage} (HTTP ${response.status}; respuesta vacía o inválida).`);
-    }
-    throw new Error(`El servidor devolvió una respuesta vacía o inválida (HTTP ${response.status}).`);
-  }
-
-  if (!response.ok) {
-    throw new Error(data.error || fallbackMessage);
-  }
-
-  return data;
-}
-
-/**
- * Obtener listado de asistencias con paginación y filtros
- */
-export async function fetchAsistencias({ page = 1, limit = 10, search = '', desde = '', hasta = '', id_socio = '' } = {}) {
+export async function fetchAsistencias({
+  page = 1,
+  limit = 10,
+  search = '',
+  desde = '',
+  hasta = '',
+  id_socio = '',
+  id_sucursal = '',
+  id_gimnasio = '',
+  estado = '',
+  signal
+} = {}) {
   const params = new URLSearchParams();
-  if (page) params.append('page', page);
-  if (limit) params.append('limit', limit);
+  if (page) params.append('page', String(page));
+  const safeLimit = Math.min(200, Math.max(1, Number(limit) || 10));
+  params.append('limit', String(safeLimit));
   if (search) params.append('search', search);
   if (desde) params.append('desde', desde);
   if (hasta) params.append('hasta', hasta);
-  if (id_socio && id_socio !== 'todos') params.append('id_socio', id_socio);
+  if (id_socio && id_socio !== 'todos') params.append('id_socio', String(id_socio));
+  if (id_sucursal && id_sucursal !== 'todas') params.append('id_sucursal', String(id_sucursal));
+  if (id_gimnasio) params.append('id_gimnasio', String(id_gimnasio));
+  if (estado && estado !== 'todos') params.append('estado', estado);
 
-  const response = await fetch(`${API_URL}/asistencias?${params.toString()}`, {
-    headers: getHeaders()
-  });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al obtener asistencias.');
-  return data;
+  return apiRequest(`/asistencias?${params.toString()}`, { signal });
 }
 
-/**
- * Registrar asistencia mediante id_socio o DNI
- */
-export async function registrarAsistencia({ id_socio, dni } = {}) {
-  const response = await fetch(`${API_URL}/asistencias`, {
+export async function fetchMisAsistencias({ id_gimnasio = null, id_sucursal = null, estado = '', signal } = {}) {
+  const params = new URLSearchParams();
+  if (id_gimnasio) params.append('id_gimnasio', String(id_gimnasio));
+  if (id_sucursal) params.append('id_sucursal', String(id_sucursal));
+  if (estado && estado !== 'todos') params.append('estado', estado);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  return apiRequest(`/asistencias/mis-asistencias${qs}`, { signal });
+}
+
+export async function registrarAsistencia({ id_socio, dni, id_sucursal } = {}) {
+  const body = {};
+  if (id_sucursal != null && id_sucursal !== '') body.id_sucursal = Number(id_sucursal);
+  if (id_socio != null && id_socio !== '') body.id_socio = Number(id_socio);
+  if (dni && String(dni).trim()) body.dni = String(dni).trim();
+
+  return apiRequest('/asistencias', {
     method: 'POST',
-    headers: getHeaders(),
-    body: JSON.stringify({ id_socio, dni })
+    body
   });
-
-  return parseAsistenciaResponse(response, 'Error al registrar la asistencia.');
 }
 
-/**
- * Obtener estadísticas de asistencias (mes actual, mes anterior y tendencia)
- */
-export async function fetchEstadisticasAsistencias() {
-  const response = await fetch(`${API_URL}/asistencias/estadisticas`, {
-    headers: getHeaders()
+export async function checkoutAsistencia(id_asistencia_socio) {
+  return apiRequest(`/asistencias/${id_asistencia_socio}/salida`, {
+    method: 'PATCH'
   });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al obtener estadísticas.');
-  return data;
 }
 
-/**
- * Obtener historial de asistencias de un socio específico
- */
-export async function fetchHistorialPorSocio(id_socio) {
-  const response = await fetch(`${API_URL}/asistencias/socio/${id_socio}`, {
-    headers: getHeaders()
+export async function registrarSalidaAbierta({ id_socio = null } = {}) {
+  const body = id_socio != null ? { id_socio: Number(id_socio) } : {};
+  return apiRequest('/asistencias/salida', {
+    method: 'POST',
+    body
   });
-
-  return parseAsistenciaResponse(response, 'Error al obtener historial del socio.');
 }
 
-/**
- * Eliminar una asistencia por ID
- */
-export async function deleteAsistencia(id_asistencia) {
-  const response = await fetch(`${API_URL}/asistencias/${id_asistencia}`, {
-    method: 'DELETE',
-    headers: getHeaders()
-  });
+export async function fetchEstadisticasAsistencias({ id_sucursal = '', id_gimnasio = '', signal } = {}) {
+  const params = new URLSearchParams();
+  if (id_sucursal && id_sucursal !== 'todas') params.append('id_sucursal', String(id_sucursal));
+  if (id_gimnasio) params.append('id_gimnasio', String(id_gimnasio));
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  return apiRequest(`/asistencias/estadisticas${qs}`, { signal });
+}
 
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Error al eliminar la asistencia.');
-  return data;
+export async function fetchHistorialPorSocio(id_socio, { id_gimnasio = null, id_sucursal = null, signal } = {}) {
+  const params = new URLSearchParams();
+  if (id_gimnasio) params.append('id_gimnasio', String(id_gimnasio));
+  if (id_sucursal) params.append('id_sucursal', String(id_sucursal));
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  return apiRequest(`/asistencias/socio/${id_socio}${qs}`, { signal });
+}
+
+export async function anularAsistencia(id_asistencia_socio, motivo = '') {
+  return apiRequest(`/asistencias/${id_asistencia_socio}/anular`, {
+    method: 'PATCH',
+    body: {
+      motivo: motivo && String(motivo).trim() ? String(motivo).trim() : null
+    }
+  });
+}
+
+export async function deleteAsistencia(id_asistencia_socio, motivo = '') {
+  return anularAsistencia(id_asistencia_socio, motivo);
 }
