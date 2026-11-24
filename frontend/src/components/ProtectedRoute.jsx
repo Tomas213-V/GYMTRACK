@@ -15,6 +15,7 @@ import { useGymContext } from '../context/GymContext';
 function ProtectedRoute({
   children,
   permitirSinGimnasio = false,
+  permitirSinContexto = false,
   rolRequerido = null,
   permisoRequerido = null
 }) {
@@ -27,18 +28,35 @@ function ProtectedRoute({
     esStaff,
     gimnasios,
     gimnasioActivo,
+    requiereSeleccionContexto,
     hasPermission
   } = useGymContext();
 
   // 1. Verificar sesión autenticada
   if (!isAuthenticated) {
-    return <Navigate to={rolRequerido === 'socio' ? '/login-socio' : '/login-dueño'} replace />;
+    if (rolRequerido === 'socio') return <Navigate to="/login-socio" replace />;
+    if (rolRequerido === 'administrador') return <Navigate to="/login-administrador" replace />;
+    if (rolRequerido === 'empleado') return <Navigate to="/login-empleado" replace />;
+    return <Navigate to="/login-dueño" replace />;
+  }
+
+  // 1b. Si el usuario tiene múltiples gimnasios/sucursales, exigir selección de contexto antes de entrar al panel
+  if (requiereSeleccionContexto && !permitirSinContexto) {
+    return <Navigate to="/seleccionar-gimnasio" replace />;
   }
 
   // 2. Control de acceso por rol
   if (rolRequerido === 'dueño' && !esDueno) {
     if (esSocio) return <Navigate to="/dashboard-socio" replace />;
     if (esAdministrador || esEmpleado) return <Navigate to="/dashboard-dueño" replace />;
+  }
+
+  if (rolRequerido === 'administrador' && !esAdministrador) {
+    return <Navigate to={esSocio ? '/dashboard-socio' : '/dashboard-dueño'} replace />;
+  }
+
+  if (rolRequerido === 'empleado' && !esEmpleado) {
+    return <Navigate to={esSocio ? '/dashboard-socio' : '/dashboard-dueño'} replace />;
   }
 
   if (rolRequerido === 'staff' && !esStaff) {

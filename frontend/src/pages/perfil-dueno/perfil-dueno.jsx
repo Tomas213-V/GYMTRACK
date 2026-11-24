@@ -41,7 +41,7 @@ import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar-dueno/sidebar';
 import Perfil from '../perfil-socio/perfil';
 import { useGymContext } from '../../context/GymContext';
-import { getPerfilOwner, updatePerfilOwner } from '../../services/authService';
+import { getPerfilOwner, updatePerfilOwner, cambiarContrasena } from '../../services/authService';
 import { actualizarMiGimnasio } from '../../services/gimnasioService';
 import './perfil-dueno.css';
 
@@ -259,10 +259,18 @@ function PerfilDueno() {
 
     try {
       setGuardandoPassword(true);
-      await updatePerfilOwner({
+      const resPass = await cambiarContrasena({
         contrasena_actual: passForm.contrasena_actual,
-        nueva_contrasena: passForm.nueva_contrasena
+        nueva_contrasena: passForm.nueva_contrasena,
+        confirmar_contrasena: passForm.confirmar_contrasena
       });
+
+      if (resPass?.token) {
+        localStorage.setItem('token', resPass.token);
+      }
+      if (resPass?.refresh_token) {
+        localStorage.setItem('refresh_token', resPass.refresh_token);
+      }
 
       setPassForm({
         contrasena_actual: '',
@@ -272,7 +280,7 @@ function PerfilDueno() {
 
       setAlerta({
         tipo: 'exito',
-        mensaje: 'Tu contraseña de administrador fue actualizada correctamente.'
+        mensaje: resPass?.mensaje || 'Tu contraseña fue actualizada correctamente.'
       });
     } catch (err) {
       setAlerta({

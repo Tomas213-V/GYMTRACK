@@ -17,6 +17,7 @@ import {
   cambiarEstadoAsignacionEmpleado
 } from '../../services/empleadoService';
 import { getSucursales } from '../../services/sucursalService';
+import { verificarIdentidad } from '../../services/authService';
 import {
   FaUserTie,
   FaPlus,
@@ -70,8 +71,11 @@ export default function EmpleadosDueno() {
     dni: '',
     email: '',
     telefono: '',
+    contrasena_inicial: '',
     asignaciones: [] // [{ id_empleado_sucursal?, id_sucursal, rol, estado }]
   });
+  const [deteccionEmp, setDeteccionEmp] = useState(null);
+  const [confirmarIncorporacionEmp, setConfirmarIncorporacionEmp] = useState(false);
 
   const mostrarExito = (msg) => {
     setExitoMsg(msg);
@@ -114,6 +118,8 @@ export default function EmpleadosDueno() {
 
   const abrirCrear = () => {
     setEditando(null);
+    setDeteccionEmp(null);
+    setConfirmarIncorporacionEmp(false);
     const primeraSuc = sucursales.find((s) => s.estado !== false) || sucursales[0];
     setFormData({
       nombre: '',
@@ -121,11 +127,39 @@ export default function EmpleadosDueno() {
       dni: '',
       email: '',
       telefono: '',
+      contrasena_inicial: '',
       asignaciones: primeraSuc
         ? [{ id_sucursal: primeraSuc.id_sucursal, rol: 'recepcionista', estado: true }]
         : []
     });
     setModalAbierto(true);
+  };
+
+  const verificarEmpleadoExistente = async (dniVal, emailVal, sucIdVal = null) => {
+    const cleanDni = String(dniVal || '').trim();
+    const cleanEmail = String(emailVal || '').trim().toLowerCase();
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail);
+    if (cleanDni.length < 5 && !emailOk) {
+      setDeteccionEmp(null);
+      setConfirmarIncorporacionEmp(false);
+      return null;
+    }
+    try {
+      const res = await verificarIdentidad({
+        tipo_perfil: 'empleado',
+        dni: cleanDni.length >= 5 ? cleanDni : null,
+        email: emailOk ? cleanEmail : null,
+        id_gimnasio: gimnasioActivoId || null,
+        id_sucursal: sucIdVal || formData.asignaciones?.[0]?.id_sucursal || null
+      });
+      setDeteccionEmp(res);
+      if (res?.existe_en_gymtrack) {
+        setFormData((prev) => ({ ...prev, contrasena_inicial: '' }));
+      }
+      return res;
+    } catch {
+      return null;
+    }
   };
 
   const abrirEditar = (emp) => {
@@ -235,6 +269,25 @@ export default function EmpleadosDueno() {
         mostrarExito('Empleado y asignaciones actualizados correctamente.');
       } else {
         const [primera, ...restantes] = formData.asignaciones;
+        const det = await verificarEmpleadoExistente(formData.dni, formData.email, primera.id_sucursal);
+        if (det?.ya_asignado_en_esta_sucursal) {
+          setErrorMsg(det.mensaje || 'Esta persona ya tiene una asignación activa en esta sucursal.');
+          return;
+        }
+        if (det?.conflicto_identidad) {
+          setErrorMsg(det.mensaje || 'El DNI y el correo corresponden a personas distintas.');
+          return;
+        }
+        if (det?.existe_en_gymtrack && !confirmarIncorporacionEmp) {
+          setErrorMsg('Confirmá que querés incorporar a esta persona existente a tus sucursales.');
+          return;
+        }
+        const pwdInicial = formData.contrasena_inicial.trim();
+        if (!det?.tiene_cuenta_auth && !det?.existe_en_gymtrack && pwdInicial && pwdInicial.length < 6) {
+          setErrorMsg('La contraseña inicial debe tener al menos 6 caracteres.');
+          return;
+        }
+
         const creadoRes = await createEmpleado({
           id_sucursal: primera.id_sucursal,
           rol: primera.rol,
@@ -242,7 +295,11 @@ export default function EmpleadosDueno() {
           apellido: formData.apellido,
           dni: formData.dni,
           email: formData.email,
-          telefono: formData.telefono
+          telefono: formData.telefono,
+          ...(!det?.tiene_cuenta_auth && !det?.existe_en_gymtrack && pwdInicial
+            ? { contrasena_inicial: pwdInicial }
+            : {}),
+          ...(det?.existe_en_gymtrack ? { confirmar_incorporacion: true } : {})
         });
 
         const empId = creadoRes?.empleado?.id_empleado;
@@ -549,7 +606,11 @@ export default function EmpleadosDueno() {
                   <input
                     type="text"
                     value={formData.dni}
-                    onChange={(e) => setFormData({ ...formData, dni: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, dni: e.target.value });
+                      setConfirmarIncorporacionEmp(false);
+                    }}
+                    onBlur={() => !editando && verificarEmpleadoExistente(formData.dni, formData.email)}
                   />
                 </label>
                 <label>
@@ -568,14 +629,56 @@ export default function EmpleadosDueno() {
                   type="email"
                   required
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, email: e.target.value });
+                    setConfirmarIncorporacionEmp(false);
+                  }}
+                  onBlur={() => !editando && verificarEmpleadoExistente(formData.dni, formData.email)}
                 />
               </label>
 
+              {!editando && deteccionEmp?.existe_en_gymtrack && !deteccionEmp?.ya_asignado_en_esta_sucursal && (
+                <div
+                  style={{
+                    background: 'rgba(158, 240, 26, 0.08)',
+                    border: '1px solid rgba(158, 240, 26, 0.35)',
+                    borderRadius: '8px',
+                    padding: '10px 12px',
+                    fontSize: '12px',
+                    color: '#d9f99d'
+                  }}
+                >
+                  <div>
+                    <strong>{deteccionEmp.mensaje}</strong> Se reutilizará su cuenta global sin duplicarla ni cambiar su contraseña.
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={confirmarIncorporacionEmp}
+                      onChange={(e) => setConfirmarIncorporacionEmp(e.target.checked)}
+                      style={{ width: 'auto' }}
+                    />
+                    <span>Confirmo incorporar este empleado existente</span>
+                  </label>
+                </div>
+              )}
+
+              {!editando && !deteccionEmp?.existe_en_gymtrack && !deteccionEmp?.tiene_cuenta_auth && (
+                <label>
+                  Contraseña inicial (para cuenta nueva)
+                  <input
+                    type="password"
+                    placeholder="Mínimo 6 caracteres"
+                    autoComplete="new-password"
+                    value={formData.contrasena_inicial}
+                    onChange={(e) => setFormData({ ...formData, contrasena_inicial: e.target.value })}
+                  />
+                </label>
+              )}
+
               {!editando && (
                 <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>
-                  Si el email o DNI ya existe en GymTrack, se reutilizará la identidad del empleado sin duplicarla.
-                  La persona vinculará su cuenta al iniciar sesión con su correo verificado en Supabase Auth.
+                  Si el email o DNI ya existe en GymTrack, se reutilizará la identidad global sin modificar su contraseña.
                 </p>
               )}
 

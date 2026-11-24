@@ -26,7 +26,7 @@ import { useGymContext } from '../../context/GymContext';
 function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { esDueno, hasPermission, logout } = useGymContext();
+  const { esDueno, esAdministrador, esEmpleado, hasPermission, logout } = useGymContext();
   const [abiertoMovil, setAbiertoMovil] = useState(false);
 
   useEffect(() => {
@@ -129,8 +129,13 @@ function Sidebar() {
   const opciones = todasLasOpciones.filter((op) => op.visible);
 
   const handleLogout = () => {
+    const destino = esAdministrador
+      ? '/login-administrador'
+      : esEmpleado
+      ? '/login-empleado'
+      : '/login-dueño';
     logout();
-    navigate('/login-dueño');
+    navigate(destino, { replace: true });
   };
 
   return (

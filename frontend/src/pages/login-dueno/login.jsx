@@ -26,7 +26,7 @@
 
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { login } from '../../services/authService.js'
+import { loginDueno, recuperarContrasena } from '../../services/authService.js'
 import { useGymContext } from '../../context/GymContext.jsx'
 import logoImg from '../../assets/logo_verde.jpg'
 import PasswordInput from '../../components/PasswordInput/PasswordInput'
@@ -52,6 +52,7 @@ function Login() {
 
   // Mensaje de error devuelto por la API (ej: "Credenciales incorrectas")
   const [backendError, setBackendError] = useState('')
+  const [recoveryMsg, setRecoveryMsg] = useState('')
 
   // Indicador de solicitud en curso para deshabilitar botones
   const [loading, setLoading] = useState(false)
@@ -103,6 +104,7 @@ function Login() {
     event.preventDefault()
 
     setBackendError('')
+    setRecoveryMsg('')
 
     // Primero validamos.
     if (!validateForm()) {
@@ -113,9 +115,9 @@ function Login() {
 
     try {
 
-      // Mandamos los datos al backend (Supabase Auth).
-      const data = await login({
-        email: formData.email,
+      // Autenticación estricta para Dueño (Supabase Auth).
+      const data = await loginDueno({
+        email: formData.email.trim(),
         contrasena: formData.contrasena,
       })
 
@@ -126,21 +128,24 @@ function Login() {
         gimnasios: data.gimnasios,
         sucursales: data.sucursales,
         sucursales_asignadas: data.sucursales_asignadas,
+        contextos_disponibles: data.contextos_disponibles,
+        requiere_seleccion_gimnasio: data.requiere_seleccion_gimnasio,
       })
 
-      // Si es administrador organizacional, empleado o dueño con al menos un gimnasio, ir al dashboard
-      const rolUsuario = data.usuario?.rol
+      if (data.requiere_seleccion_gimnasio) {
+        navigate('/seleccionar-gimnasio', { replace: true })
+        return
+      }
+
       const tieneGym = Boolean(
         data.usuario?.gimnasio?.id_gimnasio ||
-        (Array.isArray(data.gimnasios) && data.gimnasios.length > 0) ||
-        rolUsuario === 'empleado' ||
-        rolUsuario === 'administrador'
+        (Array.isArray(data.gimnasios) && data.gimnasios.length > 0)
       )
 
       if (tieneGym) {
-        navigate('/dashboard-dueño')
+        navigate('/dashboard-dueño', { replace: true })
       } else {
-        navigate('/crear-gimnasio-dueño')
+        navigate('/crear-gimnasio-dueño', { replace: true })
       }
 
     } catch (error) {
@@ -151,6 +156,22 @@ function Login() {
 
       setLoading(false)
 
+    }
+  }
+
+  const handleRecuperar = async (event) => {
+    event.preventDefault()
+    setBackendError('')
+    setRecoveryMsg('')
+    if (!formData.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      setBackendError('Ingresá tu correo electrónico arriba para enviarte el enlace de recuperación.')
+      return
+    }
+    try {
+      const res = await recuperarContrasena(formData.email.trim())
+      setRecoveryMsg(res?.mensaje || 'Si la cuenta existe, enviamos un correo de recuperación.')
+    } catch (err) {
+      setBackendError(err.message || 'No se pudo solicitar la recuperación de contraseña.')
     }
   }
 
@@ -170,7 +191,7 @@ function Login() {
 
         {/* TÍTULO */}
 
-        <h1>Iniciar sesión</h1>
+        <h1>Portal del Dueño</h1>
 
         {/* FORMULARIO */}
 
@@ -216,20 +237,44 @@ function Login() {
 
           {/* LINKS */}
 
-          <div className="login-links">
+          <div className="login-links" style={{ flexWrap: 'wrap', gap: '8px' }}>
+
+            <Link to="/login-administrador">
+              Administrador
+            </Link>
+
+            <Link to="/login-empleado">
+              Empleado
+            </Link>
 
             <Link to="/login-socio">
               ¿Eres socio?
             </Link>
 
             <a
-              href="#"
-              onClick={(event) => event.preventDefault()}
+              href="#recuperar"
+              onClick={handleRecuperar}
             >
               ¿Olvidaste tu contraseña?
             </a>
 
           </div>
+
+          {recoveryMsg && (
+            <div
+              style={{
+                background: 'rgba(158, 240, 26, 0.1)',
+                border: '1px solid rgba(158, 240, 26, 0.35)',
+                color: '#d9f99d',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                fontSize: '0.85rem',
+                marginBottom: '10px'
+              }}
+            >
+              {recoveryMsg}
+            </div>
+          )}
 
           {/* ERROR DEL BACKEND */}
 

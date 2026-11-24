@@ -61,7 +61,11 @@ export async function createEmpleado(empleadoData) {
     ...(empleadoData.apellido ? { apellido: String(empleadoData.apellido).trim() } : {}),
     ...(empleadoData.dni ? { dni: String(empleadoData.dni).trim() } : {}),
     ...(empleadoData.email ? { email: String(empleadoData.email).trim().toLowerCase() } : {}),
-    ...(empleadoData.telefono ? { telefono: String(empleadoData.telefono).trim() } : {})
+    ...(empleadoData.telefono ? { telefono: String(empleadoData.telefono).trim() } : {}),
+    ...(empleadoData.contrasena_inicial && String(empleadoData.contrasena_inicial).trim()
+      ? { contrasena_inicial: String(empleadoData.contrasena_inicial).trim() }
+      : {}),
+    ...(empleadoData.confirmar_incorporacion ? { confirmar_incorporacion: true } : {})
   };
   return apiRequest('/empleados', {
     method: 'POST',

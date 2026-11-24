@@ -26,7 +26,11 @@ export async function createAdministrador(adminData) {
     email: String(adminData.email || '').trim().toLowerCase(),
     ...(adminData.dni ? { dni: String(adminData.dni).trim() } : {}),
     ...(adminData.telefono ? { telefono: String(adminData.telefono).trim() } : {}),
-    ...(adminData.id_gimnasio ? { id_gimnasio: Number(adminData.id_gimnasio) } : {})
+    ...(adminData.id_gimnasio ? { id_gimnasio: Number(adminData.id_gimnasio) } : {}),
+    ...(adminData.contrasena_inicial && String(adminData.contrasena_inicial).trim()
+      ? { contrasena_inicial: String(adminData.contrasena_inicial).trim() }
+      : {}),
+    ...(adminData.confirmar_incorporacion ? { confirmar_incorporacion: true } : {})
   };
   return apiRequest('/administradores', {
     method: 'POST',

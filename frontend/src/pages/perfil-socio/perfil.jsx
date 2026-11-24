@@ -51,7 +51,7 @@ import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar-dueno/sidebar';
 import { useGymContext } from '../../context/GymContext';
 import { getPerfilSocio, updatePerfilSocio } from '../../services/socioService';
-import { updatePerfilOwner } from '../../services/authService';
+import { cambiarContrasena } from '../../services/authService';
 import { formatFechaArgentina, formatHoraArgentina } from '../../utils/dateUtils';
 import './perfil.css';
 
@@ -234,10 +234,18 @@ function Perfil() {
 
     try {
       setGuardandoPassword(true);
-      await updatePerfilOwner({
+      const resPass = await cambiarContrasena({
         contrasena_actual: passwordData.contrasena_actual,
-        nueva_contrasena: passwordData.nueva_contrasena
+        nueva_contrasena: passwordData.nueva_contrasena,
+        confirmar_contrasena: passwordData.confirmar_contrasena
       });
+
+      if (resPass?.token) {
+        localStorage.setItem('token', resPass.token);
+      }
+      if (resPass?.refresh_token) {
+        localStorage.setItem('refresh_token', resPass.refresh_token);
+      }
 
       setPasswordData({
         contrasena_actual: '',
@@ -247,7 +255,7 @@ function Perfil() {
 
       setAlerta({
         tipo: 'exito',
-        mensaje: 'Contraseña actualizada correctamente.'
+        mensaje: resPass?.mensaje || 'Contraseña actualizada correctamente.'
       });
     } catch (err) {
       setAlerta({

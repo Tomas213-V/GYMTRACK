@@ -19,7 +19,7 @@
 
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { loginSocio } from '../../services/authService.js'
+import { loginSocio, recuperarContrasena } from '../../services/authService.js'
 import { useGymContext } from '../../context/GymContext.jsx'
 import logoImg from '../../assets/logo_verde.jpg'
 import PasswordInput from '../../components/PasswordInput/PasswordInput'
@@ -41,6 +41,7 @@ function LoginSocio() {
 
   const [errors, setErrors] = useState({})
   const [backendError, setBackendError] = useState('')
+  const [recoveryMsg, setRecoveryMsg] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleChange = (event) => {
@@ -71,6 +72,7 @@ function LoginSocio() {
   const handleSubmit = async (event) => {
     event.preventDefault()
     setBackendError('')
+    setRecoveryMsg('')
 
     if (!validateForm()) {
       return
@@ -91,15 +93,36 @@ function LoginSocio() {
         usuario: data.usuario,
         socio: data.socio,
         gimnasios: data.gimnasios,
+        contextos_disponibles: data.contextos_disponibles,
+        requiere_seleccion_gimnasio: data.requiere_seleccion_gimnasio,
       })
 
-      // Redireccionar al dashboard de socios
-      navigate('/dashboard-socio')
+      if (data.requiere_seleccion_gimnasio) {
+        navigate('/seleccionar-gimnasio', { replace: true })
+      } else {
+        navigate('/dashboard-socio', { replace: true })
+      }
 
     } catch (error) {
       setBackendError(error.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleRecuperar = async (event) => {
+    event.preventDefault()
+    setBackendError('')
+    setRecoveryMsg('')
+    if (!formData.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      setBackendError('Ingresá tu correo electrónico arriba para recibir el enlace de recuperación.')
+      return
+    }
+    try {
+      const res = await recuperarContrasena(formData.email.trim())
+      setRecoveryMsg(res?.mensaje || 'Si la cuenta existe, enviamos un correo de recuperación.')
+    } catch (err) {
+      setBackendError(err.message || 'No se pudo solicitar la recuperación de contraseña.')
     }
   }
 
@@ -172,21 +195,31 @@ function LoginSocio() {
           />
 
           {/* ENLACES */}
-          <div className="login-links">
-            <Link to="/login-dueño">
-              ¿Eres dueño? Iniciar como dueño
-            </Link>
+          <div className="login-links" style={{ flexWrap: 'wrap', gap: '8px' }}>
+            <Link to="/login-dueño">Dueño</Link>
+            <Link to="/login-administrador">Administrador</Link>
+            <Link to="/login-empleado">Empleado</Link>
 
-            <a
-              href="#"
-              onClick={(event) => {
-                event.preventDefault()
-                alert('Para recuperar tu contraseña, comunicate con la recepción o administración de tu gimnasio.')
-              }}
-            >
+            <a href="#recuperar" onClick={handleRecuperar}>
               ¿Olvidaste tu contraseña?
             </a>
           </div>
+
+          {recoveryMsg && (
+            <div
+              style={{
+                background: 'rgba(158, 240, 26, 0.1)',
+                border: '1px solid rgba(158, 240, 26, 0.35)',
+                color: '#d9f99d',
+                borderRadius: '8px',
+                padding: '10px 12px',
+                fontSize: '0.85rem',
+                marginBottom: '10px'
+              }}
+            >
+              {recoveryMsg}
+            </div>
+          )}
 
           {/* ERROR DEL BACKEND */}
           {backendError && (

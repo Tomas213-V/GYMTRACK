@@ -11,6 +11,9 @@
 export const API_URL = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000/api').replace(/\/+$/, '');
 
 const ACTIVE_GYM_STORAGE_KEY = 'gymtrack_active_gym_id';
+const ACTIVE_SUCURSAL_STORAGE_KEY = 'gymtrack_active_sucursal_id';
+const CONTEXT_CONFIRMED_STORAGE_KEY = 'gymtrack_context_confirmed';
+const CONTEXTOS_DISPONIBLES_STORAGE_KEY = 'gymtrack_contextos_disponibles';
 
 export function normalizeRoleForHeader(rol) {
   if (!rol || typeof rol !== 'string') return null;
@@ -57,6 +60,49 @@ export function setStoredActiveGymId(id) {
   }
 }
 
+export function getStoredActiveSucursalId() {
+  const raw = localStorage.getItem(ACTIVE_SUCURSAL_STORAGE_KEY);
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+export function setStoredActiveSucursalId(id) {
+  if (id && Number(id) > 0) {
+    localStorage.setItem(ACTIVE_SUCURSAL_STORAGE_KEY, String(id));
+  } else {
+    localStorage.removeItem(ACTIVE_SUCURSAL_STORAGE_KEY);
+  }
+}
+
+export function getStoredContextConfirmed() {
+  const raw = localStorage.getItem(CONTEXT_CONFIRMED_STORAGE_KEY);
+  if (raw === null) return true;
+  return raw === 'true';
+}
+
+export function setStoredContextConfirmed(confirmed) {
+  localStorage.setItem(CONTEXT_CONFIRMED_STORAGE_KEY, confirmed ? 'true' : 'false');
+}
+
+export function getStoredContextosDisponibles() {
+  try {
+    const raw = localStorage.getItem(CONTEXTOS_DISPONIBLES_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setStoredContextosDisponibles(lista) {
+  if (Array.isArray(lista)) {
+    localStorage.setItem(CONTEXTOS_DISPONIBLES_STORAGE_KEY, JSON.stringify(lista));
+  } else {
+    localStorage.removeItem(CONTEXTOS_DISPONIBLES_STORAGE_KEY);
+  }
+}
+
 export function clearSessionStorage() {
   localStorage.removeItem('token');
   localStorage.removeItem('refresh_token');
@@ -64,6 +110,9 @@ export function clearSessionStorage() {
   localStorage.removeItem('socio');
   localStorage.removeItem('rol');
   localStorage.removeItem(ACTIVE_GYM_STORAGE_KEY);
+  localStorage.removeItem(ACTIVE_SUCURSAL_STORAGE_KEY);
+  localStorage.removeItem(CONTEXT_CONFIRMED_STORAGE_KEY);
+  localStorage.removeItem(CONTEXTOS_DISPONIBLES_STORAGE_KEY);
 }
 
 export function extractApiErrorMessage(data, status) {
@@ -118,6 +167,7 @@ export function buildAuthHeaders({
   const rolRaw = activeRole !== undefined ? activeRole : localStorage.getItem('rol');
   const rolHeader = normalizeRoleForHeader(rolRaw);
   const activeGymId = gimnasioId !== undefined ? gimnasioId : getStoredActiveGymId();
+  const activeSucursalId = sucursalId !== undefined ? sucursalId : getStoredActiveSucursalId();
 
   const headers = {
     'Content-Type': 'application/json',
@@ -130,8 +180,8 @@ export function buildAuthHeaders({
   if (activeGymId && Number(activeGymId) > 0) {
     headers['X-Gimnasio-Id'] = String(activeGymId);
   }
-  if (sucursalId && Number(sucursalId) > 0) {
-    headers['X-Sucursal-Id'] = String(sucursalId);
+  if (activeSucursalId && Number(activeSucursalId) > 0) {
+    headers['X-Sucursal-Id'] = String(activeSucursalId);
   }
   if (rolHeader) {
     headers['X-Active-Role'] = rolHeader;
