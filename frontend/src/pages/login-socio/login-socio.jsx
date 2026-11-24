@@ -20,12 +20,14 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { loginSocio } from '../../services/authService.js'
+import { useGymContext } from '../../context/GymContext.jsx'
 import logoImg from '../../assets/logo_verde.jpg'
 import PasswordInput from '../../components/PasswordInput/PasswordInput'
 import '../login-dueno/login.css'
 
 function LoginSocio() {
   const navigate = useNavigate()
+  const { setSession } = useGymContext()
 
   // ---------------------------------------------------------------------------------------
   // PASO 1: ESTADO LOCAL DEL FORMULARIO DE ACCESO DEL SOCIO
@@ -58,10 +60,6 @@ function LoginSocio() {
       newErrors.email = 'Ingresá un email válido.'
     }
 
-    if (!formData.dni.trim()) {
-      newErrors.dni = 'El DNI es obligatorio.'
-    }
-
     if (!formData.contrasena) {
       newErrors.contrasena = 'La contraseña es obligatoria.'
     }
@@ -83,20 +81,17 @@ function LoginSocio() {
     try {
       const data = await loginSocio({
         email: formData.email.trim(),
-        dni: formData.dni.trim(),
+        dni: formData.dni.trim() || undefined,
         contrasena: formData.contrasena,
       })
 
-      // Limpiamos datos previos de usuario dueño para evitar interferencia
-      localStorage.removeItem('usuario')
-
-      // Guardamos la sesión
-      localStorage.setItem('token', data.token)
-      if (data.usuario) {
-        localStorage.setItem('usuario', JSON.stringify(data.usuario))
-      }
-      localStorage.setItem('socio', JSON.stringify(data.socio))
-      localStorage.setItem('rol', 'socio')
+      setSession({
+        token: data.token,
+        refresh_token: data.refresh_token,
+        usuario: data.usuario,
+        socio: data.socio,
+        gimnasios: data.gimnasios,
+      })
 
       // Redireccionar al dashboard de socios
       navigate('/dashboard-socio')
@@ -147,7 +142,7 @@ function LoginSocio() {
           {/* DNI */}
           <div className="login-form-group">
             <label htmlFor="dni">
-              DNI
+              DNI <span style={{ color: '#94a3b8', fontWeight: 400 }}>(opcional)</span>
             </label>
             <input
               id="dni"

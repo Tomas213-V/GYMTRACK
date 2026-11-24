@@ -1,16 +1,19 @@
 import { useState, useEffect, useRef } from 'react'
-import { FaUserPlus, FaTimes, FaSave, FaExclamationTriangle, FaBan, FaSpinner } from 'react-icons/fa'
+import { FaUserPlus, FaTimes, FaSave, FaInfoCircle, FaSpinner } from 'react-icons/fa'
 import { createSocio, verificarDniSocio } from '../../../services/socioService'
+import { createMembresiaSocio } from '../../../services/membresiaAdminService'
 import { getPlanes } from '../../../services/pagoService'
 import './modal.css'
+
+const getPlanId = (p) => p?.id_membresia_gimnasio ?? ''
 
 function SocioModal({ onClose, onSuccess, gymId }) {
   const [planes, setPlanes] = useState([])
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
 
-  // Estado para la alerta de socio vinculado y activo en otro gimnasio
-  const [alertaVinculacion, setAlertaVinculacion] = useState(null)
+  // Información de socio existente en GymTrack (multigimnasio: se vincula sin bloquear)
+  const [infoSocioExistente, setInfoSocioExistente] = useState(null)
   const [verificandoDni, setVerificandoDni] = useState(false)
   const timeoutDniRef = useRef(null)
 
@@ -20,44 +23,31 @@ function SocioModal({ onClose, onSuccess, gymId }) {
     dni: '',
     telefono: '',
     email: '',
-    contrasena: '',
-    id_plan_membresia: '',
-    plan: 'Plan Premium',
-    precio: 22000,
-    estado: 'activo'
+    id_membresia_gimnasio: '',
+    contratar_plan: false
   })
 
   useEffect(() => {
-    const idGym = gymId || (() => {
-      try {
-        const u = JSON.parse(localStorage.getItem('usuario') || '{}')
-        const user = Array.isArray(u) ? u[0] : u
-        return user?.id_gimnasio || user?.gimnasio_id || null
-      } catch {
-        return null
-      }
-    })()
-
-    getPlanes({ id_gimnasio: idGym })
+    getPlanes({ id_gimnasio: gymId })
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
-          setPlanes(data)
+          const activos = data.filter((p) => p.estado !== false)
+          const lista = activos.length > 0 ? activos : data
+          setPlanes(lista)
           setFormData((prev) => ({
             ...prev,
-            id_plan_membresia: data[0].id_plan_membresia,
-            plan: data[0].nombre,
-            precio: data[0].precio || 0
+            id_membresia_gimnasio: getPlanId(lista[0])
           }))
         }
       })
       .catch(() => {})
   }, [gymId])
 
-  // Verificación preventiva de DNI (si ya existe en este gym o está activo en otro)
+  // Verificación informativa de DNI (soporte multigimnasio)
   const verificarDni = async (dniValor) => {
     const cleanDni = (dniValor || '').toString().trim()
     if (!cleanDni || cleanDni.length < 5) {
-      setAlertaVinculacion(null)
+      setInfoSocioExistente(null)
       return null
     }
 
@@ -65,38 +55,42 @@ function SocioModal({ onClose, onSuccess, gymId }) {
       setVerificandoDni(true)
       const res = await verificarDniSocio(cleanDni)
       if (res?.existeEnEsteGimnasio) {
-        setError('Ya existe un socio registrado con este DNI en tu gimnasio.')
-        setAlertaVinculacion(null)
+        setError('Este socio ya tiene una membresía activa en este gimnasio.')
+        setInfoSocioExistente(null)
         return { existeEnEsteGimnasio: true }
-      } else if (res?.vinculadoOtroGimnasio) {
-        const infoAlerta = {
-          vinculado: true,
-          gimnasioNombre: res.gimnasio?.nombre || 'Otro gimnasio',
-          socioNombre: `${res.socio?.nombre || ''} ${res.socio?.apellido || ''}`.trim(),
-          dni: res.socio?.dni || cleanDni,
-          telefonoGimnasio: res.gimnasio?.telefono || null
+      } else if (res?.cuentaExistente || res?.vinculadoOtroGimnasio || res?.socio) {
+        const socioFound = res.socio || {}
+        const info = {
+          socioNombre: `${socioFound.nombre || ''} ${socioFound.apellido || ''}`.trim(),
+          dni: socioFound.dni || cleanDni,
+          email: socioFound.email || ''
         }
-        setAlertaVinculacion(infoAlerta)
+        setInfoSocioExistente(info)
+        setFormData((prev) => ({
+          ...prev,
+          nombre: prev.nombre || socioFound.nombre || '',
+          apellido: prev.apellido || socioFound.apellido || '',
+          email: prev.email || socioFound.email || '',
+          telefono: prev.telefono || socioFound.telefono || ''
+        }))
         setError('')
-        return infoAlerta
+        return { cuentaExistente: true }
       } else {
-        setAlertaVinculacion(null)
-        if (error.includes('DNI')) setError('')
+        setInfoSocioExistente(null)
+        if (error.includes('DNI') || error.includes('membresía activa')) setError('')
         return { libre: true }
       }
     } catch {
-      // Ignorar errores menores de verificación
       return null
     } finally {
       setVerificandoDni(false)
     }
   }
 
-  // Manejo de cambio en campo DNI con debounce
   const handleDniChange = (e) => {
     const val = e.target.value
     setFormData((prev) => ({ ...prev, dni: val }))
-    if (error.includes('DNI')) setError('')
+    if (error.includes('DNI') || error.includes('membresía')) setError('')
 
     if (timeoutDniRef.current) {
       clearTimeout(timeoutDniRef.current)
@@ -107,25 +101,32 @@ function SocioModal({ onClose, onSuccess, gymId }) {
     }, 500)
   }
 
-  // Ejecución de guardado
   const ejecutarGuardado = async () => {
     setError('')
     setCargando(true)
     try {
-      await createSocio(formData)
+      const resSocio = await createSocio({
+        id_gimnasio: gymId || undefined,
+        nombre: formData.nombre,
+        apellido: formData.apellido,
+        dni: formData.dni,
+        telefono: formData.telefono,
+        email: formData.email
+      })
+
+      const idSocioCreado = resSocio?.socio?.id_socio
+      if (formData.contratar_plan && formData.id_membresia_gimnasio && idSocioCreado) {
+        await createMembresiaSocio({
+          id_socio: idSocioCreado,
+          id_membresia_gimnasio: Number(formData.id_membresia_gimnasio),
+          estado: 'pendiente',
+          registrar_pago: false
+        })
+      }
+
       onSuccess()
     } catch (err) {
-      if (err.bloqueadoPorOtroGimnasio || err.alertaVinculacion) {
-        setAlertaVinculacion({
-          vinculado: true,
-          gimnasioNombre: err.gimnasioNombre || 'Otro gimnasio',
-          socioNombre: err.socioNombre || formData.nombre,
-          dni: err.dni || formData.dni
-        })
-        setError(err.message || 'No se puede registrar este socio: figura activo en otro gimnasio.')
-      } else {
-        setError(err.message || 'Error al registrar el socio.')
-      }
+      setError(err.message || 'Error al registrar o vincular el socio.')
     } finally {
       setCargando(false)
     }
@@ -135,20 +136,9 @@ function SocioModal({ onClose, onSuccess, gymId }) {
     e.preventDefault()
     setError('')
 
-    // Si ya detectamos que está activo en otro gimnasio, bloquear
-    if (alertaVinculacion?.vinculado) {
-      setError(`No es posible registrar este socio: actualmente figura ACTIVO en el gimnasio "${alertaVinculacion.gimnasioNombre}". Debe tramitar su baja allí primero.`)
-      return
-    }
-
-    // Comprobar DNI antes de registrar
     const cheq = await verificarDni(formData.dni)
     if (cheq?.existeEnEsteGimnasio) {
-      setError('Ya existe un socio registrado con este DNI en tu gimnasio.')
-      return
-    }
-    if (cheq?.vinculado) {
-      setError(`No es posible registrar este socio: actualmente figura ACTIVO en el gimnasio "${cheq.gimnasioNombre}". Debe tramitar su baja allí primero.`)
+      setError('Este socio ya posee una membresía activa en este gimnasio.')
       return
     }
 
@@ -164,8 +154,8 @@ function SocioModal({ onClose, onSuccess, gymId }) {
               <FaUserPlus />
             </div>
             <div>
-              <h2>Registrar Nuevo Socio</h2>
-              <p>Ingresa los datos personales y su membresía inicial</p>
+              <h2>Registrar o Vincular Socio</h2>
+              <p>Crea una cuenta nueva o vincula a un socio existente de GymTrack con un plan</p>
             </div>
           </div>
           <button className="socio-modal-btn-cerrar" onClick={onClose} title="Cerrar">
@@ -175,26 +165,26 @@ function SocioModal({ onClose, onSuccess, gymId }) {
 
         {error && <div className="socio-modal-error">{error}</div>}
 
-        {alertaVinculacion?.vinculado && (
-          <div className="socio-modal-alerta-vinculado bloqueo">
-            <div className="socio-modal-alerta-icono">
-              <FaBan />
+        {infoSocioExistente && (
+          <div
+            className="socio-modal-alerta-vinculado"
+            style={{
+              background: 'rgba(158, 240, 26, 0.08)',
+              border: '1px solid rgba(158, 240, 26, 0.35)',
+              color: '#d9f99d'
+            }}
+          >
+            <div className="socio-modal-alerta-icono" style={{ color: '#9EF01A' }}>
+              <FaInfoCircle />
             </div>
             <div className="socio-modal-alerta-cuerpo">
-              <div className="socio-modal-alerta-titulo">
-                🚫 Registro no permitido: Socio activo en otro gimnasio
+              <div className="socio-modal-alerta-titulo" style={{ color: '#bef264' }}>
+                Socio existente en GymTrack (Sistema Multigimnasio)
               </div>
               <p className="socio-modal-alerta-texto">
-                El socio con DNI <strong>{alertaVinculacion.dni}</strong> ({alertaVinculacion.socioNombre}) figura actualmente registrado y <strong>ACTIVO</strong> en el gimnasio <strong>"{alertaVinculacion.gimnasioNombre}"</strong>.
+                El socio con DNI <strong>{infoSocioExistente.dni}</strong>{' '}
+                {infoSocioExistente.socioNombre ? `(${infoSocioExistente.socioNombre})` : ''} ya cuenta con usuario en GymTrack. Se vinculará a tu gimnasio creando su nueva membresía sin duplicar cuentas.
               </p>
-              {alertaVinculacion.telefonoGimnasio && (
-                <p className="socio-modal-alerta-contacto">
-                  Teléfono gimnasio origen: <span>{alertaVinculacion.telefonoGimnasio}</span>
-                </p>
-              )}
-              <span className="socio-modal-alerta-aviso">
-                No se puede crear el socio mientras continúe activo en otro gimnasio. El socio debe solicitar previamente la baja en dicho establecimiento para poder inscribirse aquí.
-              </span>
             </div>
           </div>
         )}
@@ -240,7 +230,6 @@ function SocioModal({ onClose, onSuccess, gymId }) {
                 value={formData.dni}
                 onChange={handleDniChange}
                 onBlur={() => verificarDni(formData.dni)}
-                className={alertaVinculacion?.vinculado ? 'input-aviso-vinculado' : ''}
               />
             </div>
 
@@ -267,70 +256,45 @@ function SocioModal({ onClose, onSuccess, gymId }) {
             </div>
 
             <div className="socio-modal-grupo">
-              <label>Contraseña de Acceso</label>
-              <input
-                type="password"
-                placeholder="Clave para el socio"
-                value={formData.contrasena}
-                onChange={(e) => setFormData({ ...formData, contrasena: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="socio-modal-fila">
-            <div className="socio-modal-grupo">
-              <label>Plan Inicial</label>
-              <select
-                value={formData.id_plan_membresia || formData.plan}
-                onChange={(e) => {
-                  const selected = planes.find(
-                    (p) =>
-                      String(p.id_plan_membresia) === e.target.value ||
-                      p.nombre === e.target.value
-                  )
-                  if (selected) {
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={formData.contratar_plan}
+                  onChange={(e) => setFormData({ ...formData, contratar_plan: e.target.checked })}
+                  style={{ width: 'auto' }}
+                />
+                <span>Contratar plan inicial (pendiente de pago)</span>
+              </label>
+              {formData.contratar_plan && (
+                <select
+                  value={formData.id_membresia_gimnasio}
+                  onChange={(e) =>
                     setFormData({
                       ...formData,
-                      id_plan_membresia: selected.id_plan_membresia,
-                      plan: selected.nombre,
-                      precio: selected.precio || 0
-                    })
-                  } else {
-                    setFormData({
-                      ...formData,
-                      plan: e.target.value
+                      id_membresia_gimnasio: e.target.value
                     })
                   }
-                }}
-              >
-                {planes.length > 0 ? (
-                  planes.map((p) => (
-                    <option key={p.id_plan_membresia} value={p.id_plan_membresia}>
-                      {p.nombre} {p.precio ? `($${p.precio})` : ''}
-                    </option>
-                  ))
-                ) : (
-                  <>
-                    <option value="Plan Básico">Plan Básico</option>
-                    <option value="Plan Premium">Plan Premium</option>
-                    <option value="Pase Libre">Pase Libre</option>
-                  </>
-                )}
-              </select>
-            </div>
-
-            <div className="socio-modal-grupo">
-              <label>Estado</label>
-              <select
-                value={formData.estado}
-                onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
-              >
-                <option value="activo">Activo</option>
-                <option value="pendiente">Pendiente</option>
-                <option value="inactivo">Inactivo</option>
-              </select>
+                >
+                  {planes.length > 0 ? (
+                    planes.map((p) => {
+                      const pid = getPlanId(p)
+                      return (
+                        <option key={pid} value={pid}>
+                          {p.nombre} {p.precio != null ? `($${Number(p.precio).toLocaleString('es-AR')})` : ''}
+                        </option>
+                      )
+                    })
+                  ) : (
+                    <option value="">Sin planes creados aún</option>
+                  )}
+                </select>
+              )}
             </div>
           </div>
+
+          <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 8px 0' }}>
+            El acceso del socio se gestiona vía Supabase Auth: el socio podrá vincular su ficha al iniciar sesión con su correo verificado.
+          </p>
 
           <div className="socio-modal-acciones">
             <button type="button" className="socio-btn-cancelar" onClick={onClose}>
@@ -339,15 +303,11 @@ function SocioModal({ onClose, onSuccess, gymId }) {
             <button
               type="submit"
               className="socio-btn-guardar"
-              disabled={cargando || !!alertaVinculacion?.vinculado}
-              title={
-                alertaVinculacion?.vinculado
-                  ? `El socio está activo en "${alertaVinculacion.gimnasioNombre}". Debe tramitar la baja primero.`
-                  : 'Guardar Socio'
-              }
+              disabled={cargando}
+              title="Guardar Socio"
             >
               <FaSave />
-              <span>{cargando ? 'Guardando...' : 'Guardar Socio'}</span>
+              <span>{cargando ? 'Guardando...' : infoSocioExistente ? 'Vincular Socio' : 'Guardar Socio'}</span>
             </button>
           </div>
         </form>

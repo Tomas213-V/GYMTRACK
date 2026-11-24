@@ -23,7 +23,7 @@
  *      contraseñas mediante bcrypt en el servidor.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   FaUser,
@@ -49,33 +49,39 @@ import {
 } from 'react-icons/fa';
 import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar-dueno/sidebar';
+import { useGymContext } from '../../context/GymContext';
 import { getPerfilSocio, updatePerfilSocio } from '../../services/socioService';
+import { updatePerfilOwner } from '../../services/authService';
 import { formatFechaArgentina, formatHoraArgentina } from '../../utils/dateUtils';
 import './perfil.css';
 
-function Perfil() {
+const estadoTexto = (est) => {
+  if (est === true || est === 'activo') return 'activo';
+  if (est === false || est === 'inactivo') return 'inactivo';
+  return String(est || 'activo').toLowerCase();
+};
 
+function Perfil() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { rol, gimnasioActivo, gimnasioActivoId, gimnasios, contextVersion, logout, refreshProfile } = useGymContext();
 
   // Obtener parámetro de query ?id=... si un admin está viendo un socio en específico
   const queryParams = new URLSearchParams(location.search);
   const socioIdParam = queryParams.get('id');
 
-  const rolActual = localStorage.getItem('rol') || 'dueño';
+  const rolActual = rol || localStorage.getItem('rol') || 'dueño';
   const esSocio = rolActual === 'socio';
 
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [guardandoPassword, setGuardandoPassword] = useState(false);
-  const [alerta, setAlerta] = useState(null); // { tipo: 'exito' | 'error', mensaje: '' }
+  const [alerta, setAlerta] = useState(null);
 
-  const [pestañaActiva, setPestañaActiva] = useState('info'); // 'info' | 'membresia' | 'seguridad' | 'historial'
+  const [pestañaActiva, setPestañaActiva] = useState('info');
 
-  // Datos completos retornados por el backend
   const [perfilData, setPerfilData] = useState(null);
 
-  // Formulario de datos personales
   const [formData, setFormData] = useState({
     nombre: '',
     apellido: '',
@@ -86,7 +92,6 @@ function Perfil() {
     estado: 'activo'
   });
 
-  // Formulario de cambio de contraseña
   const [passwordData, setPasswordData] = useState({
     contrasena_actual: '',
     nueva_contrasena: '',
@@ -97,8 +102,7 @@ function Perfil() {
   const [mostrarPassNueva, setMostrarPassNueva] = useState(false);
   const [mostrarPassConfirm, setMostrarPassConfirm] = useState(false);
 
-  // Cargar datos del perfil
-  const cargarPerfil = async () => {
+  const cargarPerfil = useCallback(async () => {
     try {
       setCargando(true);
       setAlerta(null);
@@ -114,7 +118,7 @@ function Perfil() {
           telefono: res.socio.telefono || '',
           email: res.socio.email || '',
           fecha_alta: res.socio.fecha_alta || '',
-          estado: res.socio.estado || 'activo'
+          estado: estadoTexto(res.socio.estado)
         });
       } else if (res.perfil || res.usuario) {
         const u = res.perfil || res.usuario;
@@ -126,7 +130,7 @@ function Perfil() {
           telefono: u.telefono || '',
           email: u.email || '',
           fecha_alta: u.fecha_creacion ? u.fecha_creacion.split('T')[0] : '',
-          estado: u.estado || 'activo'
+          estado: estadoTexto(u.estado)
         });
       }
     } catch (err) {
@@ -137,11 +141,11 @@ function Perfil() {
     } finally {
       setCargando(false);
     }
-  };
+  }, [socioIdParam]);
 
   useEffect(() => {
     cargarPerfil();
-  }, [socioIdParam]);
+  }, [cargarPerfil, gimnasioActivoId, contextVersion]);
 
   // Manejador de cambios de datos personales
   const handleInputChange = (e) => {
@@ -174,7 +178,6 @@ function Perfil() {
     try {
       setGuardando(true);
       const payload = {
-        id_socio: perfilData?.socio?.id_socio,
         nombre: formData.nombre,
         apellido: formData.apellido,
         telefono: formData.telefono,
@@ -184,13 +187,8 @@ function Perfil() {
 
       const res = await updatePerfilSocio(payload);
 
-      // Actualizar localStorage si es el socio autenticado
       if (esSocio && res.socio) {
-        const socioGuardado = JSON.parse(localStorage.getItem('socio') || '{}');
-        localStorage.setItem(
-          'socio',
-          JSON.stringify({ ...socioGuardado, ...res.socio })
-        );
+        await refreshProfile();
       }
 
       setAlerta({
@@ -236,13 +234,10 @@ function Perfil() {
 
     try {
       setGuardandoPassword(true);
-      const payload = {
-        id_socio: perfilData?.socio?.id_socio,
+      await updatePerfilOwner({
         contrasena_actual: passwordData.contrasena_actual,
         nueva_contrasena: passwordData.nueva_contrasena
-      };
-
-      await updatePerfilSocio(payload);
+      });
 
       setPasswordData({
         contrasena_actual: '',
@@ -265,8 +260,8 @@ function Perfil() {
   };
 
   // Cerrar sesión
-  const handleLogout = () => {
-    localStorage.clear();
+  const handleLogout = async () => {
+    await logout();
     navigate(esSocio ? '/login-socio' : '/login-dueño');
   };
 
@@ -302,7 +297,7 @@ function Perfil() {
   };
 
   const socio = perfilData?.socio || perfilData?.perfil || {};
-  const gimnasio = perfilData?.gimnasio || socio?.gimnasio || null;
+  const gimnasio = perfilData?.gimnasio || gimnasioActivo || socio?.gimnasio || null;
   const membresia = perfilData?.membresia || null;
   const estadisticas = perfilData?.estadisticas || {};
   const ultimosPagos = perfilData?.ultimosPagos || [];
@@ -702,8 +697,12 @@ function Perfil() {
                               <FaMapMarkerAlt />
                             </div>
                             <div className="perfil-gym-info-text">
-                              <span>Dirección</span>
-                              <strong>{gimnasio.direccion || 'Sin dirección registrada'}</strong>
+                              <span>Gimnasios Vinculados</span>
+                              <strong>
+                                {esSocio && gimnasios?.length > 0
+                                  ? gimnasios.map((g) => g.nombre).join(' • ')
+                                  : gimnasio.nombre}
+                              </strong>
                             </div>
                           </div>
 
@@ -761,10 +760,10 @@ function Perfil() {
                             {membresia.estado || 'Activo'}
                           </span>
                           <h4 className="perfil-membresia-nombre-plan">
-                            {membresia.plan_membresia?.nombre || 'Plan Personalizado'}
+                            {membresia.membresia_gimnasio?.nombre || 'Plan Contratado'}
                           </h4>
                           <div className="perfil-membresia-precio">
-                            ${membresia.precio || membresia.plan_membresia?.precio || 0}
+                            ${membresia.precio ?? membresia.membresia_gimnasio?.precio ?? 0}
                             <span> / período</span>
                           </div>
 
@@ -842,10 +841,10 @@ function Perfil() {
                             </thead>
                             <tbody>
                               {perfilData.historialMembresias.map((m, idx) => (
-                                <tr key={m.id_membresia || idx}>
+                                <tr key={m.id_membresia_socio || idx}>
                                   <td>
                                     <strong>
-                                      {m.plan_membresia?.nombre || 'Plan Estándar'}
+                                      {m.membresia_gimnasio?.nombre || 'Plan Estándar'}
                                     </strong>
                                   </td>
                                   <td>{formatearFecha(m.fecha_inicio)}</td>
@@ -1066,18 +1065,22 @@ function Perfil() {
                             <thead>
                               <tr>
                                 <th>Fecha</th>
-                                <th>Hora</th>
+                                <th>Sucursal</th>
+                                <th>Ingreso</th>
+                                <th>Salida</th>
                                 <th>Estado</th>
                               </tr>
                             </thead>
                             <tbody>
                               {ultimasAsistencias.map((a, idx) => (
-                                <tr key={a.id_asistencia || idx}>
+                                <tr key={a.id_asistencia_socio || a.id_asistencia || idx}>
                                   <td>{formatearFecha(a.hora_ingreso || a.fecha)}</td>
-                                  <td>{formatearHora(a.hora_ingreso || a.hora)}</td>
+                                  <td>{a.sucursal?.direccion || '-'}</td>
+                                  <td>{formatearHora(a.hora_ingreso || a.hora)} hs</td>
+                                  <td>{a.hora_salida ? `${formatearHora(a.hora_salida)} hs` : 'En curso'}</td>
                                   <td>
                                     <span className="perfil-tag perfil-tag-estado-activo">
-                                      {a.estado || 'Registrada'}
+                                      {a.estado || 'presente'}
                                     </span>
                                   </td>
                                 </tr>

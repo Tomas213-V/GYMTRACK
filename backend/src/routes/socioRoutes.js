@@ -1,32 +1,67 @@
 const express = require('express');
 const router = express.Router();
-const { 
-  getSocios, 
+const {
+  getSocios,
   getPerfilSocio,
   updatePerfilSocio,
-  getSocioById, 
-  createSocio, 
-  updateSocio, 
+  getSocioById,
+  createSocio,
+  updateSocio,
   changeEstadoSocio,
   deleteSocio,
   verificarDniSocio
 } = require('../controllers/socioController');
-const { verifyToken } = require('../middlewares/authMiddleware');
+const { verifyToken, requireRoles, requireGimnasioAccess } = require('../middlewares/authMiddleware');
 
-// Proteger todas las rutas exigiendo JWT
 router.use(verifyToken);
 
-// Rutas especiales y de Perfil (declaradas antes de /:id para evitar capturas accidentales)
-router.get('/verificar-dni', verificarDniSocio);
+// Perfil del socio (accesible por el propio socio o staff autorizado)
 router.get('/perfil', getPerfilSocio);
 router.put('/perfil', updatePerfilSocio);
 
-// Endpoints CRUD
-router.get('/', getSocios);
+// Verificación de DNI/email y gestión de socios por gimnasio (Dueño / Staff)
+router.get(
+  '/verificar-dni',
+  requireRoles('dueño', 'empleado:administrador', 'empleado:recepcionista'),
+  requireGimnasioAccess,
+  verificarDniSocio
+);
+
+router.get(
+  '/',
+  requireRoles('dueño', 'empleado:administrador', 'empleado:recepcionista', 'empleado:entrenador'),
+  requireGimnasioAccess,
+  getSocios
+);
+
 router.get('/:id', getSocioById);
-router.post('/', createSocio);
-router.put('/:id', updateSocio);
-router.patch('/:id/estado', changeEstadoSocio);
-router.delete('/:id', deleteSocio);
+
+router.post(
+  '/',
+  requireRoles('dueño', 'empleado:administrador', 'empleado:recepcionista'),
+  requireGimnasioAccess,
+  createSocio
+);
+
+router.put(
+  '/:id',
+  requireRoles('dueño', 'empleado:administrador', 'empleado:recepcionista'),
+  requireGimnasioAccess,
+  updateSocio
+);
+
+router.patch(
+  '/:id/estado',
+  requireRoles('dueño', 'empleado:administrador', 'empleado:recepcionista'),
+  requireGimnasioAccess,
+  changeEstadoSocio
+);
+
+router.delete(
+  '/:id',
+  requireRoles('dueño', 'empleado:administrador'),
+  requireGimnasioAccess,
+  deleteSocio
+);
 
 module.exports = router;

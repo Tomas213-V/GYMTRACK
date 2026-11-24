@@ -1,37 +1,88 @@
 // ==============================================================================
-// CONFIGURACIÓN DEL CLIENTE DE SUPABASE (BASE DE DATOS)
+// CONFIGURACIÓN DE CLIENTES SUPABASE (BACKEND - GYMTRACK)
+// ==============================================================================
+// Arquitectura de seguridad:
+// 1. supabaseAnon: cliente público con ANON KEY para operaciones de Auth
+//    (signInWithPassword, signUp, getUser, refreshSession).
+// 2. createSupabaseClientForToken(accessToken): cliente por petición autenticado
+//    con el JWT de Supabase Auth del usuario. Todas las consultas de negocio
+//    ejecutan con este cliente para respetar estrictamente las políticas RLS.
+// 3. supabaseAdmin: cliente privilegiado con SUPABASE_SERVICE_ROLE_KEY
+//    EXCLUSIVAMENTE en el backend para tareas administrativas de Auth
+//    (invitar/crear usuarios de empleados/socios) y webhooks verificados.
+//    NUNCA exponer SUPABASE_SERVICE_ROLE_KEY al frontend.
 // ==============================================================================
 
-// Importamos la función 'createClient' del SDK oficial de Supabase para Node.js
 const { createClient } = require('@supabase/supabase-js');
-
-// Importamos 'path' para construir rutas de archivos de manera segura en cualquier sistema operativo
 const path = require('path');
 
-// Cargamos las variables de entorno desde el archivo .env ubicado en la raíz de 'backend'
-// Usamos path.resolve para garantizar que siempre encuentre el archivo .env,
-// sin importar desde qué carpeta se ejecute la terminal o el servidor.
-require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
-
-// Obtenemos la URL de Supabase desde las variables de entorno.
-// Admite tanto 'SUPABASE_URL' (estándar para backend) como 'VITE_SUPABASE_URL' (convención de frontend)
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-
-// Obtenemos la clave de la API (API Key) de Supabase desde las variables de entorno.
-// Admite la clave estándar, anon key o publishable key.
-const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-// Validación: verificamos que ambas variables existan antes de inicializar el cliente
-if (!supabaseUrl || !supabaseKey) {
-  console.error('❌ Error: Faltan las variables de entorno de Supabase (SUPABASE_URL y SUPABASE_KEY en .env).');
+// Compatibilidad con Node.js 20.x donde globalThis.WebSocket puede no estar disponible
+if (typeof globalThis.WebSocket === 'undefined') {
+  try {
+    globalThis.WebSocket = require('ws');
+  } catch {
+    // Si ws no está disponible, usar runtime nativo (Node 22+)
+  }
 }
 
-// Creamos la instancia del cliente de Supabase con las credenciales cargadas.
-// Esta instancia nos permite realizar operaciones como consultas a tablas (.from),
-// autenticación (.auth), almacenamiento (.storage), etc.
-const supabase = createClient(supabaseUrl, supabaseKey);
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
-// Exportamos la instancia para que pueda ser reutilizada en controladores, servicios y rutas
-// siguiendo el patrón singleton (una sola conexión compartida en toda la app)
-module.exports = supabase;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey =
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_KEY ||
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  '';
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error(
+    '❌ Error: Faltan variables de entorno de Supabase (SUPABASE_URL y SUPABASE_ANON_KEY en backend/.env).'
+  );
+}
+
+const commonAuthOptions = {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false
+  }
+};
+
+const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey, commonAuthOptions);
+
+const supabaseAdmin = supabaseServiceRoleKey
+  ? createClient(supabaseUrl, supabaseServiceRoleKey, commonAuthOptions)
+  : null;
+
+/**
+ * Crea un cliente Supabase acotado a la sesión del usuario autenticado (JWT de Supabase Auth).
+ * Permite que PostgreSQL aplique RLS en todas las consultas y RPCs SECURITY INVOKER.
+ */
+function createSupabaseClientForToken(accessToken) {
+  if (!accessToken) {
+    throw new Error('Se requiere un access token de Supabase Auth para crear el cliente de sesión.');
+  }
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    ...commonAuthOptions,
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    }
+  });
+}
+
+function hasServiceRole() {
+  return Boolean(supabaseAdmin);
+}
+
+// Exportamos supabaseAnon como exportación base por compatibilidad y las funciones/clientes nombrados
+supabaseAnon.supabaseAnon = supabaseAnon;
+supabaseAnon.supabaseAdmin = supabaseAdmin;
+supabaseAnon.createSupabaseClientForToken = createSupabaseClientForToken;
+supabaseAnon.hasServiceRole = hasServiceRole;
+supabaseAnon.supabaseUrl = supabaseUrl;
+
+module.exports = supabaseAnon;

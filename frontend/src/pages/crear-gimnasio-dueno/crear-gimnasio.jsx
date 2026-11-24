@@ -17,22 +17,16 @@
  *    y transiciona al panel de control con los datos actualizados.
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { crearGimnasio } from '../../services/gimnasioService';
-import { FaDumbbell, FaMapMarkerAlt, FaPhone, FaEnvelope, FaSignOutAlt } from 'react-icons/fa';
+import { crearGimnasio, crearSucursalEnGimnasio } from '../../services/gimnasioService';
+import { useGymContext } from '../../context/GymContext';
+import { FaDumbbell, FaMapMarkerAlt, FaPhone, FaEnvelope, FaSignOutAlt, FaArrowLeft } from 'react-icons/fa';
 import './crear-gimnasio.css';
 
 function CrearGimnasio() {
   const navigate = useNavigate();
-  const [usuario] = useState(() => {
-    try {
-      const userGuardado = localStorage.getItem('usuario');
-      return userGuardado ? JSON.parse(userGuardado) : null;
-    } catch {
-      return null;
-    }
-  });
+  const { usuario, gimnasios, refreshProfile, logout } = useGymContext();
 
   const [formData, setFormData] = useState({
     nombre: '',
@@ -41,16 +35,11 @@ function CrearGimnasio() {
     email: ''
   });
 
-
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (usuario?.gimnasio?.id_gimnasio) {
-      navigate('/dashboard-dueño');
-    }
-  }, [usuario, navigate]);
+  const tieneAlgunGimnasio = Array.isArray(gimnasios) && gimnasios.length > 0;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -75,25 +64,29 @@ function CrearGimnasio() {
     try {
       const res = await crearGimnasio({
         nombre: formData.nombre.trim(),
-        direccion: formData.direccion.trim() || null,
         telefono: formData.telefono.trim() || null,
         email: formData.email.trim() || null
       });
 
+      const nuevoGymId = res?.gimnasio?.id_gimnasio || null;
+
+      // La dirección física pertenece a public.sucursal, no a public.gimnasio
+      if (nuevoGymId && formData.direccion.trim()) {
+        await crearSucursalEnGimnasio(nuevoGymId, {
+          direccion: formData.direccion.trim(),
+          telefono: formData.telefono.trim() || null,
+          descripcion: 'Sucursal principal'
+        });
+      }
+
       setSuccess('¡Gimnasio registrado con éxito! Redirigiendo al panel...');
 
-      // Actualizar el objeto usuario en localStorage con los datos del gimnasio creado
-      if (usuario) {
-        const usuarioActualizado = {
-          ...usuario,
-          gimnasio: res.gimnasio
-        };
-        localStorage.setItem('usuario', JSON.stringify(usuarioActualizado));
-      }
+      // Refrescar lista de gimnasios y activar el recién creado
+      await refreshProfile(nuevoGymId);
 
       setTimeout(() => {
         navigate('/dashboard-dueño');
-      }, 1000);
+      }, 800);
     } catch (err) {
       setError(err.message || 'Ocurrió un error al registrar el gimnasio.');
     } finally {
@@ -102,8 +95,7 @@ function CrearGimnasio() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('usuario');
+    logout();
     navigate('/login-dueño');
   };
 
@@ -114,14 +106,26 @@ function CrearGimnasio() {
         <div className="Caja-crear-gimnasio-marca">
           <b>GYM<span>TRACK</span></b>
         </div>
-        <button
-          className="Caja-crear-gimnasio-btn-logout"
-          onClick={handleLogout}
-          title="Cerrar sesión"
-        >
-          <FaSignOutAlt />
-          <span>Cerrar sesión</span>
-        </button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {tieneAlgunGimnasio && (
+            <button
+              type="button"
+              className="Caja-crear-gimnasio-btn-logout"
+              onClick={() => navigate('/dashboard-dueño')}
+            >
+              <FaArrowLeft />
+              <span>Volver al panel</span>
+            </button>
+          )}
+          <button
+            className="Caja-crear-gimnasio-btn-logout"
+            onClick={handleLogout}
+            title="Cerrar sesión"
+          >
+            <FaSignOutAlt />
+            <span>Cerrar sesión</span>
+          </button>
+        </div>
       </header>
 
       {/* Contenedor central del formulario */}

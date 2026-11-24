@@ -35,6 +35,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { register } from '../../services/authService.js';
+import { useGymContext } from '../../context/GymContext.jsx';
 import logoImg from '../../assets/logo_verde.jpg';
 import PasswordInput from '../../components/PasswordInput/PasswordInput';
 import './register.css';
@@ -42,6 +43,7 @@ import './register.css';
 function Register() {
   // Hook de navegación para redirigir al usuario tras completar el registro
   const navigate = useNavigate();
+  const { setSession } = useGymContext();
 
   // ---------------------------------------------------------------------------------------
   // PASO 1: DEFINICIÓN DE ESTADOS LOCALES (STATE HOOKS)
@@ -141,18 +143,37 @@ function Register() {
     setLoading(true);
 
     try {
-      // Llamada al servicio HTTP para registrar al usuario en Supabase/PostgreSQL
-      await register({
+      // Llamada al servicio HTTP para registrar al usuario en Supabase Auth + public.dueno
+      const res = await register({
         nombre: formData.nombre.trim(),
         apellido: formData.apellido.trim(),
         email: formData.email.trim(),
         contrasena: formData.contrasena,
       });
 
-      // Notificación de éxito al usuario
-      setSuccess('¡Cuenta creada correctamente! Redirigiendo para iniciar sesión...');
+      if (res?.requiere_confirmacion_email) {
+        setSuccess(
+          res.mensaje ||
+            'Cuenta creada en Supabase Auth. Revisá tu casilla y confirmá tu correo electrónico antes de iniciar sesión.'
+        );
+        return;
+      }
 
-      // Redirigir suavemente tras 1.5 segundos a la pantalla de login de dueño
+      if (res?.token && res?.usuario) {
+        setSession({
+          token: res.token,
+          refresh_token: res.refresh_token,
+          usuario: res.usuario,
+          gimnasios: res.gimnasio ? [res.gimnasio] : []
+        });
+        setSuccess(res.mensaje || '¡Cuenta creada correctamente! Redirigiendo...');
+        setTimeout(() => {
+          navigate(res.gimnasio?.id_gimnasio ? '/dashboard-dueño' : '/crear-gimnasio-dueño');
+        }, 900);
+        return;
+      }
+
+      setSuccess(res?.mensaje || '¡Cuenta creada correctamente! Redirigiendo para iniciar sesión...');
       setTimeout(() => {
         navigate('/login-dueño');
       }, 1500);

@@ -16,7 +16,7 @@
  *    y navegación lateral consistente.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   FaUser,
@@ -40,6 +40,7 @@ import {
 import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar-dueno/sidebar';
 import Perfil from '../perfil-socio/perfil';
+import { useGymContext } from '../../context/GymContext';
 import { getPerfilOwner, updatePerfilOwner } from '../../services/authService';
 import { actualizarMiGimnasio } from '../../services/gimnasioService';
 import './perfil-dueno.css';
@@ -47,28 +48,20 @@ import './perfil-dueno.css';
 function PerfilDueno() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { rol, gimnasioActivo, gimnasioActivoId, contextVersion, refreshProfile } = useGymContext();
 
-  // Si viene con ?id=..., estamos inspeccionando un socio específico -> renderizar ficha de socio
   const queryParams = new URLSearchParams(location.search);
   const socioIdParam = queryParams.get('id');
-  if (socioIdParam) {
-    return <Perfil />;
-  }
 
-  // Estados de carga y alertas
   const [cargando, setCargando] = useState(true);
   const [guardandoOwner, setGuardandoOwner] = useState(false);
   const [guardandoGym, setGuardandoGym] = useState(false);
   const [guardandoPassword, setGuardandoPassword] = useState(false);
-  const [alerta, setAlerta] = useState(null); // { tipo: 'exito' | 'error', mensaje: string }
+  const [alerta, setAlerta] = useState(null);
 
-  // Pestañas: 'dueno' | 'gimnasio' | 'seguridad'
   const [pestanaActiva, setPestanaActiva] = useState('dueno');
-
-  // Datos completos de usuario y gimnasio
   const [perfil, setPerfil] = useState(null);
 
-  // Formulario Dueño
   const [ownerForm, setOwnerForm] = useState({
     nombre: '',
     apellido: '',
@@ -78,18 +71,15 @@ function PerfilDueno() {
     fecha_creacion: ''
   });
 
-  // Formulario Gimnasio
   const [gymForm, setGymForm] = useState({
     id_gimnasio: null,
     nombre: '',
-    direccion: '',
     telefono: '',
     email: '',
     fecha_registro: '',
     estado: 'activo'
   });
 
-  // Formulario Contraseña
   const [passForm, setPassForm] = useState({
     contrasena_actual: '',
     nueva_contrasena: '',
@@ -100,8 +90,8 @@ function PerfilDueno() {
   const [verPassNueva, setVerPassNueva] = useState(false);
   const [verPassConfirm, setVerPassConfirm] = useState(false);
 
-  // Cargar perfil completo del Dueño y Gimnasio
-  const cargarDatos = async () => {
+  const cargarDatos = useCallback(async () => {
+    if (socioIdParam) return;
     try {
       setCargando(true);
       setAlerta(null);
@@ -109,24 +99,29 @@ function PerfilDueno() {
       const u = res?.usuario || {};
       setPerfil(u);
 
+      const estadoUser = u.estado === false ? 'inactivo' : 'activo';
       setOwnerForm({
         nombre: u.nombre || '',
         apellido: u.apellido || '',
         email: u.email || '',
-        rol: u.rol || 'dueño',
-        estado: u.estado || 'activo',
+        rol: u.rol || rol || 'dueño',
+        estado: estadoUser,
         fecha_creacion: u.fecha_creacion ? u.fecha_creacion.split('T')[0] : ''
       });
 
-      if (u.gimnasio) {
+      const gymTarget =
+        (res?.gimnasios || []).find((g) => String(g.id_gimnasio) === String(gimnasioActivoId)) ||
+        u.gimnasio ||
+        gimnasioActivo;
+
+      if (gymTarget) {
         setGymForm({
-          id_gimnasio: u.gimnasio.id_gimnasio || null,
-          nombre: u.gimnasio.nombre || '',
-          direccion: u.gimnasio.direccion || '',
-          telefono: u.gimnasio.telefono || '',
-          email: u.gimnasio.email || '',
-          fecha_registro: u.gimnasio.fecha_registro ? u.gimnasio.fecha_registro.split('T')[0] : '',
-          estado: u.gimnasio.estado || 'activo'
+          id_gimnasio: gymTarget.id_gimnasio || null,
+          nombre: gymTarget.nombre || '',
+          telefono: gymTarget.telefono || '',
+          email: gymTarget.email || '',
+          fecha_registro: gymTarget.fecha_registro ? gymTarget.fecha_registro.split('T')[0] : '',
+          estado: gymTarget.estado === false ? 'inactivo' : 'activo'
         });
       }
     } catch (err) {
@@ -137,11 +132,15 @@ function PerfilDueno() {
     } finally {
       setCargando(false);
     }
-  };
+  }, [socioIdParam, rol, gimnasioActivoId, gimnasioActivo]);
 
   useEffect(() => {
     cargarDatos();
-  }, []);
+  }, [cargarDatos, contextVersion]);
+
+  if (socioIdParam) {
+    return <Perfil />;
+  }
 
   // Formatear fechas
   const formatearFecha = (fechaStr) => {
@@ -177,20 +176,13 @@ function PerfilDueno() {
 
     try {
       setGuardandoOwner(true);
-      const res = await updatePerfilOwner({
+      await updatePerfilOwner({
         nombre: ownerForm.nombre,
         apellido: ownerForm.apellido,
         email: ownerForm.email
       });
 
-      // Actualizar localStorage y token si cambió
-      if (res.token) {
-        localStorage.setItem('token', res.token);
-      }
-      if (res.usuario) {
-        const guardado = JSON.parse(localStorage.getItem('usuario') || '{}');
-        localStorage.setItem('usuario', JSON.stringify({ ...guardado, ...res.usuario }));
-      }
+      await refreshProfile();
 
       setAlerta({
         tipo: 'exito',
@@ -219,18 +211,16 @@ function PerfilDueno() {
 
     try {
       setGuardandoGym(true);
-      const res = await actualizarMiGimnasio({
-        nombre: gymForm.nombre,
-        direccion: gymForm.direccion,
-        telefono: gymForm.telefono,
-        email: gymForm.email
-      });
+      await actualizarMiGimnasio(
+        {
+          nombre: gymForm.nombre,
+          telefono: gymForm.telefono,
+          email: gymForm.email
+        },
+        gymForm.id_gimnasio
+      );
 
-      if (res.gimnasio) {
-        const guardado = JSON.parse(localStorage.getItem('usuario') || '{}');
-        guardado.gimnasio = res.gimnasio;
-        localStorage.setItem('usuario', JSON.stringify(guardado));
-      }
+      await refreshProfile();
 
       setAlerta({
         tipo: 'exito',
@@ -647,17 +637,15 @@ function PerfilDueno() {
                         </div>
 
                         <div className="perfil-dueno-form-group">
-                          <label htmlFor="gym-direccion">Dirección / Ubicación</label>
-                          <div className="perfil-dueno-input-wrapper">
-                            <FaMapMarkerAlt className="perfil-dueno-input-icon" />
-                            <input
-                              id="gym-direccion"
-                              type="text"
-                              className="perfil-dueno-input"
-                              value={gymForm.direccion}
-                              onChange={(e) => setGymForm({ ...gymForm, direccion: e.target.value })}
-                              placeholder="Ej: Av. San Martín 1420, Buenos Aires"
-                            />
+                          <label>Sucursales / Direcciones</label>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 14px', borderRadius: '10px', background: 'rgba(158, 240, 26, 0.06)', border: '1px solid rgba(158, 240, 26, 0.2)' }}>
+                            <span style={{ fontSize: '13px', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <FaMapMarkerAlt style={{ color: '#9EF01A' }} />
+                              Las direcciones físicas se administran por sucursal.
+                            </span>
+                            <Link to="/sucursales-dueño" style={{ color: '#9EF01A', fontWeight: 600, fontSize: '13px', textDecoration: 'none' }}>
+                              Gestionar Sucursales →
+                            </Link>
                           </div>
                         </div>
 

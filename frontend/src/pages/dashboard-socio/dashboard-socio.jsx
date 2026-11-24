@@ -4,31 +4,31 @@
  * RUTA: frontend/src/pages/dashboard-socio/dashboard-socio.jsx
  * PROYECTO: GYMTRACK - Frontend
  * DESCRIPCIÓN: Portal y Dashboard principal del Socio / Alumno del gimnasio.
+ *              Adaptado al modelo definitivo de Supabase (sin tabla `progreso`).
  * =========================================================================================
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import NavGlobal from '../../components/nav-global/nav-global';
 import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
+import { useGymContext } from '../../context/GymContext';
 import {
   fetchDashboardSocio,
   realizarCheckinSocio,
-  registrarProgresoSocio
+  realizarCheckoutSocio
 } from '../../services/dashboardSocioService';
-import { registrarAsistencia } from '../../services/asistenciaService';
+import { getSucursales } from '../../services/sucursalService';
+import { fetchMisAsistencias } from '../../services/asistenciaService';
 import { formatFechaArgentina, formatHoraArgentina } from '../../utils/dateUtils';
 
 import {
   FaCrown,
   FaDumbbell,
-  FaHeartbeat,
   FaCalendarAlt,
   FaCheck,
   FaTimes,
   FaClock,
-  FaArrowDown,
-  FaArrowUp,
   FaBolt,
   FaFire,
   FaReceipt,
@@ -38,17 +38,6 @@ import {
 } from 'react-icons/fa';
 
 import './dashboard-socio.css';
-
-function leerSocioLocal() {
-  try {
-    const raw = localStorage.getItem('socio') || localStorage.getItem('usuario');
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed[0] || {}) : (parsed || {});
-  } catch {
-    return {};
-  }
-}
 
 function parsearDescripcionRutina(desc) {
   if (!desc) return '';
@@ -65,40 +54,35 @@ function parsearDescripcionRutina(desc) {
 
 export default function DashboardSocio() {
   const navigate = useNavigate();
+  const { usuario, gimnasioActivo, gimnasioActivoId, contextVersion } = useGymContext();
 
   const [loading, setLoading] = useState(true);
   const [errorCarga, setErrorCarga] = useState('');
   const [notificacion, setNotificacion] = useState('');
   const [ejerciciosCompletados, setEjerciciosCompletados] = useState({});
+  const [sucursalesActivas, setSucursalesActivas] = useState([]);
+  const [sucursalSeleccionada, setSucursalSeleccionada] = useState('');
+  const [asistenciaAbierta, setAsistenciaAbierta] = useState(null);
 
   // Modales
   const [modalCheckinAbierto, setModalCheckinAbierto] = useState(false);
-  const [modalProgresoAbierto, setModalProgresoAbierto] = useState(false);
   const [modalReciboAbierto, setModalReciboAbierto] = useState(false);
-  const [guardandoProgreso, setGuardandoProgreso] = useState(false);
   const [guardandoCheckin, setGuardandoCheckin] = useState(false);
-
-  // Formulario de progreso
-  const [nuevoPeso, setNuevoPeso] = useState('');
-  const [notasProgreso, setNotasProgreso] = useState('');
-
-  const socioInicial = useMemo(() => leerSocioLocal(), []);
 
   const [dashboardData, setDashboardData] = useState({
     socio: {
-      id_socio: socioInicial.id_socio || socioInicial.id || null,
-      nombre: socioInicial.nombre || '',
-      apellido: socioInicial.apellido || '',
-      dni: socioInicial.dni || '',
-      email: socioInicial.email || '',
-      telefono: socioInicial.telefono || '',
-      estado: socioInicial.estado || 'activo'
+      id_socio: usuario?.id_socio || null,
+      nombre: usuario?.nombre || '',
+      apellido: usuario?.apellido || '',
+      dni: usuario?.dni || '',
+      email: usuario?.email || '',
+      telefono: usuario?.telefono || '',
+      estado: usuario?.estado ?? true
     },
-    gimnasio: {
-      nombre: socioInicial.gimnasio?.nombre || ''
-    },
+    gimnasio_activo: gimnasioActivo || null,
+    gimnasios_asociados: [],
     membresia: {
-      id_membresia: null,
+      id_membresia_socio: null,
       plan: 'Sin Membresía Activa',
       estado: 'sin_membresia',
       fecha_inicio: null,
@@ -109,50 +93,57 @@ export default function DashboardSocio() {
       expirada: true
     },
     ultimo_pago: null,
-    progreso: {
-      peso_actual: null,
-      variacion_mes: null,
-      fecha_ultimo_registro: null,
-      observaciones: null,
-      historial: []
-    },
     entrenamientos: {
       total_asistencias: 0,
       asistencias_mes: 0,
       recientes: []
     },
-    rutina_activa: null
+    rutinas_personales: [],
+    rutinas_asignadas: []
   });
 
-  // --------------------------------------------------------------------------
-  // Cargar Información Consolidada desde Backend (sin datos falsos)
-  // --------------------------------------------------------------------------
-  const cargarDatos = async () => {
+  const cargarDatos = useCallback(async (signal) => {
     try {
       setLoading(true);
       setErrorCarga('');
-      const socioLocal = leerSocioLocal();
-      const data = await fetchDashboardSocio();
+
+      const [data, sucs, abiertasRes] = await Promise.all([
+        fetchDashboardSocio({ id_gimnasio: gimnasioActivoId || null, signal }),
+        gimnasioActivoId
+          ? getSucursales({ id_gimnasio: gimnasioActivoId, estado: 'true', signal }).catch(() => [])
+          : Promise.resolve([]),
+        fetchMisAsistencias({ id_gimnasio: gimnasioActivoId || null, estado: 'presente', signal }).catch(() => ({
+          asistencias: []
+        }))
+      ]);
+
+      const sucsList = Array.isArray(sucs) ? sucs : [];
+      setSucursalesActivas(sucsList);
+      setSucursalSeleccionada((prev) =>
+        sucsList.some((s) => String(s.id_sucursal) === String(prev))
+          ? prev
+          : (sucsList[0]?.id_sucursal ? String(sucsList[0].id_sucursal) : '')
+      );
+
+      const abiertas = Array.isArray(abiertasRes?.asistencias) ? abiertasRes.asistencias : [];
+      const openItem = abiertas.find((a) => a.estado === 'presente' && !a.hora_salida) || null;
+      setAsistenciaAbierta(openItem);
 
       if (data) {
-        const pesoActual = data.progreso?.peso_actual ?? null;
-        if (pesoActual != null) {
-          setNuevoPeso(String(pesoActual));
-        }
-
         setDashboardData({
           socio: data.socio || {
-            id_socio: socioLocal.id_socio || socioLocal.id || null,
-            nombre: socioLocal.nombre || '',
-            apellido: socioLocal.apellido || '',
-            dni: socioLocal.dni || '',
-            email: socioLocal.email || '',
-            telefono: socioLocal.telefono || '',
-            estado: socioLocal.estado || 'activo'
+            id_socio: usuario?.id_socio || null,
+            nombre: usuario?.nombre || '',
+            apellido: usuario?.apellido || '',
+            dni: usuario?.dni || '',
+            email: usuario?.email || '',
+            telefono: usuario?.telefono || '',
+            estado: usuario?.estado ?? true
           },
-          gimnasio: data.gimnasio || { nombre: '' },
+          gimnasio_activo: data.gimnasio_activo || gimnasioActivo || null,
+          gimnasios_asociados: Array.isArray(data.gimnasios_asociados) ? data.gimnasios_asociados : [],
           membresia: data.membresia || {
-            id_membresia: null,
+            id_membresia_socio: null,
             plan: 'Sin Membresía Activa',
             estado: 'sin_membresia',
             fecha_inicio: null,
@@ -163,60 +154,44 @@ export default function DashboardSocio() {
             expirada: true
           },
           ultimo_pago: data.ultimo_pago || null,
-          progreso: {
-            peso_actual: pesoActual,
-            variacion_mes: data.progreso?.variacion_mes ?? null,
-            fecha_ultimo_registro: data.progreso?.fecha_ultimo_registro || null,
-            observaciones: data.progreso?.observaciones || null,
-            historial: Array.isArray(data.progreso?.historial) ? data.progreso.historial : []
-          },
           entrenamientos: {
             total_asistencias: data.entrenamientos?.total_asistencias ?? 0,
             asistencias_mes: data.entrenamientos?.asistencias_mes ?? 0,
             recientes: Array.isArray(data.entrenamientos?.recientes) ? data.entrenamientos.recientes : []
           },
-          rutina_activa: data.rutina_activa || null
+          rutinas_personales: Array.isArray(data.rutinas_personales) ? data.rutinas_personales : [],
+          rutinas_asignadas: Array.isArray(data.rutinas_asignadas) ? data.rutinas_asignadas : []
         });
       }
     } catch (err) {
+      if (err.name === 'AbortError') return;
       console.error('Error cargando dashboard del socio:', err);
       setErrorCarga(err.message || 'No se pudieron obtener tus datos actualizados.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [gimnasioActivoId, gimnasioActivo, usuario]);
 
   useEffect(() => {
-    cargarDatos();
-  }, []);
+    const controller = new AbortController();
+    cargarDatos(controller.signal);
+    return () => controller.abort();
+  }, [cargarDatos, contextVersion]);
 
-  // --------------------------------------------------------------------------
-  // Manejador para Completar Ejercicios de Hoy
-  // --------------------------------------------------------------------------
   const toggleEjercicio = (id) => {
-    setEjerciciosCompletados((prev) => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
+    setEjerciciosCompletados((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // --------------------------------------------------------------------------
-  // Manejador de Check-in Rápido
-  // --------------------------------------------------------------------------
   const handleCheckin = async () => {
+    if (!sucursalSeleccionada) {
+      setErrorCarga('Debés seleccionar una sucursal activa para registrar tu ingreso.');
+      return;
+    }
     try {
       setGuardandoCheckin(true);
-      let res;
-      try {
-        res = await realizarCheckinSocio();
-      } catch {
-        const idSocio = dashboardData.socio?.id_socio;
-        const dni = dashboardData.socio?.dni;
-        if (!idSocio && !dni) throw new Error('No se pudo identificar tu perfil de socio.');
-        res = await registrarAsistencia({ id_socio: idSocio, dni });
-      }
-
-      setNotificacion(res?.mensaje || '¡Check-in realizado! Asistencia registrada para hoy.');
+      setErrorCarga('');
+      const res = await realizarCheckinSocio({ id_sucursal: Number(sucursalSeleccionada) });
+      setNotificacion(res?.mensaje || '¡Check-in realizado! Asistencia registrada.');
       setModalCheckinAbierto(false);
       await cargarDatos();
       setTimeout(() => setNotificacion(''), 6000);
@@ -228,34 +203,24 @@ export default function DashboardSocio() {
     }
   };
 
-  // --------------------------------------------------------------------------
-  // Manejador de Registro de Nuevo Peso
-  // --------------------------------------------------------------------------
-  const handleGuardarProgreso = async (e) => {
-    e.preventDefault();
-    if (!nuevoPeso || isNaN(nuevoPeso)) return;
-
+  const handleCheckout = async () => {
+    if (!asistenciaAbierta) return;
     try {
-      setGuardandoProgreso(true);
-      const pesoNum = Number(nuevoPeso);
-      await registrarProgresoSocio({
-        peso: pesoNum,
-        observaciones: notasProgreso
+      setGuardandoCheckin(true);
+      setErrorCarga('');
+      const res = await realizarCheckoutSocio({
+        id_asistencia_socio: asistenciaAbierta.id_asistencia_socio
       });
-
-      setNotificacion('¡Nuevo registro de peso guardado correctamente!');
-      setModalProgresoAbierto(false);
-      setNotasProgreso('');
+      setNotificacion(res?.mensaje || '¡Salida registrada correctamente!');
       await cargarDatos();
-      setTimeout(() => setNotificacion(''), 5000);
+      setTimeout(() => setNotificacion(''), 6000);
     } catch (err) {
-      setErrorCarga(err.message || 'No se pudo guardar el registro de peso.');
+      setErrorCarga(err.message || 'No se pudo registrar la salida.');
     } finally {
-      setGuardandoProgreso(false);
+      setGuardandoCheckin(false);
     }
   };
 
-  // Saludo dinámico según horario
   const saludoHora = useMemo(() => {
     const hora = new Date().getHours();
     if (hora < 12) return '¡Buen día';
@@ -263,15 +228,55 @@ export default function DashboardSocio() {
     return '¡Buenas noches';
   }, []);
 
-  const { socio, gimnasio, membresia, ultimoPago, progreso, entrenamientos, rutinaActiva } = {
-    socio: dashboardData.socio,
-    gimnasio: dashboardData.gimnasio,
-    membresia: dashboardData.membresia,
-    ultimoPago: dashboardData.ultimo_pago,
-    progreso: dashboardData.progreso,
-    entrenamientos: dashboardData.entrenamientos,
-    rutinaActiva: dashboardData.rutina_activa
-  };
+  const socio = dashboardData.socio;
+  const gimnasio = dashboardData.gimnasio_activo;
+  const membresia = dashboardData.membresia;
+  const ultimoPago = dashboardData.ultimo_pago;
+  const entrenamientos = dashboardData.entrenamientos;
+  const rutinasPersonales = dashboardData.rutinas_personales;
+  const rutinasAsignadas = dashboardData.rutinas_asignadas;
+
+  // Normalizar la rutina principal destacada (prioridad: asignada activa del gimnasio, sino personal activa)
+  const rutinaDestacada = useMemo(() => {
+    const asig = rutinasAsignadas[0];
+    if (asig && asig.rutina_gimnasio) {
+      const rg = asig.rutina_gimnasio;
+      return {
+        origen: 'Asignada por gimnasio',
+        nombre: rg.nombre || 'Rutina del Gimnasio',
+        descripcion: asig.observaciones || rg.descripcion || '',
+        ejercicios: (rg.rutina_ejercicio_gimnasio || []).map((it, idx) => ({
+          key: `g-${it.id_rutina_ejercicio_gimnasio || idx}`,
+          nombre: it.ejercicio_gimnasio?.nombre || 'Ejercicio del gimnasio',
+          grupo_muscular: it.ejercicio_gimnasio?.grupo_muscular || 'General',
+          series: it.series || 4,
+          repeticiones: it.repeticiones || 10,
+          peso: it.peso || 0,
+          descanso: it.descanso ?? 60
+        }))
+      };
+    }
+
+    const pers = rutinasPersonales[0];
+    if (pers) {
+      return {
+        origen: 'Mi rutina personal',
+        nombre: pers.nombre || 'Mi Rutina',
+        descripcion: pers.descripcion || '',
+        ejercicios: (pers.rutina_ejercicio_socio || []).map((it, idx) => ({
+          key: `p-${it.id_rutina_ejercicio_socio || idx}`,
+          nombre: it.ejercicio_socio?.nombre || 'Ejercicio personal',
+          grupo_muscular: it.ejercicio_socio?.grupo_muscular || 'General',
+          series: it.series || 4,
+          repeticiones: it.repeticiones || 10,
+          peso: it.peso || 0,
+          descanso: it.descanso ?? 60
+        }))
+      };
+    }
+
+    return null;
+  }, [rutinasAsignadas, rutinasPersonales]);
 
   const asistenciasMes = entrenamientos.asistencias_mes ?? 0;
   const objetivoMensual = 20;
@@ -279,11 +284,18 @@ export default function DashboardSocio() {
 
   const tieneMembresiaActiva = Boolean(
     membresia &&
-    membresia.id_membresia &&
+    (membresia.id_membresia_socio || membresia.id_membresia) &&
     !['sin_membresia', 'inactivo', 'inactiva', 'pausa', 'pausado', 'pausada', 'cancelado', 'cancelada'].includes(
-      (membresia.estado || '').toLowerCase().trim()
+      String(membresia.estado || '').toLowerCase().trim()
     )
   );
+
+  const estadoSocioTexto =
+    typeof socio.estado === 'boolean'
+      ? (socio.estado ? 'Activo' : 'Inactivo')
+      : (socio.estado ? String(socio.estado).charAt(0).toUpperCase() + String(socio.estado).slice(1) : 'Activo');
+
+  const totalRutinasActivas = rutinasAsignadas.length + rutinasPersonales.length;
 
   return (
     <div className="socio-pc-page">
@@ -293,7 +305,6 @@ export default function DashboardSocio() {
         <SidebarSocio />
 
         <main className="socio-pc-main">
-          {/* Banner de Feedback si hay notificación */}
           {notificacion && (
             <div className="socio-pc-alert-banner">
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -309,7 +320,6 @@ export default function DashboardSocio() {
             </div>
           )}
 
-          {/* Banner de error si falló la carga */}
           {errorCarga && (
             <div
               className="socio-pc-alert-banner"
@@ -329,22 +339,18 @@ export default function DashboardSocio() {
             </div>
           )}
 
-          {/* ================================================================
-              1. Hero Header
-              ================================================================ */}
+          {/* 1. Hero Header */}
           <section className="socio-pc-hero">
             <div className="socio-pc-hero-left">
               <div className="socio-pc-avatar">
                 {socio.nombre ? socio.nombre[0].toUpperCase() : 'S'}
               </div>
               <div className="socio-pc-hero-text">
-                <h1>
-                  {saludoHora}, {socio.nombre || 'Socio'}! 👋
-                </h1>
+                <h1>{saludoHora}, {socio.nombre || 'Socio'}! 👋</h1>
                 <p>
                   Bienvenido a tu panel de socio{gimnasio?.nombre ? <> en <strong>{gimnasio.nombre}</strong></> : ''}
                   <span className="socio-pc-gym-badge">
-                    <FaCheck style={{ fontSize: '10px' }} /> Socio {socio.estado ? socio.estado.charAt(0).toUpperCase() + socio.estado.slice(1) : 'Activo'}
+                    <FaCheck style={{ fontSize: '10px' }} /> Socio {estadoSocioTexto}
                   </span>
                 </p>
               </div>
@@ -363,18 +369,31 @@ export default function DashboardSocio() {
                 </span>
               </div>
 
-              <button
-                className="socio-pc-btn-checkin"
-                onClick={() => setModalCheckinAbierto(true)}
-                title="Marcar asistencia al gimnasio hoy"
-              >
-                <FaBolt />
-                <span>Marcar Asistencia</span>
-              </button>
+              {asistenciaAbierta ? (
+                <button
+                  className="socio-pc-btn-checkin"
+                  style={{ background: '#f59e0b', color: '#0b0f12' }}
+                  onClick={handleCheckout}
+                  disabled={guardandoCheckin}
+                  title="Registrar tu salida del gimnasio"
+                >
+                  <FaClock />
+                  <span>{guardandoCheckin ? 'Registrando salida...' : 'Registrar Salida'}</span>
+                </button>
+              ) : (
+                <button
+                  className="socio-pc-btn-checkin"
+                  onClick={() => setModalCheckinAbierto(true)}
+                  title="Marcar asistencia en una sucursal"
+                >
+                  <FaBolt />
+                  <span>Marcar Asistencia</span>
+                </button>
+              )}
 
               <button
                 className="socio-pc-btn-outline"
-                onClick={cargarDatos}
+                onClick={() => cargarDatos()}
                 title="Actualizar datos"
                 disabled={loading}
               >
@@ -383,9 +402,7 @@ export default function DashboardSocio() {
             </div>
           </section>
 
-          {/* ================================================================
-              2. Grid Superior de Métricas (4 KPIs en Fila Desktop)
-              ================================================================ */}
+          {/* 2. Grid Superior de Métricas (4 KPIs) */}
           <section className="socio-pc-kpi-grid">
             {/* KPI 1: Membresía */}
             <div className="socio-pc-kpi-card">
@@ -398,7 +415,7 @@ export default function DashboardSocio() {
                     <FaCrown />
                   </div>
                   <span className={`socio-pc-kpi-badge ${tieneMembresiaActiva ? 'badge-active-green' : 'badge-pill-neutral'}`}>
-                    ● {tieneMembresiaActiva ? (membresia.estado === 'activa' || membresia.estado === 'activo' ? 'Activa' : membresia.estado) : 'Sin Membresía'}
+                    ● {tieneMembresiaActiva ? (membresia.estado === 'activa' ? 'Activa' : membresia.estado) : 'Sin Membresía'}
                   </span>
                 </div>
                 <h3 className="socio-pc-kpi-title">Membresía</h3>
@@ -430,15 +447,12 @@ export default function DashboardSocio() {
                   </div>
                 ) : (
                   <div style={{ marginTop: '14px', fontSize: '12px', color: '#94a3b8' }}>
-                    Consulta las opciones activas disponibles para activar tu acceso.
+                    Consultá los planes activos para habilitar tu acceso.
                   </div>
                 )}
               </div>
 
-              <button
-                onClick={() => navigate('/membresia-socio')}
-                className="socio-pc-kpi-footer-link"
-              >
+              <button onClick={() => navigate('/membresia-socio')} className="socio-pc-kpi-footer-link">
                 <span>{tieneMembresiaActiva ? 'Gestionar suscripción' : 'Ver membresías disponibles'}</span>
                 <FaChevronRight style={{ fontSize: '11px' }} />
               </button>
@@ -448,9 +462,7 @@ export default function DashboardSocio() {
             <div className="socio-pc-kpi-card">
               <div>
                 <div className="socio-pc-kpi-top">
-                  <div className="socio-pc-kpi-icon-wrap icon-blue">
-                    <FaReceipt />
-                  </div>
+                  <div className="socio-pc-kpi-icon-wrap icon-blue"><FaReceipt /></div>
                   <span className="socio-pc-kpi-badge badge-pill-neutral">
                     {ultimoPago?.metodo_pago ? ultimoPago.metodo_pago : 'Sin pagos'}
                   </span>
@@ -467,17 +479,13 @@ export default function DashboardSocio() {
                     </p>
                     <div style={{ marginTop: '14px', fontSize: '12.5px', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <FaCheck style={{ fontSize: '11px' }} />
-                      <span>Estado: {ultimoPago.estado || 'pagado'}</span>
+                      <span>Estado: {ultimoPago.estado || 'aprobado'}</span>
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="socio-pc-kpi-val" style={{ fontSize: '20px' }}>
-                      Sin registros
-                    </div>
-                    <p className="socio-pc-kpi-detail">
-                      Aún no tienes pagos registrados
-                    </p>
+                    <div className="socio-pc-kpi-val" style={{ fontSize: '20px' }}>Sin registros</div>
+                    <p className="socio-pc-kpi-detail">Aún no tienes pagos registrados</p>
                   </>
                 )}
               </div>
@@ -507,9 +515,7 @@ export default function DashboardSocio() {
             <div className="socio-pc-kpi-card">
               <div>
                 <div className="socio-pc-kpi-top">
-                  <div className="socio-pc-kpi-icon-wrap icon-amber">
-                    <FaFire />
-                  </div>
+                  <div className="socio-pc-kpi-icon-wrap icon-amber"><FaFire /></div>
                   <span className="socio-pc-kpi-badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' }}>
                     {asistenciasMes >= objetivoMensual ? '🔥 Meta superada' : `${entrenamientos.total_asistencias ?? 0} totales`}
                   </span>
@@ -520,7 +526,7 @@ export default function DashboardSocio() {
                   <span className="unit">este mes</span>
                 </div>
                 <p className="socio-pc-kpi-detail">
-                  Asistencias registradas{gimnasio?.nombre ? <> en <strong>{gimnasio.nombre}</strong></> : ''}
+                  Asistencias válidas{gimnasio?.nombre ? <> en <strong>{gimnasio.nombre}</strong></> : ''}
                 </p>
 
                 <div className="socio-pc-kpi-progress">
@@ -547,71 +553,45 @@ export default function DashboardSocio() {
               </button>
             </div>
 
-            {/* KPI 4: Peso Actual */}
+            {/* KPI 4: Rutinas Activas (reemplaza el antiguo bloque de progreso eliminado) */}
             <div className="socio-pc-kpi-card">
               <div>
                 <div className="socio-pc-kpi-top">
-                  <div className="socio-pc-kpi-icon-wrap icon-purple">
-                    <FaHeartbeat />
-                  </div>
-                  {progreso.variacion_mes != null ? (
-                    <span className="socio-pc-kpi-badge" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e' }}>
-                      {progreso.variacion_mes <= 0 ? <FaArrowDown style={{ fontSize: '9px' }} /> : <FaArrowUp style={{ fontSize: '9px' }} />}{' '}
-                      {progreso.variacion_mes > 0 ? `+${progreso.variacion_mes}` : progreso.variacion_mes} kg
-                    </span>
-                  ) : (
-                    <span className="socio-pc-kpi-badge badge-pill-neutral">Seguimiento</span>
-                  )}
+                  <div className="socio-pc-kpi-icon-wrap icon-purple"><FaDumbbell /></div>
+                  <span className="socio-pc-kpi-badge badge-pill-neutral">
+                    {rutinasAsignadas.length} asignadas
+                  </span>
                 </div>
-                <h3 className="socio-pc-kpi-title">Peso Actual</h3>
-                {progreso.peso_actual != null ? (
-                  <>
-                    <div className="socio-pc-kpi-val">
-                      {progreso.peso_actual}
-                      <span className="unit">kg</span>
-                    </div>
-                    <p className="socio-pc-kpi-detail">
-                      Último pesaje: <strong>{progreso.fecha_ultimo_registro ? formatFechaArgentina(progreso.fecha_ultimo_registro) : 'Reciente'}</strong>
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <div className="socio-pc-kpi-val" style={{ fontSize: '20px' }}>
-                      Sin registro
-                    </div>
-                    <p className="socio-pc-kpi-detail">
-                      Aún no cargaste tu peso corporal
-                    </p>
-                  </>
-                )}
+                <h3 className="socio-pc-kpi-title">Mis Rutinas</h3>
+                <div className="socio-pc-kpi-val">
+                  {totalRutinasActivas}
+                  <span className="unit">activas</span>
+                </div>
+                <p className="socio-pc-kpi-detail">
+                  <strong>{rutinasPersonales.length}</strong> personales · <strong>{rutinasAsignadas.length}</strong> del gimnasio
+                </p>
               </div>
 
               <button
-                onClick={() => setModalProgresoAbierto(true)}
+                onClick={() => navigate('/rutinas-socio')}
                 className="socio-pc-kpi-footer-link"
                 style={{ color: '#c084fc' }}
               >
-                <span>+ Registrar nuevo peso</span>
+                <span>Administrar mis rutinas</span>
                 <FaChevronRight style={{ fontSize: '11px' }} />
               </button>
             </div>
           </section>
 
-          {/* ================================================================
-              3. Sección Principal: Mi Rutina Activa (Ancho completo)
-              ================================================================ */}
+          {/* 3. Sección Principal: Mi Rutina Activa */}
           <div className="socio-pc-main-grid socio-pc-main-grid-single">
             <div className="socio-pc-card">
               <div className="socio-pc-card-header">
                 <div className="socio-pc-card-title-group">
-                  <span className="socio-pc-card-header-icon">
-                    <FaDumbbell />
-                  </span>
+                  <span className="socio-pc-card-header-icon"><FaDumbbell /></span>
                   <div>
                     <h2 className="socio-pc-card-title">Mi Rutina Activa</h2>
-                    <p className="socio-pc-card-subtitle">
-                      Plan de entrenamiento asignado para hoy
-                    </p>
+                    <p className="socio-pc-card-subtitle">Plan de entrenamiento disponible para hoy</p>
                   </div>
                 </div>
 
@@ -621,21 +601,21 @@ export default function DashboardSocio() {
                 </Link>
               </div>
 
-              {rutinaActiva ? (
+              {rutinaDestacada ? (
                 <>
                   <div className="socio-pc-routine-banner">
                     <div>
-                      <h3 className="socio-pc-routine-name">{rutinaActiva.nombre}</h3>
-                      {parsearDescripcionRutina(rutinaActiva.descripcion) && (
+                      <h3 className="socio-pc-routine-name">{rutinaDestacada.nombre}</h3>
+                      {parsearDescripcionRutina(rutinaDestacada.descripcion) && (
                         <p className="socio-pc-routine-desc">
-                          {parsearDescripcionRutina(rutinaActiva.descripcion)}
+                          {parsearDescripcionRutina(rutinaDestacada.descripcion)}
                         </p>
                       )}
                     </div>
-                    <span className="socio-pc-routine-badge">Rutina en curso</span>
+                    <span className="socio-pc-routine-badge">{rutinaDestacada.origen}</span>
                   </div>
 
-                  {rutinaActiva.ejercicios && rutinaActiva.ejercicios.length > 0 ? (
+                  {rutinaDestacada.ejercicios.length > 0 ? (
                     <table className="socio-pc-exercises-table">
                       <thead>
                         <tr>
@@ -648,15 +628,13 @@ export default function DashboardSocio() {
                         </tr>
                       </thead>
                       <tbody>
-                        {rutinaActiva.ejercicios.map((item, idx) => {
-                          const isChecked = Boolean(ejerciciosCompletados[item.id_rutina_ejercicio || idx]);
-                          const ej = item.ejercicio || {};
-
+                        {rutinaDestacada.ejercicios.map((item) => {
+                          const isChecked = Boolean(ejerciciosCompletados[item.key]);
                           return (
-                            <tr key={item.id_rutina_ejercicio || idx} style={{ opacity: isChecked ? 0.6 : 1 }}>
+                            <tr key={item.key} style={{ opacity: isChecked ? 0.6 : 1 }}>
                               <td>
                                 <button
-                                  onClick={() => toggleEjercicio(item.id_rutina_ejercicio || idx)}
+                                  onClick={() => toggleEjercicio(item.key)}
                                   className={`socio-pc-exercise-check-btn ${isChecked ? 'checked' : ''}`}
                                   title={isChecked ? 'Marcar como pendiente' : 'Marcar como completado'}
                                 >
@@ -666,22 +644,20 @@ export default function DashboardSocio() {
                               <td>
                                 <div className="socio-pc-exercise-row-name">
                                   <span style={{ textDecoration: isChecked ? 'line-through' : 'none' }}>
-                                    {ej.nombre || 'Ejercicio personalizado'}
+                                    {item.nombre}
                                   </span>
                                 </div>
                               </td>
                               <td>
-                                <span className="socio-pc-exercise-muscle-tag">
-                                  {ej.grupo_muscular || 'Musculación'}
-                                </span>
+                                <span className="socio-pc-exercise-muscle-tag">{item.grupo_muscular}</span>
                               </td>
                               <td style={{ fontWeight: '700', color: '#ffffff' }}>
-                                {item.series || 4} × {item.repeticiones || 10}
+                                {item.series} × {item.repeticiones}
                               </td>
-                              <td>{item.peso && item.peso > 0 ? `${item.peso} kg` : 'Corporal'}</td>
+                              <td>{item.peso > 0 ? `${item.peso} kg` : 'Corporal'}</td>
                               <td style={{ color: '#94a3b8' }}>
                                 <FaClock style={{ fontSize: '11px', marginRight: '5px' }} />
-                                {item.descanso || 60}s
+                                {item.descanso}s
                               </td>
                             </tr>
                           );
@@ -716,7 +692,7 @@ export default function DashboardSocio() {
               ) : (
                 <div style={{ padding: '24px 0', textAlign: 'center', color: '#94a3b8' }}>
                   <p style={{ margin: '0 0 16px 0', fontSize: '15px' }}>
-                    {loading ? 'Cargando tu rutina...' : 'Todavía no tienes una rutina activa asignada.'}
+                    {loading ? 'Cargando tu rutina...' : 'Todavía no tienes una rutina activa asignada o personal.'}
                   </p>
                   {!loading && (
                     <div className="socio-pc-routine-footer-btns" style={{ justifyContent: 'center' }}>
@@ -726,7 +702,7 @@ export default function DashboardSocio() {
                         style={{ flex: '0 0 auto', padding: '10px 20px', fontSize: '13.5px' }}
                       >
                         <FaDumbbell />
-                        <span>Explorar Rutinas</span>
+                        <span>Ir a Mis Rutinas</span>
                       </button>
                       <button
                         onClick={() => navigate('/ejercicios-socio')}
@@ -744,9 +720,7 @@ export default function DashboardSocio() {
         </main>
       </div>
 
-      {/* ================================================================
-          MODAL: Marcar Asistencia / Check-in
-          ================================================================ */}
+      {/* MODAL: Marcar Asistencia / Check-in */}
       {modalCheckinAbierto && (
         <div className="socio-pc-modal-backdrop" onClick={() => setModalCheckinAbierto(false)}>
           <div className="socio-pc-modal-content" onClick={(e) => e.stopPropagation()}>
@@ -761,17 +735,40 @@ export default function DashboardSocio() {
             </div>
 
             <p style={{ color: '#cbd5e1', fontSize: '14.5px', margin: '0 0 18px 0', lineHeight: '1.5' }}>
-              ¿Estás en el gimnasio y listo para comenzar tu sesión? Confirmá tu ingreso para registrar la asistencia de hoy.
+              Confirmá tu ingreso en una sucursal activa. Recordá que podés registrar hasta 3 asistencias por día en este gimnasio (1 abierta a la vez).
             </p>
 
-            <div style={{ background: 'rgba(255, 255, 255, 0.04)', padding: '14px', borderRadius: '10px', marginBottom: '20px' }}>
+            <div style={{ background: 'rgba(255, 255, 255, 0.04)', padding: '14px', borderRadius: '10px', marginBottom: '16px' }}>
               <div style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '4px' }}>Socio:</div>
               <div style={{ fontSize: '15px', fontWeight: '700', color: '#ffffff' }}>
                 {socio.nombre} {socio.apellido} {socio.dni ? `(DNI: ${socio.dni})` : ''}
               </div>
               <div style={{ fontSize: '13px', color: '#22c55e', marginTop: '6px' }}>
-                📍 {gimnasio?.nombre || 'GymTrack'} • {formatHoraArgentina(new Date())} hs
+                📍 {gimnasio?.nombre || 'Sin gimnasio seleccionado'} • {formatHoraArgentina(new Date())} hs
               </div>
+            </div>
+
+            <div className="socio-pc-form-group" style={{ marginBottom: '18px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', color: '#cbd5e1', fontSize: '13.5px' }}>
+                Seleccioná la sucursal donde estás entrenando *
+              </label>
+              {sucursalesActivas.length > 0 ? (
+                <select
+                  className="socio-pc-form-input"
+                  value={sucursalSeleccionada}
+                  onChange={(e) => setSucursalSeleccionada(e.target.value)}
+                >
+                  {sucursalesActivas.map((s) => (
+                    <option key={s.id_sucursal} value={s.id_sucursal}>
+                      {s.direccion}{s.descripcion ? ` — ${s.descripcion}` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p style={{ color: '#f87171', fontSize: '13px', margin: 0 }}>
+                  Este gimnasio no tiene sucursales activas registradas todavía.
+                </p>
+              )}
             </div>
 
             <div className="socio-pc-modal-actions">
@@ -785,7 +782,7 @@ export default function DashboardSocio() {
               <button
                 className="socio-pc-btn-primary"
                 onClick={handleCheckin}
-                disabled={guardandoCheckin}
+                disabled={guardandoCheckin || !sucursalSeleccionada}
               >
                 {guardandoCheckin ? 'Registrando...' : 'Confirmar Ingreso'}
               </button>
@@ -794,74 +791,7 @@ export default function DashboardSocio() {
         </div>
       )}
 
-      {/* ================================================================
-          MODAL: Registrar Peso / Progreso
-          ================================================================ */}
-      {modalProgresoAbierto && (
-        <div className="socio-pc-modal-backdrop" onClick={() => setModalProgresoAbierto(false)}>
-          <div className="socio-pc-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="socio-pc-modal-header">
-              <h3 className="socio-pc-modal-title">
-                <FaHeartbeat style={{ color: '#c084fc' }} />
-                <span>Registrar Peso Corporal</span>
-              </h3>
-              <button className="socio-pc-modal-close-btn" onClick={() => setModalProgresoAbierto(false)}>
-                <FaTimes />
-              </button>
-            </div>
-
-            <form onSubmit={handleGuardarProgreso}>
-              <div className="socio-pc-form-group">
-                <label>Peso Actual (kg):</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={nuevoPeso}
-                  onChange={(e) => setNuevoPeso(e.target.value)}
-                  className="socio-pc-form-input"
-                  placeholder="Ej: 78.5"
-                  required
-                  autoFocus
-                />
-              </div>
-
-              <div className="socio-pc-form-group">
-                <label>Notas u Observaciones (opcional):</label>
-                <textarea
-                  value={notasProgreso}
-                  onChange={(e) => setNotasProgreso(e.target.value)}
-                  className="socio-pc-form-textarea"
-                  placeholder="Ej: Sentí buena fuerza, mejor definición en abdomen..."
-                  rows={3}
-                />
-              </div>
-
-              <div className="socio-pc-modal-actions">
-                <button
-                  type="button"
-                  className="socio-pc-btn-secondary"
-                  onClick={() => setModalProgresoAbierto(false)}
-                  disabled={guardandoProgreso}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="socio-pc-btn-primary"
-                  style={{ background: 'linear-gradient(135deg, #a855f7, #9333ea)', color: '#ffffff' }}
-                  disabled={guardandoProgreso}
-                >
-                  {guardandoProgreso ? 'Guardando...' : 'Guardar Pesaje'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ================================================================
-          MODAL: Ver Comprobante de Pago Rápido
-          ================================================================ */}
+      {/* MODAL: Ver Comprobante de Pago Rápido */}
       {modalReciboAbierto && ultimoPago && (
         <div className="socio-pc-modal-backdrop" onClick={() => setModalReciboAbierto(false)}>
           <div className="socio-pc-modal-content" onClick={(e) => e.stopPropagation()}>
@@ -903,16 +833,13 @@ export default function DashboardSocio() {
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#94a3b8', fontSize: '13px' }}>Estado</span>
                 <span style={{ color: '#22c55e', fontWeight: '700', fontSize: '13.5px' }}>
-                  ● {ultimoPago.estado || 'Acreditado'}
+                  ● {ultimoPago.estado || 'aprobado'}
                 </span>
               </div>
             </div>
 
             <div className="socio-pc-modal-actions">
-              <button
-                className="socio-pc-btn-secondary"
-                onClick={() => setModalReciboAbierto(false)}
-              >
+              <button className="socio-pc-btn-secondary" onClick={() => setModalReciboAbierto(false)}>
                 Cerrar
               </button>
               <button

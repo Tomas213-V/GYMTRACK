@@ -83,14 +83,21 @@ function PagosTabla({
                   <td className="Caja-pagos-td-estado">
                     <div className="Caja-pagos-estado-selector-wrapper">
                       <select
-                        className={`Caja-pagos-badge Caja-pagos-badge-select Caja-pagos-badge-${(item.estado || "pagado").toLowerCase()}`}
-                        value={(item.estado || "pagado").toLowerCase()}
+                        className={`Caja-pagos-badge Caja-pagos-badge-select Caja-pagos-badge-${
+                          (item.estado || "aprobado").toLowerCase() === "aprobado"
+                            ? "pagado"
+                            : (item.estado || "aprobado").toLowerCase() === "pendiente"
+                            ? "pendiente"
+                            : "vencido"
+                        }`}
+                        value={(item.estado || "aprobado").toLowerCase()}
                         onChange={(e) => onCambiarEstado && onCambiarEstado(item.id, e.target.value)}
                         title="Haz clic para cambiar el estado manualmente"
                       >
-                        <option value="pagado">Pagado</option>
+                        <option value="aprobado">Aprobado</option>
                         <option value="pendiente">Pendiente</option>
-                        <option value="vencido">Vencido</option>
+                        <option value="rechazado">Rechazado</option>
+                        <option value="anulado">Anulado</option>
                       </select>
                       <FaChevronDown className="Caja-pagos-badge-flecha" />
                     </div>

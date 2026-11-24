@@ -3,32 +3,16 @@
  * ARCHIVO: dashboard.jsx
  * RUTA: frontend/src/pages/dashboard-dueno/dashboard.jsx
  * PROYECTO: GYMTRACK - Frontend
- * DESCRIPCIÓN: Panel de Control (Dashboard) principal del Administrador / Dueño del Gimnasio.
+ * DESCRIPCIÓN: Panel de Control Gerencial y Operativo (Dueño / Admin Org / Empleados).
+ *              Respeta estrictamente `alcance.acceso_financiero` y `alcance.acceso_rutinas`.
  * =========================================================================================
- * 
- * GUÍA PASO A PASO PARA EL DESARROLLADOR EXTERNO:
- * 
- * Este componente es el centro neurálgico de analítica del sistema:
- * 
- * 1. PASO 1 (Ciclo de Vida y Carga):
- *    - `cargarDatos()`: Recupera la sesión activa de `localStorage` y llama a `fetchDashboardAdmin()`.
- *    - Actualiza el timestamp de última sincronización para informar frescura de datos al dueño.
- * 
- * 2. PASO 2 (Formateadores Auxiliares):
- *    - `formatearDinero()`: Formatea importes en pesos argentinos (ARS) con `Intl.NumberFormat`.
- * 
- * 3. PASO 3 (Visualización de Datos con Recharts):
- *    - Gráficos de Área (AreaChart): Evolución de ingresos en los últimos meses.
- *    - Gráficos de Barras (BarChart): Distribución de asistencias por franja horaria / día.
- * 
- * 4. PASO 4 (Acciones Rápidas):
- *    - Acceso rápido a crear socio, registrar cobro, asistencia y rutinas.
  */
 
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import NavGlobal from "../../components/nav-global/nav-global";
 import Sidebar from "../../components/sidebar-dueno/sidebar";
+import { useGymContext } from "../../context/GymContext";
 import { fetchDashboardAdmin } from "../../services/dashboardService";
 import {
   FaUsers,
@@ -43,7 +27,8 @@ import {
   FaArrowDown,
   FaChevronRight,
   FaBuilding,
-  FaClock
+  FaClock,
+  FaMapMarkerAlt
 } from "react-icons/fa";
 import {
   ResponsiveContainer,
@@ -58,40 +43,42 @@ import {
 } from "recharts";
 import "./dashboard.css";
 
-
 function Dashboard() {
+  const { usuario: usuarioCtx, gimnasioActivo, gimnasioActivoId, contextVersion } = useGymContext();
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
   const [data, setData] = useState(null);
-  const [usuario, setUsuario] = useState(null);
+  const [sucursalFiltro, setSucursalFiltro] = useState("");
   const [ultimaActualizacion, setUltimaActualizacion] = useState(new Date());
 
   const cargarDatos = useCallback(async () => {
+    if (!gimnasioActivoId) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    setErrorMsg("");
     try {
-      // 1. Obtener datos del usuario guardado
-      const rawUser = localStorage.getItem("usuario");
-      if (rawUser) {
-        try {
-          setUsuario(JSON.parse(rawUser));
-        } catch (e) {
-          console.debug("Error leyendo usuario de sesión:", e);
-        }
-      }
-
-      // 2. Cargar métricas del dashboard
-      const res = await fetchDashboardAdmin();
+      const res = await fetchDashboardAdmin({ id_sucursal: sucursalFiltro || undefined });
       setData(res);
       setUltimaActualizacion(new Date());
     } catch (err) {
       console.error("Error al cargar dashboard de administrador:", err);
+      setErrorMsg(err.message || "No se pudieron cargar las métricas del gimnasio.");
+      setData(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [gimnasioActivoId, sucursalFiltro]);
+
+  useEffect(() => {
+    setSucursalFiltro("");
+  }, [gimnasioActivoId]);
 
   useEffect(() => {
     cargarDatos();
-  }, [cargarDatos]);
+  }, [cargarDatos, contextVersion]);
 
   const formatearDinero = (val) => {
     return new Intl.NumberFormat("es-AR", {
@@ -101,24 +88,48 @@ function Dashboard() {
     }).format(Number(val) || 0);
   };
 
-  const nombreDuenio = usuario?.nombre
-    ? `${usuario.nombre} ${usuario.apellido || ""}`.trim()
+  const nombreDuenio = usuarioCtx?.nombre
+    ? `${usuarioCtx.nombre} ${usuarioCtx.apellido || ""}`.trim()
     : "Administrador";
 
-  const nombreGym = data?.gimnasio?.nombre || usuario?.gimnasio?.nombre || "Mi Gimnasio";
+  const nombreGym = data?.gimnasio?.nombre || gimnasioActivo?.nombre || "Mi Gimnasio";
+  const sucursalesDisponibles = data?.sucursales || [];
 
-  const kpis = data?.kpis || {
-    socios: { total: 0, activos: 0, inactivos: 0, pendientes: 0, nuevosMes: 0 },
-    ingresos: { mesActual: 0, mesAnterior: 0, variacionPorcentaje: 0, pagosRealizados: 0, pagosPendientes: 0, pagosVencidos: 0 },
-    asistencias: { hoy: 0, mesActual: 0, mesAnterior: 0, variacionPorcentaje: 0 },
-    membresiasPorVencer: 0,
-    membresiasVencidas: 0
+  const accesoFinanciero = data?.alcance ? Boolean(data.alcance.acceso_financiero) : true;
+  const accesoRutinas = data?.alcance ? Boolean(data.alcance.acceso_rutinas) : true;
+
+  const sociosKpi = data?.kpis?.socios || { total: 0, activos: 0, inactivos: 0, nuevosMes: 0 };
+  const ingresosKpi = data?.kpis?.ingresos || null;
+  const asistenciasKpi = data?.kpis?.asistencias || {
+    hoy: 0,
+    abiertas: 0,
+    mesActual: 0,
+    mesAnterior: 0,
+    variacionPorcentaje: 0
+  };
+  const membresiasKpi = data?.kpis?.membresias || {
+    activas: 0,
+    pendientes: 0,
+    porVencer: 0,
+    vencidas: 0
+  };
+  const rutinasKpi = data?.kpis?.rutinas || {
+    totalPlantillas: 0,
+    plantillasActivas: 0,
+    asignacionesActivas: 0,
+    asignacionesFinalizadas: 0
   };
 
   const graficos = data?.graficos || {
     ingresosMensuales: [],
     asistenciasPorDia: []
   };
+
+  const alertasCuotasTotal =
+    (membresiasKpi.vencidas || 0) +
+    (membresiasKpi.porVencer || 0) +
+    (membresiasKpi.pendientes || 0) +
+    (accesoFinanciero ? (ingresosKpi?.pagosPendientes || 0) : 0);
 
   return (
     <div className="Caja-admin-dashboard">
@@ -128,9 +139,7 @@ function Dashboard() {
         <Sidebar />
 
         <main className="Caja-admin-dashboard-contenido">
-          {/* =========================================================
-              HEADER HERO DEL ADMINISTRADOR / DUEÑO
-             ========================================================= */}
+          {/* HEADER HERO */}
           <section className="admin-dash-hero">
             <div className="admin-dash-hero-info">
               <div className="admin-dash-hero-badge-gym">
@@ -142,11 +151,28 @@ function Dashboard() {
                 ¡Hola de nuevo, <span>{nombreDuenio}</span>!
               </h1>
               <p className="admin-dash-hero-desc">
-                Panel de control gerencial. Aquí tienes el rendimiento en tiempo real de tu gimnasio.
+                Panel de control en tiempo real de tu gimnasio y sus sucursales autorizadas.
               </p>
             </div>
 
             <div className="admin-dash-hero-actions">
+              {sucursalesDisponibles.length > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "6px 10px" }}>
+                  <FaMapMarkerAlt style={{ color: "#9EF01A", fontSize: "13px" }} />
+                  <select
+                    value={sucursalFiltro}
+                    onChange={(e) => setSucursalFiltro(e.target.value)}
+                    style={{ background: "transparent", border: "none", color: "#f8fafc", fontSize: "13px", cursor: "pointer", outline: "none" }}
+                  >
+                    <option value="" style={{ background: "#141921" }}>Todas las sucursales</option>
+                    {sucursalesDisponibles.map((s) => (
+                      <option key={s.id_sucursal} value={s.id_sucursal} style={{ background: "#141921" }}>
+                        {s.direccion}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="admin-dash-live-time">
                 <FaClock />
                 <span>{ultimaActualizacion.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</span>
@@ -162,171 +188,181 @@ function Dashboard() {
             </div>
           </section>
 
-          {/* =========================================================
-              ACCIONES RÁPIDAS (SHORTCUTS)
-             ========================================================= */}
+          {errorMsg && (
+            <div style={{ background: "rgba(239, 68, 68, 0.14)", border: "1px solid rgba(239, 68, 68, 0.4)", color: "#fca5a5", padding: "12px 16px", borderRadius: "10px", marginBottom: "18px", display: "flex", alignItems: "center", gap: "10px" }}>
+              <FaExclamationTriangle />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {/* ACCIONES RÁPIDAS */}
           <section className="admin-dash-quick-actions">
             <Link to="/socios-dueño" className="admin-dash-quick-btn quick-btn-socios">
-              <div className="quick-btn-icon-box">
-                <FaUserPlus />
-              </div>
+              <div className="quick-btn-icon-box"><FaUserPlus /></div>
               <div className="quick-btn-texts">
-                <strong>Nuevo Socio</strong>
-                <span>Registrar usuario</span>
+                <strong>Socios</strong>
+                <span>Gestionar asociados</span>
               </div>
               <FaChevronRight className="quick-btn-arrow" />
             </Link>
 
-            <Link to="/pagos-dueño" className="admin-dash-quick-btn quick-btn-pagos">
-              <div className="quick-btn-icon-box">
-                <FaReceipt />
-              </div>
-              <div className="quick-btn-texts">
-                <strong>Cobrar Cuota</strong>
-                <span>Registrar pago</span>
-              </div>
-              <FaChevronRight className="quick-btn-arrow" />
-            </Link>
+            {accesoFinanciero && (
+              <Link to="/pagos-dueño" className="admin-dash-quick-btn quick-btn-pagos">
+                <div className="quick-btn-icon-box"><FaReceipt /></div>
+                <div className="quick-btn-texts">
+                  <strong>Cobrar Cuota</strong>
+                  <span>Registrar pago</span>
+                </div>
+                <FaChevronRight className="quick-btn-arrow" />
+              </Link>
+            )}
 
             <Link to="/asistencias-dueño" className="admin-dash-quick-btn quick-btn-asist">
-              <div className="quick-btn-icon-box">
-                <FaCalendarCheck />
-              </div>
+              <div className="quick-btn-icon-box"><FaCalendarCheck /></div>
               <div className="quick-btn-texts">
-                <strong>Marcar Entrada</strong>
-                <span>Asistencia socios</span>
+                <strong>Asistencias</strong>
+                <span>Control de ingresos</span>
               </div>
               <FaChevronRight className="quick-btn-arrow" />
             </Link>
 
-            <Link to="/rutinas-dueño" className="admin-dash-quick-btn quick-btn-rutinas">
-              <div className="quick-btn-icon-box">
-                <FaDumbbell />
-              </div>
-              <div className="quick-btn-texts">
-                <strong>Crear Rutina</strong>
-                <span>Planes de entreno</span>
-              </div>
-              <FaChevronRight className="quick-btn-arrow" />
-            </Link>
+            {accesoRutinas && (
+              <Link to="/rutinas-dueño" className="admin-dash-quick-btn quick-btn-rutinas">
+                <div className="quick-btn-icon-box"><FaDumbbell /></div>
+                <div className="quick-btn-texts">
+                  <strong>Rutinas</strong>
+                  <span>Plantillas y asignaciones</span>
+                </div>
+                <FaChevronRight className="quick-btn-arrow" />
+              </Link>
+            )}
           </section>
 
-          {/* =========================================================
-              TARJETAS DE MÉTRICAS CLAVE (KPIS)
-             ========================================================= */}
+          {/* TARJETAS DE KPIS */}
           <section className="admin-dash-kpi-grid">
             {/* KPI 1: Socios */}
             <div className="admin-dash-kpi-card card-socios">
               <div className="kpi-card-header">
-                <div className="kpi-icon-wrap icon-socios">
-                  <FaUsers />
-                </div>
+                <div className="kpi-icon-wrap icon-socios"><FaUsers /></div>
                 <span className="kpi-tag-sub">Total Registrados</span>
               </div>
               <div className="kpi-card-main">
-                <h3 className="kpi-card-valor">{kpis.socios.total}</h3>
-                <span className="kpi-card-label">Socios Totales</span>
+                <h3 className="kpi-card-valor">{sociosKpi.total}</h3>
+                <span className="kpi-card-label">Socios Asociados</span>
               </div>
               <div className="kpi-card-footer">
                 <div className="kpi-pill-success">
                   <span className="pill-dot"></span>
-                  <b>{kpis.socios.activos}</b> activos
+                  <b>{sociosKpi.activos}</b> activos
                 </div>
-                {kpis.socios.inactivos > 0 && (
+                {sociosKpi.inactivos > 0 && (
                   <div className="kpi-pill-muted">
-                    <b>{kpis.socios.inactivos}</b> inactivos
+                    <b>{sociosKpi.inactivos}</b> inactivos
                   </div>
                 )}
                 <div className="kpi-badge-highlight">
-                  +{kpis.socios.nuevosMes} este mes
+                  +{sociosKpi.nuevosMes} este mes
                 </div>
               </div>
             </div>
 
-            {/* KPI 2: Recaudación */}
-            <div className="admin-dash-kpi-card card-ingresos">
-              <div className="kpi-card-header">
-                <div className="kpi-icon-wrap icon-ingresos">
-                  <FaMoneyBillWave />
+            {/* KPI 2: Recaudación (solo si acceso_financiero) o Rutinas (entrenador) */}
+            {accesoFinanciero && ingresosKpi ? (
+              <div className="admin-dash-kpi-card card-ingresos">
+                <div className="kpi-card-header">
+                  <div className="kpi-icon-wrap icon-ingresos"><FaMoneyBillWave /></div>
+                  <div className={`kpi-variation ${(ingresosKpi.variacionPorcentaje || 0) >= 0 ? "up" : "down"}`}>
+                    {(ingresosKpi.variacionPorcentaje || 0) >= 0 ? <FaArrowUp /> : <FaArrowDown />}
+                    <span>{Math.abs(ingresosKpi.variacionPorcentaje || 0)}%</span>
+                  </div>
                 </div>
-                <div className={`kpi-variation ${kpis.ingresos.variacionPorcentaje >= 0 ? "up" : "down"}`}>
-                  {kpis.ingresos.variacionPorcentaje >= 0 ? <FaArrowUp /> : <FaArrowDown />}
-                  <span>{Math.abs(kpis.ingresos.variacionPorcentaje)}%</span>
+                <div className="kpi-card-main">
+                  <h3 className="kpi-card-valor">{formatearDinero(ingresosKpi.mesActual)}</h3>
+                  <span className="kpi-card-label">Recaudación del Mes</span>
+                </div>
+                <div className="kpi-card-footer">
+                  <span className="kpi-detail-text">
+                    <b>{ingresosKpi.pagosAprobados ?? 0}</b> pagos aprobados
+                  </span>
+                  <span className="kpi-detail-comp">
+                    Mes ant: {formatearDinero(ingresosKpi.mesAnterior)}
+                  </span>
                 </div>
               </div>
-              <div className="kpi-card-main">
-                <h3 className="kpi-card-valor">{formatearDinero(kpis.ingresos.mesActual)}</h3>
-                <span className="kpi-card-label">Recaudación del Mes</span>
+            ) : (
+              <div className="admin-dash-kpi-card card-ingresos">
+                <div className="kpi-card-header">
+                  <div className="kpi-icon-wrap icon-ingresos"><FaDumbbell /></div>
+                  <span className="kpi-tag-sub">Entrenamiento</span>
+                </div>
+                <div className="kpi-card-main">
+                  <h3 className="kpi-card-valor">{rutinasKpi.asignacionesActivas ?? 0}</h3>
+                  <span className="kpi-card-label">Rutinas Asignadas Activas</span>
+                </div>
+                <div className="kpi-card-footer">
+                  <span className="kpi-detail-text">
+                    <b>{rutinasKpi.plantillasActivas ?? 0}</b> plantillas activas
+                  </span>
+                  <span className="kpi-detail-comp">
+                    {rutinasKpi.totalPlantillas ?? 0} en catálogo
+                  </span>
+                </div>
               </div>
-              <div className="kpi-card-footer">
-                <span className="kpi-detail-text">
-                  <b>{kpis.ingresos.pagosRealizados}</b> pagos concretados
-                </span>
-                <span className="kpi-detail-comp">
-                  Mes ant: {formatearDinero(kpis.ingresos.mesAnterior)}
-                </span>
-              </div>
-            </div>
+            )}
 
             {/* KPI 3: Asistencias */}
             <div className="admin-dash-kpi-card card-asistencias">
               <div className="kpi-card-header">
-                <div className="kpi-icon-wrap icon-asistencias">
-                  <FaCalendarCheck />
-                </div>
+                <div className="kpi-icon-wrap icon-asistencias"><FaCalendarCheck /></div>
                 <div className="kpi-variation up">
                   <span className="kpi-live-dot"></span>
-                  <span>En vivo</span>
+                  <span>{asistenciasKpi.abiertas || 0} en sala</span>
                 </div>
               </div>
               <div className="kpi-card-main">
-                <h3 className="kpi-card-valor">{kpis.asistencias.hoy}</h3>
+                <h3 className="kpi-card-valor">{asistenciasKpi.hoy}</h3>
                 <span className="kpi-card-label">Asistencias Hoy</span>
               </div>
               <div className="kpi-card-footer">
                 <span className="kpi-detail-text">
-                  <b>{kpis.asistencias.mesActual}</b> en el mes
+                  <b>{asistenciasKpi.mesActual}</b> en el mes
                 </span>
-                {kpis.asistencias.variacionPorcentaje !== 0 && (
+                {asistenciasKpi.variacionPorcentaje !== 0 && (
                   <span className="kpi-pill-success">
-                    {kpis.asistencias.variacionPorcentaje > 0 ? "+" : ""}
-                    {kpis.asistencias.variacionPorcentaje}% vs mes ant.
+                    {asistenciasKpi.variacionPorcentaje > 0 ? "+" : ""}
+                    {asistenciasKpi.variacionPorcentaje}% vs mes ant.
                   </span>
                 )}
               </div>
             </div>
 
-            {/* KPI 4: Cuotas Vencidas / Por Vencer */}
+            {/* KPI 4: Membresías / Alertas */}
             <div className="admin-dash-kpi-card card-alertas">
               <div className="kpi-card-header">
-                <div className="kpi-icon-wrap icon-alertas">
-                  <FaExclamationTriangle />
-                </div>
-                <span className="kpi-badge-warning">Atención</span>
+                <div className="kpi-icon-wrap icon-alertas"><FaExclamationTriangle /></div>
+                <span className="kpi-badge-warning">{membresiasKpi.activas} activas</span>
               </div>
               <div className="kpi-card-main">
-                <h3 className="kpi-card-valor">
-                  {(kpis.membresiasVencidas || 0) + (kpis.membresiasPorVencer || 0) + (kpis.ingresos?.pagosPendientes || 0) + (kpis.ingresos?.pagosVencidos || 0)}
-                </h3>
-                <span className="kpi-card-label">Cuotas a Cobrar / Por Vencer</span>
+                <h3 className="kpi-card-valor">{alertasCuotasTotal}</h3>
+                <span className="kpi-card-label">Membresías / Cuotas por Atender</span>
               </div>
               <div className="kpi-card-footer">
-                {((kpis.membresiasVencidas || 0) + (kpis.ingresos?.pagosVencidos || 0)) > 0 && (
+                {(membresiasKpi.vencidas || 0) > 0 && (
                   <div className="kpi-pill-danger">
-                    <b>{(kpis.membresiasVencidas || 0) + (kpis.ingresos?.pagosVencidos || 0)}</b> {((kpis.membresiasVencidas || 0) + (kpis.ingresos?.pagosVencidos || 0)) === 1 ? "vencida" : "vencidas"}
+                    <b>{membresiasKpi.vencidas}</b> {membresiasKpi.vencidas === 1 ? "vencida" : "vencidas"}
                   </div>
                 )}
-                {(kpis.membresiasPorVencer || 0) > 0 && (
+                {(membresiasKpi.porVencer || 0) > 0 && (
                   <div className="kpi-pill-warning">
-                    <b>{kpis.membresiasPorVencer}</b> por vencer
+                    <b>{membresiasKpi.porVencer}</b> por vencer
                   </div>
                 )}
-                {(kpis.ingresos?.pagosPendientes || 0) > 0 && (
+                {(membresiasKpi.pendientes || 0) > 0 && (
                   <div className="kpi-pill-warning">
-                    <b>{kpis.ingresos.pagosPendientes}</b> pendientes
+                    <b>{membresiasKpi.pendientes}</b> pendientes
                   </div>
                 )}
-                {((kpis.membresiasVencidas || 0) === 0 && (kpis.ingresos?.pagosVencidos || 0) === 0 && (kpis.membresiasPorVencer || 0) === 0 && (kpis.ingresos?.pagosPendientes || 0) === 0) && (
+                {alertasCuotasTotal === 0 && (
                   <div className="kpi-pill-success">
                     <span className="pill-dot"></span> Al día
                   </div>
@@ -335,66 +371,67 @@ function Dashboard() {
             </div>
           </section>
 
-          {/* =========================================================
-              GRÁFICOS ESTADÍSTICOS (RECHARTS)
-             ========================================================= */}
-          <section className="admin-dash-charts-grid">
-            {/* Gráfico 1: Evolución de Ingresos */}
-            <div className="admin-chart-box">
-              <div className="admin-chart-header">
-                <div>
-                  <h3 className="admin-chart-title">Evolución de Recaudación</h3>
-                  <p className="admin-chart-subtitle">Histórico de ingresos de los últimos meses</p>
+          {/* GRÁFICOS ESTADÍSTICOS */}
+          <section
+            className="admin-dash-charts-grid"
+            style={!accesoFinanciero ? { gridTemplateColumns: "1fr" } : undefined}
+          >
+            {accesoFinanciero && (
+              <div className="admin-chart-box">
+                <div className="admin-chart-header">
+                  <div>
+                    <h3 className="admin-chart-title">Evolución de Recaudación</h3>
+                    <p className="admin-chart-subtitle">Histórico de ingresos aprobados de los últimos 6 meses</p>
+                  </div>
+                  <div className="admin-chart-tag">
+                    <FaMoneyBillWave /> Facturación
+                  </div>
                 </div>
-                <div className="admin-chart-tag">
-                  <FaMoneyBillWave /> Facturación
+                <div className="admin-chart-canvas-wrapper">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <AreaChart data={graficos.ingresosMensuales || []} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="ingresosGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#22c55e" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#22c55e" stopOpacity={0.0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#222731" vertical={false} />
+                      <XAxis dataKey="mes" stroke="#64748b" fontSize={12} tickLine={false} />
+                      <YAxis
+                        stroke="#64748b"
+                        fontSize={11}
+                        tickLine={false}
+                        tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#15181e",
+                          borderColor: "#262c37",
+                          borderRadius: "8px",
+                          color: "#fff"
+                        }}
+                        formatter={(val) => [formatearDinero(val), "Recaudación"]}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="recaudacion"
+                        stroke="#22c55e"
+                        strokeWidth={3}
+                        fillOpacity={1}
+                        fill="url(#ingresosGrad)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
-              <div className="admin-chart-canvas-wrapper">
-                <ResponsiveContainer width="100%" height={260}>
-                  <AreaChart data={graficos.ingresosMensuales} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="ingresosGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0.0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#222731" vertical={false} />
-                    <XAxis dataKey="mes" stroke="#64748b" fontSize={12} tickLine={false} />
-                    <YAxis
-                      stroke="#64748b"
-                      fontSize={11}
-                      tickLine={false}
-                      tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#15181e",
-                        borderColor: "#262c37",
-                        borderRadius: "8px",
-                        color: "#fff"
-                      }}
-                      formatter={(val) => [formatearDinero(val), "Recaudación"]}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="recaudacion"
-                      stroke="#22c55e"
-                      strokeWidth={3}
-                      fillOpacity={1}
-                      fill="url(#ingresosGrad)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+            )}
 
-            {/* Gráfico 2: Asistencias por día */}
             <div className="admin-chart-box">
               <div className="admin-chart-header">
                 <div>
                   <h3 className="admin-chart-title">Afluencia Semanal</h3>
-                  <p className="admin-chart-subtitle">Asistencias registradas por día de la semana</p>
+                  <p className="admin-chart-subtitle">Asistencias válidas registradas por día de la semana</p>
                 </div>
                 <div className="admin-chart-tag tag-cyan">
                   <FaCalendarCheck /> Concurrencia
@@ -402,7 +439,7 @@ function Dashboard() {
               </div>
               <div className="admin-chart-canvas-wrapper">
                 <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={graficos.asistenciasPorDia} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                  <BarChart data={graficos.asistenciasPorDia || []} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#222731" vertical={false} />
                     <XAxis dataKey="dia" stroke="#64748b" fontSize={12} tickLine={false} />
                     <YAxis stroke="#64748b" fontSize={11} tickLine={false} />
@@ -425,8 +462,6 @@ function Dashboard() {
               </div>
             </div>
           </section>
-
-
         </main>
       </div>
     </div>

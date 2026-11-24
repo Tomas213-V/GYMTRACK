@@ -1,83 +1,53 @@
-// backend/src/controllers/socioEjercicioController.js
-const supabase = require('../config/supabase');
-
-/**
- * Helper para resolver el socio y su gimnasio a partir de la sesión JWT
- */
-const resolverSocioAutenticado = async (req) => {
-  let idSocio = req.usuario?.id_socio;
-  let idGimnasio = req.usuario?.id_gimnasio;
-
-  if (!idSocio && req.usuario?.id_usuario) {
-    const { data: socioAuth } = await supabase
-      .from('socio')
-      .select('id_socio, id_gimnasio')
-      .eq('id_usuario', req.usuario.id_usuario)
-      .maybeSingle();
-
-    if (socioAuth) {
-      idSocio = socioAuth.id_socio;
-      idGimnasio = socioAuth.id_gimnasio;
-    }
-  }
-
-  if (idSocio && !idGimnasio) {
-    const { data: sData } = await supabase
-      .from('socio')
-      .select('id_gimnasio')
-      .eq('id_socio', idSocio)
-      .maybeSingle();
-    if (sData) idGimnasio = sData.id_gimnasio;
-  }
-
-  return { idSocio, idGimnasio };
-};
+// ==============================================================================
+// CONTROLADOR DE EJERCICIOS DEL SOCIO (GIMNASIO SELECCIONADO + PERSONALES)
+// - Propietario exclusivo garantizado: ejercicios propios tienen id_gimnasio = NULL.
+// - Ejercicios personales siempre visibles sin importar el gimnasio seleccionado.
+// - Ejercicios del gimnasio filtrados al gimnasio activo, solo lectura para socio.
+// ==============================================================================
 
 /**
  * 1. GET /api/socio/ejercicios
- * Consultar ejercicios disponibles del gimnasio y propios creados por el socio.
- * Filtros opcionales: origen ('todos' | 'gimnasio' | 'propio'), grupo_muscular, search.
  */
 const getEjerciciosSocio = async (req, res) => {
   try {
-    const { idSocio, idGimnasio } = await resolverSocioAutenticado(req);
+    const db = req.supabase;
+    const u = req.usuario;
 
-    if (!idSocio) {
-      return res.status(401).json({ error: 'Acceso no autorizado: Perfil de socio no encontrado.' });
+    if (u.rol !== 'socio' || !u.id_socio) {
+      return res.status(403).json({ error: 'Acceso reservado para socios autenticados.' });
     }
 
+    if (u.requested_gym_id && !u.requested_gym_autorizado) {
+      return res.status(403).json({ error: 'No tienes acceso al gimnasio solicitado.' });
+    }
+
+    const idSocio = u.id_socio;
+    const idGimnasio = u.id_gimnasio;
     const { origen = 'todos', grupo_muscular, search } = req.query;
 
-    let query = supabase.from('ejercicio').select('*');
+    let query = db.from('ejercicio').select('*');
 
-    // Filtrar según el origen solicitado:
     if (origen === 'gimnasio') {
-      // Sólo ejercicios oficiales del gimnasio (sin id_socio asignado)
-      if (idGimnasio) {
-        query = query.eq('id_gimnasio', idGimnasio).is('id_socio', null);
-      } else {
-        query = query.is('id_socio', null);
-      }
+      if (!idGimnasio) return res.status(200).json([]);
+      query = query.eq('id_gimnasio', idGimnasio).is('id_socio', null);
     } else if (origen === 'propio') {
-      // Sólo ejercicios creados por este socio
-      query = query.eq('id_socio', idSocio);
+      query = query.eq('id_socio', idSocio).is('id_gimnasio', null);
     } else {
-      // 'todos': ejercicios del gimnasio al que asiste + ejercicios propios
       if (idGimnasio) {
-        query = query.or(`and(id_gimnasio.eq.${idGimnasio},id_socio.is.null),id_socio.eq.${idSocio}`);
+        query = query.or(
+          `and(id_gimnasio.eq.${idGimnasio},id_socio.is.null),and(id_socio.eq.${idSocio},id_gimnasio.is.null)`
+        );
       } else {
-        query = query.or(`id_socio.is.null,id_socio.eq.${idSocio}`);
+        query = query.eq('id_socio', idSocio).is('id_gimnasio', null);
       }
     }
 
-    // Filtro por grupo muscular
     if (grupo_muscular && grupo_muscular !== 'todos') {
-      query = query.ilike('grupo_muscular', `%${grupo_muscular.trim()}%`);
+      query = query.ilike('grupo_muscular', `%${String(grupo_muscular).trim()}%`);
     }
 
-    // Buscador por nombre
-    if (search && search.trim()) {
-      query = query.ilike('nombre', `%${search.trim()}%`);
+    if (search && String(search).trim()) {
+      query = query.ilike('nombre', `%${String(search).trim()}%`);
     }
 
     query = query.order('nombre', { ascending: true });
@@ -85,10 +55,12 @@ const getEjerciciosSocio = async (req, res) => {
     const { data, error } = await query;
     if (error) throw error;
 
-    // Enriquecer y diferenciar claramente ejercicios del gimnasio y propios
-    const ejerciciosDiferenciados = (data || []).map((ej) => {
+    // Sin duplicados por id_ejercicio
+    const mapa = new Map();
+    (data || []).forEach((ej) => {
+      if (mapa.has(ej.id_ejercicio)) return;
       const esPropio = Boolean(ej.id_socio && Number(ej.id_socio) === Number(idSocio));
-      return {
+      mapa.set(ej.id_ejercicio, {
         id_ejercicio: ej.id_ejercicio,
         nombre: ej.nombre,
         descripcion: ej.descripcion || 'Sin descripción técnica disponible',
@@ -99,13 +71,13 @@ const getEjerciciosSocio = async (req, res) => {
         origen: esPropio ? 'Mi ejercicio' : 'Gimnasio',
         tipo_origen: esPropio ? 'propio' : 'gimnasio',
         es_propio: esPropio,
-        es_gimnasio: !ej.id_socio,
+        es_gimnasio: !esPropio,
         puede_editar: esPropio,
         puede_eliminar: esPropio
-      };
+      });
     });
 
-    return res.status(200).json(ejerciciosDiferenciados);
+    return res.status(200).json(Array.from(mapa.values()));
   } catch (error) {
     return res.status(500).json({ error: 'Error al consultar ejercicios del socio: ' + error.message });
   }
@@ -113,41 +85,41 @@ const getEjerciciosSocio = async (req, res) => {
 
 /**
  * 2. POST /api/socio/ejercicios
- * Crear un nuevo ejercicio personalizado propio del socio.
+ * Crea un ejercicio personal del socio (id_socio = X, id_gimnasio = NULL).
  */
 const crearEjercicioSocio = async (req, res) => {
   try {
-    const { idSocio, idGimnasio } = await resolverSocioAutenticado(req);
+    const db = req.supabase;
+    const u = req.usuario;
 
-    if (!idSocio) {
-      return res.status(401).json({ error: 'Acceso no autorizado: Perfil de socio no encontrado.' });
+    if (u.rol !== 'socio' || !u.id_socio) {
+      return res.status(403).json({ error: 'Acceso reservado para socios autenticados.' });
     }
 
     const { nombre, grupo_muscular, descripcion, dificultad } = req.body;
-
-    if (!nombre || !nombre.trim()) {
+    if (!nombre || !String(nombre).trim()) {
       return res.status(400).json({ error: 'El nombre del ejercicio es obligatorio.' });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('ejercicio')
       .insert([
         {
-          nombre: nombre.trim(),
-          grupo_muscular: grupo_muscular ? grupo_muscular.trim() : 'General',
-          descripcion: descripcion ? descripcion.trim() : null,
+          nombre: String(nombre).trim(),
+          grupo_muscular: grupo_muscular ? String(grupo_muscular).trim() : 'General',
+          descripcion: descripcion ? String(descripcion).trim() : null,
           dificultad: dificultad || 'Intermedia',
-          id_socio: idSocio,
-          id_gimnasio: idGimnasio || null
+          id_socio: u.id_socio,
+          id_gimnasio: null
         }
       ])
-      .select()
+      .select('*')
       .single();
 
     if (error) throw error;
 
     return res.status(201).json({
-      mensaje: '¡Ejercicio propio creado exitosamente!',
+      mensaje: '¡Ejercicio personal creado exitosamente!',
       ejercicio: {
         ...data,
         origen: 'Mi ejercicio',
@@ -159,61 +131,58 @@ const crearEjercicioSocio = async (req, res) => {
       }
     });
   } catch (error) {
-    return res.status(500).json({ error: 'Error al crear el ejercicio propio: ' + error.message });
+    return res.status(500).json({ error: 'Error al crear el ejercicio personal: ' + error.message });
   }
 };
 
 /**
  * 3. PUT /api/socio/ejercicios/:id
- * Modificar un ejercicio propio.
- * Valida que el socio SOLO pueda modificar ejercicios creados por él.
  */
 const actualizarEjercicioSocio = async (req, res) => {
   try {
+    const db = req.supabase;
+    const u = req.usuario;
     const { id } = req.params;
-    const { idSocio } = await resolverSocioAutenticado(req);
 
-    if (!idSocio) {
-      return res.status(401).json({ error: 'Acceso no autorizado.' });
+    if (u.rol !== 'socio' || !u.id_socio) {
+      return res.status(403).json({ error: 'Acceso no autorizado.' });
     }
 
-    // 1. Consultar el ejercicio a editar
-    const { data: ejercicioExistente, error: getErr } = await supabase
+    const { data: existente, error: getErr } = await db
       .from('ejercicio')
       .select('id_ejercicio, id_socio, id_gimnasio, nombre')
       .eq('id_ejercicio', id)
       .maybeSingle();
 
-    if (getErr || !ejercicioExistente) {
+    if (getErr || !existente) {
       return res.status(404).json({ error: 'El ejercicio solicitado no fue encontrado.' });
     }
 
-    // 2. VALIDACIÓN ESTRICTA: El socio solamente puede modificar sus propios ejercicios
-    if (!ejercicioExistente.id_socio || Number(ejercicioExistente.id_socio) !== Number(idSocio)) {
+    if (!existente.id_socio || Number(existente.id_socio) !== Number(u.id_socio)) {
       return res.status(403).json({
-        error: 'Permiso denegado: No tienes autorización para modificar ejercicios del gimnasio o pertenecientes a otros socios.'
+        error: 'Permiso denegado: no puedes modificar ejercicios del gimnasio ni de otros socios.'
       });
     }
 
     const { nombre, grupo_muscular, descripcion, dificultad } = req.body;
-
     const updateFields = {};
-    if (nombre !== undefined && nombre.trim()) updateFields.nombre = nombre.trim();
-    if (grupo_muscular !== undefined) updateFields.grupo_muscular = grupo_muscular.trim();
-    if (descripcion !== undefined) updateFields.descripcion = descripcion ? descripcion.trim() : null;
+    if (nombre !== undefined && String(nombre).trim()) updateFields.nombre = String(nombre).trim();
+    if (grupo_muscular !== undefined) updateFields.grupo_muscular = String(grupo_muscular).trim();
+    if (descripcion !== undefined) updateFields.descripcion = descripcion ? String(descripcion).trim() : null;
     if (dificultad !== undefined) updateFields.dificultad = dificultad;
 
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('ejercicio')
       .update(updateFields)
       .eq('id_ejercicio', id)
-      .select()
+      .eq('id_socio', u.id_socio)
+      .select('*')
       .single();
 
     if (error) throw error;
 
     return res.status(200).json({
-      mensaje: 'Ejercicio propio actualizado con éxito.',
+      mensaje: 'Ejercicio personal actualizado con éxito.',
       ejercicio: {
         ...data,
         origen: 'Mi ejercicio',
@@ -231,54 +200,52 @@ const actualizarEjercicioSocio = async (req, res) => {
 
 /**
  * 4. DELETE /api/socio/ejercicios/:id
- * Eliminar un ejercicio propio.
- * Valida que el socio SOLO pueda eliminar ejercicios creados por él.
  */
 const eliminarEjercicioSocio = async (req, res) => {
   try {
+    const db = req.supabase;
+    const u = req.usuario;
     const { id } = req.params;
-    const { idSocio } = await resolverSocioAutenticado(req);
 
-    if (!idSocio) {
-      return res.status(401).json({ error: 'Acceso no autorizado.' });
+    if (u.rol !== 'socio' || !u.id_socio) {
+      return res.status(403).json({ error: 'Acceso no autorizado.' });
     }
 
-    // 1. Consultar el ejercicio a eliminar
-    const { data: ejercicioExistente, error: getErr } = await supabase
+    const { data: existente, error: getErr } = await db
       .from('ejercicio')
       .select('id_ejercicio, id_socio, id_gimnasio, nombre')
       .eq('id_ejercicio', id)
       .maybeSingle();
 
-    if (getErr || !ejercicioExistente) {
+    if (getErr || !existente) {
       return res.status(404).json({ error: 'El ejercicio solicitado no fue encontrado.' });
     }
 
-    // 2. VALIDACIÓN ESTRICTA: El socio solamente puede eliminar sus propios ejercicios
-    if (!ejercicioExistente.id_socio || Number(ejercicioExistente.id_socio) !== Number(idSocio)) {
+    if (!existente.id_socio || Number(existente.id_socio) !== Number(u.id_socio)) {
       return res.status(403).json({
-        error: 'Permiso denegado: No tienes autorización para eliminar ejercicios oficiales del gimnasio.'
+        error: 'Permiso denegado: no puedes eliminar ejercicios oficiales del gimnasio ni de otros socios.'
       });
     }
 
-    // 3. Limpiar dependencias en rutinas antes de eliminar
-    await supabase
+    // Quitar referencias de sus propias rutinas si existen antes de eliminar
+    await db
       .from('rutina_ejercicio')
       .delete()
       .eq('id_ejercicio', id);
 
-    const { error } = await supabase
+    const { error } = await db
       .from('ejercicio')
       .delete()
-      .eq('id_ejercicio', id);
+      .eq('id_ejercicio', id)
+      .eq('id_socio', u.id_socio);
 
     if (error) throw error;
 
     return res.status(200).json({
-      mensaje: `El ejercicio propio "${ejercicioExistente.nombre}" fue eliminado exitosamente.`
+      mensaje: `El ejercicio personal "${existente.nombre}" fue eliminado exitosamente.`
     });
   } catch (error) {
-    return res.status(500).json({ error: 'Error al eliminar el ejercicio propio: ' + error.message });
+    return res.status(500).json({ error: 'Error al eliminar el ejercicio personal: ' + error.message });
   }
 };
 

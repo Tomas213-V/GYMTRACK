@@ -16,9 +16,10 @@
  *    - Control de estados (activas, vencidas, canceladas) y filtros de búsqueda rápida.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar-dueno/sidebar';
+import { useGymContext } from '../../context/GymContext';
 import {
   getPlanesMembresia,
   createPlanMembresia,
@@ -27,6 +28,7 @@ import {
   deletePlanMembresia,
   getMembresiasSocios,
   createMembresiaSocio,
+  renovarMembresiaSocio,
   updateMembresiaSocio,
   cancelarMembresiaSocio,
   deleteMembresiaSocio,
@@ -51,21 +53,24 @@ import {
   FaExclamationTriangle,
   FaSyncAlt,
   FaFilter,
-  FaUserPlus,
-  FaPause,
-  FaPlay
+  FaUserPlus
 } from 'react-icons/fa';
 
 import './membresia-admin.css';
 
+const isPlanActivo = (p) => p?.estado === true || String(p?.estado || '').toLowerCase() === 'activo';
+const getPlanId = (p) => p?.id_membresia_gimnasio ?? p?.id_plan_membresia;
+const getMembId = (m) => m?.id_membresia_socio ?? m?.id_membresia;
+
 export default function MembresiaAdmin() {
+  const { gimnasioActivoId, contextVersion } = useGymContext();
 
   // --------------------------------------------------------------------------
   // Estados Generales
   // --------------------------------------------------------------------------
-  const [tabActiva, setTabActiva] = useState('planes'); // 'planes' | 'socios'
+  const [tabActiva, setTabActiva] = useState('planes');
   const [loading, setLoading] = useState(true);
-  const [notificacion, setNotificacion] = useState(null); // { tipo: 'exito'|'error', mensaje: '' }
+  const [notificacion, setNotificacion] = useState(null);
 
   // Datos
   const [planes, setPlanes] = useState([]);
@@ -79,16 +84,19 @@ export default function MembresiaAdmin() {
 
   // Modales
   const [modalPlanAbierto, setModalPlanAbierto] = useState(false);
-  const [planEditando, setPlanEditando] = useState(null); // null = nuevo, objeto = editar
+  const [planEditando, setPlanEditando] = useState(null);
   const [formPlan, setFormPlan] = useState({
     nombre: '',
+    descripcion: '',
     precio: '',
     duracion_dias: 30,
-    estado: 'activo'
+    limite_asistencias_semanales: '',
+    limite_asistencias_totales: '',
+    estado: true
   });
 
   const [modalMembresiaAbierto, setModalMembresiaAbierto] = useState(false);
-  const [membresiaEditando, setMembresiaEditando] = useState(null); // null = nuevo, objeto = editar
+  const [membresiaEditando, setMembresiaEditando] = useState(null);
   const [formMembresia, setFormMembresia] = useState({
     id_socio: '',
     id_plan_membresia: '',
@@ -99,7 +107,6 @@ export default function MembresiaAdmin() {
     estado: 'activa'
   });
 
-  // Modal Confirmación Genérico (eliminar o cancelar)
   const [modalConfirmacion, setModalConfirmacion] = useState({
     abierto: false,
     titulo: '',
@@ -111,9 +118,6 @@ export default function MembresiaAdmin() {
 
   const [guardando, setGuardando] = useState(false);
 
-  // --------------------------------------------------------------------------
-  // Notificaciones automáticas
-  // --------------------------------------------------------------------------
   const mostrarNotificacion = (mensaje, tipo = 'exito') => {
     setNotificacion({ mensaje, tipo });
     setTimeout(() => {
@@ -122,9 +126,16 @@ export default function MembresiaAdmin() {
   };
 
   // --------------------------------------------------------------------------
-  // Carga de Datos
+  // Carga de Datos (reactiva al cambio de gimnasio activo)
   // --------------------------------------------------------------------------
-  const cargarDatos = async () => {
+  const cargarDatos = useCallback(async () => {
+    if (!gimnasioActivoId) {
+      setPlanes([]);
+      setMembresias([]);
+      setSociosLista([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       const [planesData, membresiasData, sociosData] = await Promise.all([
@@ -142,97 +153,79 @@ export default function MembresiaAdmin() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [gimnasioActivoId]);
 
   useEffect(() => {
     cargarDatos();
-  }, []);
+  }, [cargarDatos, contextVersion]);
 
-  // --------------------------------------------------------------------------
-  // Funciones Auxiliares de Cálculo de Estados de Membresía
-  // --------------------------------------------------------------------------
   const calcularDiasRestantes = (fechaVenc) => {
     if (!fechaVenc) return null;
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
     const venc = new Date(fechaVenc.split('T')[0] + 'T00:00:00');
     const diffTime = venc - hoy;
-    const diffDias = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDias;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
   const obtenerEstadoMembresia = (memb) => {
     const est = (memb?.estado || '').toLowerCase().trim();
     if (est === 'cancelada' || est === 'cancelado') return 'cancelada';
-    if (est === 'pausada' || est === 'pausado' || est === 'inactiva' || est === 'inactivo') return 'pausada';
+    if (est === 'pendiente') return 'pendiente';
     const dias = calcularDiasRestantes(memb?.fecha_vencimiento);
     if (est === 'vencida' || est === 'vencido' || (dias !== null && dias < 0)) return 'vencida';
     if (est === 'activa' || est === 'activo' || !est) return 'activa';
     return est;
   };
 
-  // --------------------------------------------------------------------------
-  // Métricas y Estadísticas Calculadas
-  // --------------------------------------------------------------------------
   const metricas = useMemo(() => {
-    const planesActivos = planes.filter(p => p.estado === 'activo').length;
+    const planesActivos = planes.filter((p) => isPlanActivo(p)).length;
     const totalMembresias = membresias.length;
-    const membresiasActivas = membresias.filter(m => obtenerEstadoMembresia(m) === 'activa').length;
-    const membresiasPausadas = membresias.filter(m => obtenerEstadoMembresia(m) === 'pausada').length;
-    const membresiasVencidas = membresias.filter(m => obtenerEstadoMembresia(m) === 'vencida').length;
-    const membresiasCanceladas = membresias.filter(m => obtenerEstadoMembresia(m) === 'cancelada').length;
+    const membresiasActivas = membresias.filter((m) => obtenerEstadoMembresia(m) === 'activa').length;
+    const membresiasPendientes = membresias.filter((m) => obtenerEstadoMembresia(m) === 'pendiente').length;
+    const membresiasVencidas = membresias.filter((m) => obtenerEstadoMembresia(m) === 'vencida').length;
+    const membresiasCanceladas = membresias.filter((m) => obtenerEstadoMembresia(m) === 'cancelada').length;
 
-    // Calcular recaudación estimada mensual por membresías activas
     const estimadoActivo = membresias
-      .filter(m => obtenerEstadoMembresia(m) === 'activa')
-      .reduce((acc, curr) => acc + (parseFloat(curr.precio) || 0), 0);
+      .filter((m) => obtenerEstadoMembresia(m) === 'activa')
+      .reduce((acc, curr) => acc + (parseFloat(curr.precio_contratado ?? curr.precio) || 0), 0);
 
     return {
       planesActivos,
       totalPlanes: planes.length,
       totalMembresias,
       membresiasActivas,
-      membresiasPausadas,
+      membresiasPendientes,
       membresiasVencidas,
       membresiasCanceladas,
       estimadoActivo
     };
   }, [planes, membresias]);
 
-  // --------------------------------------------------------------------------
-  // Filtrado de Planes
-  // --------------------------------------------------------------------------
   const planesFiltrados = useMemo(() => {
-    return planes.filter(p => {
-      if (filtroEstadoPlan !== 'todos') {
-        if (p.estado !== filtroEstadoPlan) return false;
-      }
+    return planes.filter((p) => {
+      if (filtroEstadoPlan === 'activo') return isPlanActivo(p);
+      if (filtroEstadoPlan === 'inactivo') return !isPlanActivo(p);
       return true;
     });
   }, [planes, filtroEstadoPlan]);
 
-  // --------------------------------------------------------------------------
-  // Filtrado de Membresías de Socios
-  // --------------------------------------------------------------------------
   const membresiasFiltradas = useMemo(() => {
-    return membresias.filter(m => {
+    return membresias.filter((m) => {
       const estadoCalculado = obtenerEstadoMembresia(m);
-      if (filtroEstadoMembresia !== 'todos') {
-        if (filtroEstadoMembresia === 'pausada') {
-          if (estadoCalculado !== 'pausada') return false;
-        } else if (estadoCalculado !== filtroEstadoMembresia) {
-          return false;
-        }
+      if (filtroEstadoMembresia !== 'todos' && estadoCalculado !== filtroEstadoMembresia) {
+        return false;
       }
 
       if (busquedaSocio.trim()) {
         const busq = busquedaSocio.toLowerCase().trim();
         const nombreCompleto = `${m.socio?.nombre || ''} ${m.socio?.apellido || ''}`.toLowerCase();
         const dni = (m.socio?.dni || '').toString();
-        const nombrePlan = (m.plan_membresia?.nombre || '').toLowerCase();
+        const nombrePlan = (m.plan_membresia?.nombre || m.membresia_gimnasio?.nombre || '').toLowerCase();
 
-        const coincide = nombreCompleto.includes(busq) || dni.includes(busq) || nombrePlan.includes(busq);
-        if (!coincide) return false;
+        if (!nombreCompleto.includes(busq) && !dni.includes(busq) && !nombrePlan.includes(busq)) {
+          return false;
+        }
       }
 
       return true;
@@ -240,15 +233,18 @@ export default function MembresiaAdmin() {
   }, [membresias, filtroEstadoMembresia, busquedaSocio]);
 
   // --------------------------------------------------------------------------
-  // Manejo de Modales: Planes
+  // Modales: Planes (membresia_gimnasio)
   // --------------------------------------------------------------------------
   const abrirModalNuevoPlan = () => {
     setPlanEditando(null);
     setFormPlan({
       nombre: '',
+      descripcion: '',
       precio: '',
       duracion_dias: 30,
-      estado: 'activo'
+      limite_asistencias_semanales: '',
+      limite_asistencias_totales: '',
+      estado: true
     });
     setModalPlanAbierto(true);
   };
@@ -257,9 +253,12 @@ export default function MembresiaAdmin() {
     setPlanEditando(plan);
     setFormPlan({
       nombre: plan.nombre || '',
+      descripcion: plan.descripcion || '',
       precio: plan.precio !== undefined ? plan.precio : '',
       duracion_dias: plan.duracion_dias || 30,
-      estado: plan.estado || 'activo'
+      limite_asistencias_semanales: plan.limite_asistencias_semanales ?? '',
+      limite_asistencias_totales: plan.limite_asistencias_totales ?? '',
+      estado: isPlanActivo(plan)
     });
     setModalPlanAbierto(true);
   };
@@ -279,15 +278,25 @@ export default function MembresiaAdmin() {
       return;
     }
 
+    const payload = {
+      nombre: formPlan.nombre.trim(),
+      descripcion: formPlan.descripcion.trim() || null,
+      precio: Number(formPlan.precio),
+      duracion_dias: Number(formPlan.duracion_dias),
+      limite_asistencias_semanales:
+        formPlan.limite_asistencias_semanales !== '' ? Number(formPlan.limite_asistencias_semanales) : null,
+      limite_asistencias_totales:
+        formPlan.limite_asistencias_totales !== '' ? Number(formPlan.limite_asistencias_totales) : null,
+      estado: Boolean(formPlan.estado)
+    };
+
     try {
       setGuardando(true);
       if (planEditando) {
-        // Actualizar
-        await updatePlanMembresia(planEditando.id_plan_membresia, formPlan);
+        await updatePlanMembresia(getPlanId(planEditando), payload);
         mostrarNotificacion('Plan de membresía actualizado exitosamente');
       } else {
-        // Crear
-        await createPlanMembresia(formPlan);
+        await createPlanMembresia(payload);
         mostrarNotificacion('Plan de membresía creado exitosamente');
       }
       setModalPlanAbierto(false);
@@ -300,14 +309,15 @@ export default function MembresiaAdmin() {
   };
 
   const alternarEstadoPlan = async (plan) => {
-    const nuevoEstado = plan.estado === 'activo' ? 'inactivo' : 'activo';
+    const actualmenteActivo = isPlanActivo(plan);
+    const idPlan = getPlanId(plan);
     try {
-      if (nuevoEstado === 'inactivo') {
-        await deshabilitarPlanMembresia(plan.id_plan_membresia);
+      if (actualmenteActivo) {
+        await deshabilitarPlanMembresia(idPlan);
       } else {
-        await updatePlanMembresia(plan.id_plan_membresia, { estado: 'activo' });
+        await updatePlanMembresia(idPlan, { estado: true });
       }
-      mostrarNotificacion(`El plan "${plan.nombre}" ahora está ${nuevoEstado}.`);
+      mostrarNotificacion(`El plan "${plan.nombre}" ahora está ${actualmenteActivo ? 'inactivo' : 'activo'}.`);
       await cargarDatos();
     } catch (err) {
       mostrarNotificacion(err.message || 'Error al cambiar estado del plan', 'error');
@@ -318,14 +328,14 @@ export default function MembresiaAdmin() {
     setModalConfirmacion({
       abierto: true,
       titulo: 'Eliminar Plan de Membresía',
-      mensaje: `¿Estás seguro de que deseas eliminar el plan "${plan.nombre}"? Si hay socios con este plan asignado, se desactivará automáticamente para conservar el registro histórico.`,
+      mensaje: `¿Estás seguro de que deseas eliminar el plan "${plan.nombre}"? Si hay socios con contrataciones de este plan, se desactivará automáticamente para conservar el registro histórico.`,
       textoBoton: 'Sí, Eliminar Plan',
       peligroso: true,
       onConfirm: async () => {
         try {
-          const res = await deletePlanMembresia(plan.id_plan_membresia);
+          const res = await deletePlanMembresia(getPlanId(plan));
           mostrarNotificacion(res.mensaje || 'Plan eliminado correctamente');
-          setModalConfirmacion(prev => ({ ...prev, abierto: false }));
+          setModalConfirmacion((prev) => ({ ...prev, abierto: false }));
           await cargarDatos();
         } catch (err) {
           mostrarNotificacion(err.message || 'Error al eliminar el plan', 'error');
@@ -335,11 +345,11 @@ export default function MembresiaAdmin() {
   };
 
   // --------------------------------------------------------------------------
-  // Manejo de Modales: Membresías de Socios
+  // Modales: Membresías de Socios (membresia_socio)
   // --------------------------------------------------------------------------
   const abrirModalNuevaMembresia = () => {
     setMembresiaEditando(null);
-    const primerPlan = planes.find(p => p.estado === 'activo') || planes[0];
+    const primerPlan = planes.find((p) => isPlanActivo(p)) || planes[0];
     const fInicio = new Date().toISOString().split('T')[0];
     const duracion = primerPlan ? primerPlan.duracion_dias : 30;
     const fVenc = new Date();
@@ -347,7 +357,7 @@ export default function MembresiaAdmin() {
 
     setFormMembresia({
       id_socio: sociosLista[0]?.id_socio || '',
-      id_plan_membresia: primerPlan?.id_plan_membresia || '',
+      id_plan_membresia: primerPlan ? getPlanId(primerPlan) : '',
       fecha_inicio: fInicio,
       fecha_vencimiento: fVenc.toISOString().split('T')[0],
       dias_adicionales: 0,
@@ -359,46 +369,46 @@ export default function MembresiaAdmin() {
 
   const abrirModalEditarMembresia = (memb) => {
     setMembresiaEditando(memb);
+    const estActual = (memb.estado || 'activa').toLowerCase();
+    const estValido = ['pendiente', 'activa', 'vencida', 'cancelada'].includes(estActual) ? estActual : 'activa';
     setFormMembresia({
       id_socio: memb.id_socio,
-      id_plan_membresia: memb.id_plan_membresia || memb.plan_membresia?.id_plan_membresia || '',
+      id_plan_membresia: memb.id_membresia_gimnasio || memb.id_plan_membresia || getPlanId(memb.plan_membresia) || '',
       fecha_inicio: memb.fecha_inicio ? memb.fecha_inicio.split('T')[0] : '',
       fecha_vencimiento: memb.fecha_vencimiento ? memb.fecha_vencimiento.split('T')[0] : '',
       dias_adicionales: 0,
-      precio: memb.precio !== undefined ? memb.precio : (memb.plan_membresia?.precio || ''),
-      estado: memb.estado || 'activa'
+      precio: memb.precio_contratado ?? memb.precio ?? memb.plan_membresia?.precio ?? '',
+      estado: estValido
     });
     setModalMembresiaAbierto(true);
   };
 
-  // Al cambiar de plan en el formulario de membresía, sugerir precio y recalcular fecha de vencimiento
   const handleCambioPlanEnForm = (planId) => {
-    const planSel = planes.find(p => p.id_plan_membresia === parseInt(planId));
+    const planSel = planes.find((p) => String(getPlanId(p)) === String(planId));
     if (planSel) {
       const fIni = formMembresia.fecha_inicio ? new Date(formMembresia.fecha_inicio) : new Date();
       const fVenc = new Date(fIni);
       fVenc.setDate(fVenc.getDate() + (planSel.duracion_dias || 30) + (parseInt(formMembresia.dias_adicionales) || 0));
 
-      setFormMembresia(prev => ({
+      setFormMembresia((prev) => ({
         ...prev,
         id_plan_membresia: planId,
         precio: planSel.precio,
         fecha_vencimiento: fVenc.toISOString().split('T')[0]
       }));
     } else {
-      setFormMembresia(prev => ({ ...prev, id_plan_membresia: planId }));
+      setFormMembresia((prev) => ({ ...prev, id_plan_membresia: planId }));
     }
   };
 
-  // Al cambiar la fecha de inicio, recalcular vencimiento si hay un plan seleccionado
   const handleCambioFechaInicio = (nuevaFecha) => {
-    const planSel = planes.find(p => p.id_plan_membresia === parseInt(formMembresia.id_plan_membresia));
+    const planSel = planes.find((p) => String(getPlanId(p)) === String(formMembresia.id_plan_membresia));
     const duracion = planSel ? (planSel.duracion_dias || 30) : 30;
     const fIni = nuevaFecha ? new Date(nuevaFecha) : new Date();
     const fVenc = new Date(fIni);
     fVenc.setDate(fVenc.getDate() + duracion + (parseInt(formMembresia.dias_adicionales) || 0));
 
-    setFormMembresia(prev => ({
+    setFormMembresia((prev) => ({
       ...prev,
       fecha_inicio: nuevaFecha,
       fecha_vencimiento: fVenc.toISOString().split('T')[0]
@@ -408,7 +418,7 @@ export default function MembresiaAdmin() {
   const handleExtenderDiasRapido = (diasExtra) => {
     const base = formMembresia.fecha_vencimiento ? new Date(formMembresia.fecha_vencimiento) : new Date();
     base.setDate(base.getDate() + diasExtra);
-    setFormMembresia(prev => ({
+    setFormMembresia((prev) => ({
       ...prev,
       fecha_vencimiento: base.toISOString().split('T')[0]
     }));
@@ -428,26 +438,31 @@ export default function MembresiaAdmin() {
     try {
       setGuardando(true);
       if (membresiaEditando) {
-        // Actualizar existente
-        await updateMembresiaSocio(membresiaEditando.id_membresia, {
-          id_plan_membresia: formMembresia.id_plan_membresia,
-          fecha_inicio: formMembresia.fecha_inicio,
+        await updateMembresiaSocio(getMembId(membresiaEditando), {
           fecha_vencimiento: formMembresia.fecha_vencimiento,
-          precio: formMembresia.precio,
           estado: formMembresia.estado
         });
         mostrarNotificacion('Membresía del socio actualizada exitosamente');
       } else {
-        // Crear nueva asignación
-        await createMembresiaSocio({
-          id_socio: formMembresia.id_socio,
-          id_plan_membresia: formMembresia.id_plan_membresia,
-          fecha_inicio: formMembresia.fecha_inicio,
-          dias_adicionales: formMembresia.dias_adicionales || 0,
-          precio: formMembresia.precio,
-          estado: formMembresia.estado
-        });
-        mostrarNotificacion('Membresía asignada al socio exitosamente');
+        const yaTieneActiva = membresias.some(
+          (m) =>
+            String(m.id_socio || m.socio_gimnasio?.id_socio) === String(formMembresia.id_socio) &&
+            String(m.estado || '').toLowerCase() === 'activa'
+        );
+        const payload = {
+          id_socio: Number(formMembresia.id_socio),
+          id_membresia_gimnasio: Number(formMembresia.id_plan_membresia),
+          fecha_inicio: formMembresia.fecha_inicio || undefined,
+          estado: formMembresia.estado === 'pendiente' ? 'pendiente' : 'activa',
+          registrar_pago: formMembresia.estado !== 'pendiente'
+        };
+        if (yaTieneActiva) {
+          await renovarMembresiaSocio(payload);
+          mostrarNotificacion('Renovación encadenada registrada exitosamente');
+        } else {
+          await createMembresiaSocio(payload);
+          mostrarNotificacion('Membresía contratada y asignada al socio exitosamente');
+        }
       }
       setModalMembresiaAbierto(false);
       await cargarDatos();
@@ -458,35 +473,19 @@ export default function MembresiaAdmin() {
     }
   };
 
-  const alternarPausaMembresiaSocio = async (memb) => {
-    const esActiva = (memb.estado || '').toLowerCase() === 'activa';
-    const nuevoEstado = esActiva ? 'pausada' : 'activa';
-    try {
-      await updateMembresiaSocio(memb.id_membresia, { estado: nuevoEstado });
-      mostrarNotificacion(
-        esActiva
-          ? `Membresía de ${memb.socio?.nombre || 'socio'} pausada (ya no le aparecerá en su apartado de membresías).`
-          : `Membresía de ${memb.socio?.nombre || 'socio'} reanudada y activada exitosamente.`
-      );
-      await cargarDatos();
-    } catch (err) {
-      mostrarNotificacion(err.message || 'Error al cambiar estado de la membresía', 'error');
-    }
-  };
-
   const confirmarCancelarMembresia = (memb) => {
     const nombreSocio = `${memb.socio?.nombre || ''} ${memb.socio?.apellido || ''}`.trim() || 'este socio';
     setModalConfirmacion({
       abierto: true,
       titulo: 'Cancelar Membresía',
-      mensaje: `¿Deseas dar de baja y cancelar la membresía de ${nombreSocio}? La membresía pasará a estado cancelada y no podrá ingresar al gimnasio con este pase.`,
+      mensaje: `¿Deseas dar de baja y cancelar la membresía de ${nombreSocio}? Pasará a estado cancelada y no podrá ingresar con este pase.`,
       textoBoton: 'Sí, Cancelar Membresía',
       peligroso: true,
       onConfirm: async () => {
         try {
-          await cancelarMembresiaSocio(memb.id_membresia);
+          await cancelarMembresiaSocio(getMembId(memb));
           mostrarNotificacion('Membresía cancelada correctamente');
-          setModalConfirmacion(prev => ({ ...prev, abierto: false }));
+          setModalConfirmacion((prev) => ({ ...prev, abierto: false }));
           await cargarDatos();
         } catch (err) {
           mostrarNotificacion(err.message || 'Error al cancelar la membresía', 'error');
@@ -500,14 +499,14 @@ export default function MembresiaAdmin() {
     setModalConfirmacion({
       abierto: true,
       titulo: 'Eliminar Membresía',
-      mensaje: `¿Confirmas la eliminación del registro de membresía de ${nombreSocio}? Si posee pagos contables vinculados, se marcará como cancelada para no romper la facturación.`,
+      mensaje: `¿Confirmas la eliminación del registro de membresía de ${nombreSocio}? Si posee pagos vinculados, se marcará como cancelada para conservar el historial contable.`,
       textoBoton: 'Sí, Eliminar Registro',
       peligroso: true,
       onConfirm: async () => {
         try {
-          const res = await deleteMembresiaSocio(memb.id_membresia);
-          mostrarNotificacion(res.mensaje || 'Membresía eliminada correctamente');
-          setModalConfirmacion(prev => ({ ...prev, abierto: false }));
+          const res = await deleteMembresiaSocio(getMembId(memb));
+          mostrarNotificacion(res.mensaje || 'Membresía procesada correctamente');
+          setModalConfirmacion((prev) => ({ ...prev, abierto: false }));
           await cargarDatos();
         } catch (err) {
           mostrarNotificacion(err.message || 'Error al eliminar la membresía', 'error');
@@ -714,14 +713,16 @@ export default function MembresiaAdmin() {
               ) : planesFiltrados.length > 0 ? (
                 <div className="planes-grid">
                   {planesFiltrados.map((plan) => {
+                    const planId = getPlanId(plan);
+                    const activo = isPlanActivo(plan);
                     const sociosConEstePlan = membresias.filter(
-                      m => m.id_plan_membresia === plan.id_plan_membresia && m.estado === 'activa'
+                      (m) => String(m.id_membresia_gimnasio || m.id_plan_membresia) === String(planId) && m.estado === 'activa'
                     ).length;
 
                     return (
                       <div
-                        key={plan.id_plan_membresia}
-                        className={`plan-card-item ${plan.estado === 'inactivo' ? 'plan-inactivo' : ''}`}
+                        key={planId}
+                        className={`plan-card-item ${!activo ? 'plan-inactivo' : ''}`}
                       >
                         <div className="plan-card-header">
                           <div className="plan-title-box">
@@ -736,17 +737,23 @@ export default function MembresiaAdmin() {
                             </div>
                           </div>
 
-                          <span className={`estado-badge estado-${plan.estado}`}>
-                            {plan.estado === 'activo' ? 'Activo' : 'Inactivo'}
+                          <span className={`estado-badge estado-${activo ? 'activo' : 'inactivo'}`}>
+                            {activo ? 'Activo' : 'Inactivo'}
                           </span>
                         </div>
+
+                        {plan.descripcion && (
+                          <p style={{ fontSize: '12.5px', color: '#94a3b8', margin: '0 0 10px 0' }}>
+                            {plan.descripcion}
+                          </p>
+                        )}
 
                         <div className="plan-precio-container">
                           <span className="plan-precio-valor">
                             {formatearMoneda(plan.precio)}
                           </span>
                           <span className="plan-precio-sub">
-                            / {plan.duracion_dias >= 365 ? 'año' : plan.duracion_dias >= 30 ? 'mes' : `${plan.duracion_dias} días`}
+                            / {plan.duracion_dias} días
                           </span>
                         </div>
 
@@ -755,6 +762,15 @@ export default function MembresiaAdmin() {
                             <FaUserCheck className="pill-icon" />
                             <span><strong>{sociosConEstePlan}</strong> socios activos</span>
                           </div>
+                          {(plan.limite_asistencias_semanales || plan.limite_asistencias_totales) && (
+                            <div className="stat-pill" style={{ fontSize: '11.5px', color: '#94a3b8' }}>
+                              <span>
+                                {plan.limite_asistencias_semanales ? `${plan.limite_asistencias_semanales}/sem` : ''}
+                                {plan.limite_asistencias_semanales && plan.limite_asistencias_totales ? ' • ' : ''}
+                                {plan.limite_asistencias_totales ? `${plan.limite_asistencias_totales} totales` : ''}
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         <div className="plan-card-footer">
@@ -768,12 +784,12 @@ export default function MembresiaAdmin() {
                           </button>
 
                           <button
-                            className={`btn-plan-action ${plan.estado === 'activo' ? 'btn-pausar' : 'btn-activar'}`}
+                            className={`btn-plan-action ${activo ? 'btn-pausar' : 'btn-activar'}`}
                             onClick={() => alternarEstadoPlan(plan)}
-                            title={plan.estado === 'activo' ? 'Desactivar plan' : 'Activar plan'}
+                            title={activo ? 'Desactivar plan' : 'Activar plan'}
                           >
-                            {plan.estado === 'activo' ? <FaBan /> : <FaCheck />}
-                            <span>{plan.estado === 'activo' ? 'Pausar' : 'Activar'}</span>
+                            {activo ? <FaBan /> : <FaCheck />}
+                            <span>{activo ? 'Desactivar' : 'Activar'}</span>
                           </button>
 
                           <button
@@ -839,10 +855,10 @@ export default function MembresiaAdmin() {
                       Activas ({metricas.membresiasActivas})
                     </button>
                     <button
-                      className={`pill-btn ${filtroEstadoMembresia === 'pausada' ? 'pill-activo' : ''}`}
-                      onClick={() => setFiltroEstadoMembresia('pausada')}
+                      className={`pill-btn ${filtroEstadoMembresia === 'pendiente' ? 'pill-activo' : ''}`}
+                      onClick={() => setFiltroEstadoMembresia('pendiente')}
                     >
-                      Pausadas ({metricas.membresiasPausadas})
+                      Pendientes ({metricas.membresiasPendientes})
                     </button>
                     <button
                       className={`pill-btn ${filtroEstadoMembresia === 'vencida' ? 'pill-activo' : ''}`}
@@ -893,21 +909,24 @@ export default function MembresiaAdmin() {
                           const esPorVencer = diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 5;
 
                           const estadoCalculado = obtenerEstadoMembresia(memb);
+                          const socioObj = memb.socio || memb.socio_gimnasio?.socio || null;
+                          const planObj = memb.membresia_gimnasio || memb.plan_membresia || null;
+                          const precioMostrado = memb.precio_contratado ?? memb.precio ?? planObj?.precio ?? 0;
 
                           return (
-                            <tr key={memb.id_membresia} className={`fila-membresia ${estadoCalculado === 'cancelada' ? 'fila-cancelada' : ''}`}>
+                            <tr key={getMembId(memb)} className={`fila-membresia ${estadoCalculado === 'cancelada' ? 'fila-cancelada' : ''}`}>
                               {/* Socio */}
                               <td>
                                 <div className="socio-col-user">
                                   <div className="socio-avatar">
-                                    {memb.socio?.nombre ? memb.socio.nombre[0].toUpperCase() : 'S'}
+                                    {socioObj?.nombre ? socioObj.nombre[0].toUpperCase() : 'S'}
                                   </div>
                                   <div className="socio-col-meta">
                                     <span className="socio-col-nombre">
-                                      {memb.socio ? `${memb.socio.nombre} ${memb.socio.apellido || ''}` : 'Socio Desconocido'}
+                                      {socioObj ? `${socioObj.nombre} ${socioObj.apellido || ''}` : 'Socio Desconocido'}
                                     </span>
                                     <span className="socio-col-dni">
-                                      DNI: {memb.socio?.dni || 'Sin DNI'}
+                                      DNI: {socioObj?.dni || 'Sin DNI'}
                                     </span>
                                   </div>
                                 </div>
@@ -917,14 +936,14 @@ export default function MembresiaAdmin() {
                               <td>
                                 <div className="plan-col-tag">
                                   <FaCrown className="tag-crown" />
-                                  <span>{memb.plan_membresia?.nombre || 'Plan Sin Nombre'}</span>
+                                  <span>{planObj?.nombre || 'Plan Sin Nombre'}</span>
                                 </div>
                               </td>
 
                               {/* Precio */}
                               <td>
                                 <span className="precio-col-val">
-                                  {formatearMoneda(memb.precio || memb.plan_membresia?.precio || 0)}
+                                  {formatearMoneda(precioMostrado)}
                                 </span>
                               </td>
 
@@ -964,67 +983,49 @@ export default function MembresiaAdmin() {
                                 {(() => {
                                   const estadoCalculado = obtenerEstadoMembresia(memb);
                                   return (
-                                    <span className={`estado-badge estado-${estadoCalculado}`}>
-                                      {estadoCalculado === 'activa'
-                                        ? 'Activa'
-                                        : estadoCalculado === 'vencida'
-                                        ? 'Vencida'
-                                        : estadoCalculado === 'pausada'
-                                        ? 'Pausada'
-                                        : 'Cancelada'}
-                                    </span>
-                                  );
-                                })()}
-                              </td>
+                                      <span className={`estado-badge estado-${estadoCalculado}`}>
+                                        {estadoCalculado === 'activa'
+                                          ? 'Activa'
+                                          : estadoCalculado === 'pendiente'
+                                          ? 'Pendiente'
+                                          : estadoCalculado === 'vencida'
+                                          ? 'Vencida'
+                                          : 'Cancelada'}
+                                      </span>
+                                    );
+                                  })()}
+                                </td>
 
-                              {/* Acciones */}
-                              <td>
-                                <div className="acciones-row">
-                                  <button
-                                    className="btn-tabla-action btn-tabla-editar"
-                                    onClick={() => abrirModalEditarMembresia(memb)}
-                                    title="Editar o renovar membresía"
-                                  >
-                                    <FaEdit />
-                                  </button>
-
-                                  {memb.estado === 'activa' ? (
+                                {/* Acciones */}
+                                <td>
+                                  <div className="acciones-row">
                                     <button
-                                      className="btn-tabla-action btn-tabla-pausar"
-                                      onClick={() => alternarPausaMembresiaSocio(memb)}
-                                      title="Pausar membresía (ocultar del apartado del socio)"
+                                      className="btn-tabla-action btn-tabla-editar"
+                                      onClick={() => abrirModalEditarMembresia(memb)}
+                                      title="Editar o renovar membresía"
                                     >
-                                      <FaPause />
+                                      <FaEdit />
                                     </button>
-                                  ) : (memb.estado === 'pausada' || memb.estado === 'inactiva') ? (
-                                    <button
-                                      className="btn-tabla-action btn-tabla-activar"
-                                      onClick={() => alternarPausaMembresiaSocio(memb)}
-                                      title="Reanudar membresía (volver a habilitar para el socio)"
-                                    >
-                                      <FaPlay />
-                                    </button>
-                                  ) : null}
 
-                                  {memb.estado !== 'cancelada' && (
-                                    <button
-                                      className="btn-tabla-action btn-tabla-cancelar"
-                                      onClick={() => confirmarCancelarMembresia(memb)}
-                                      title="Cancelar membresía del socio"
-                                    >
-                                      <FaBan />
-                                    </button>
-                                  )}
+                                    {memb.estado !== 'cancelada' && (
+                                      <button
+                                        className="btn-tabla-action btn-tabla-cancelar"
+                                        onClick={() => confirmarCancelarMembresia(memb)}
+                                        title="Cancelar membresía del socio"
+                                      >
+                                        <FaBan />
+                                      </button>
+                                    )}
 
-                                  <button
-                                    className="btn-tabla-action btn-tabla-eliminar"
-                                    onClick={() => confirmarEliminarMembresia(memb)}
-                                    title="Eliminar registro"
-                                  >
-                                    <FaTrash />
-                                  </button>
-                                </div>
-                              </td>
+                                    <button
+                                      className="btn-tabla-action btn-tabla-eliminar"
+                                      onClick={() => confirmarEliminarMembresia(memb)}
+                                      title="Eliminar registro"
+                                    >
+                                      <FaTrash />
+                                    </button>
+                                  </div>
+                                </td>
                             </tr>
                           );
                         })}
@@ -1145,13 +1146,47 @@ export default function MembresiaAdmin() {
               </div>
 
               <div className="form-group">
+                <label>Descripción (opcional)</label>
+                <input
+                  type="text"
+                  placeholder="Ej: Acceso libre a todas las sucursales y sala de musculación"
+                  value={formPlan.descripcion}
+                  onChange={(e) => setFormPlan({ ...formPlan, descripcion: e.target.value })}
+                />
+              </div>
+
+              <div className="form-row-2">
+                <div className="form-group">
+                  <label>Límite semanal de asistencias (opcional)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Sin límite"
+                    value={formPlan.limite_asistencias_semanales}
+                    onChange={(e) => setFormPlan({ ...formPlan, limite_asistencias_semanales: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Límite total de asistencias (opcional)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Sin límite"
+                    value={formPlan.limite_asistencias_totales}
+                    onChange={(e) => setFormPlan({ ...formPlan, limite_asistencias_totales: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
                 <label>Estado del Plan</label>
                 <select
-                  value={formPlan.estado}
-                  onChange={(e) => setFormPlan({ ...formPlan, estado: e.target.value })}
+                  value={formPlan.estado ? 'true' : 'false'}
+                  onChange={(e) => setFormPlan({ ...formPlan, estado: e.target.value === 'true' })}
                 >
-                  <option value="activo">Activo (Disponible para asignar y pagar)</option>
-                  <option value="inactivo">Inactivo (Pausado temporalmente)</option>
+                  <option value="true">Activo (Disponible para asignar y contratar)</option>
+                  <option value="false">Inactivo (Deshabilitado temporalmente)</option>
                 </select>
               </div>
 
@@ -1231,11 +1266,14 @@ export default function MembresiaAdmin() {
                   onChange={(e) => handleCambioPlanEnForm(e.target.value)}
                 >
                   <option value="">-- Seleccionar Plan --</option>
-                  {planes.map((p) => (
-                    <option key={p.id_plan_membresia} value={p.id_plan_membresia}>
-                      {p.nombre} - {formatearMoneda(p.precio)} ({p.duracion_dias} días)
-                    </option>
-                  ))}
+                    {planes.map((p) => {
+                      const pid = getPlanId(p);
+                      return (
+                        <option key={pid} value={pid}>
+                          {p.nombre} - {formatearMoneda(p.precio)} ({p.duracion_dias} días)
+                        </option>
+                      );
+                    })}
                 </select>
               </div>
 
@@ -1312,8 +1350,7 @@ export default function MembresiaAdmin() {
                     onChange={(e) => setFormMembresia({ ...formMembresia, estado: e.target.value })}
                   >
                     <option value="activa">Activa (Habilitada para entrenar)</option>
-                    <option value="pausada">Pausada (En pausa - No visible en apartado del socio)</option>
-                    <option value="inactiva">Inactiva (No visible para el socio)</option>
+                    <option value="pendiente">Pendiente (Pendiente de acreditación)</option>
                     <option value="vencida">Vencida</option>
                     <option value="cancelada">Cancelada</option>
                   </select>

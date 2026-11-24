@@ -1,155 +1,101 @@
-const supabase = require('../config/supabase');
-
-/**
- * Helper para resolver el id_socio desde el token
- */
-const resolverIdSocio = async (req) => {
-  let idSocio = req.usuario?.id_socio;
-
-  if (!idSocio && req.usuario?.id_usuario) {
-    const { data: socioAuth, error: socioAuthErr } = await supabase
-      .from('socio')
-      .select('id_socio')
-      .eq('id_usuario', req.usuario.id_usuario)
-      .maybeSingle();
-
-    if (!socioAuthErr && socioAuth) {
-      idSocio = socioAuth.id_socio;
-    }
-  }
-
-  return idSocio;
-};
+// ==============================================================================
+// CONTROLADOR DE DASHBOARD DEL SOCIO — MULTIGIMNASIO + ASISTENCIAS POR SUCURSAL
+// - Todos los datos dependientes de gimnasio filtrados al gimnasio seleccionado.
+// - Rutinas personales y progreso corporal independientes del gimnasio.
+// - Check-in / Check-out validados transaccionalmente vía RPCs.
+// ==============================================================================
 
 /**
  * GET /api/socio/dashboard
- * Retorna la información completa para el Dashboard del Socio autenticado optimizado para PC / Desktop.
  */
 const getDashboardSocio = async (req, res) => {
   try {
-    const idSocio = await resolverIdSocio(req);
+    const db = req.supabase;
+    const u = req.usuario;
 
-    if (!idSocio) {
-      return res.status(401).json({ error: 'Usuario no autenticado como socio o perfil no encontrado.' });
+    if (u.rol !== 'socio' || !u.id_socio) {
+      return res.status(403).json({ error: 'Acceso reservado para socios autenticados.' });
     }
 
-    // Calcular inicio de mes actual para asistencias mensuales
+    if (u.requested_gym_id && !u.requested_gym_autorizado) {
+      return res.status(403).json({ error: 'No tienes una membresía válida en el gimnasio solicitado.' });
+    }
+
+    const idSocio = u.id_socio;
+    const gymId = u.id_gimnasio;
+
     const inicioMes = new Date();
     inicioMes.setDate(1);
     inicioMes.setHours(0, 0, 0, 0);
 
-    // Consulta paralela de datos para máxima velocidad
+    // Consultas paralelas acotadas al gimnasio seleccionado (y personales del socio)
     const [
-      socioRes,
-      membresiaRes,
-      ultimoPagoRes,
-      progresoRes,
-      progresoHistorialRes,
-      asistenciasTotalRes,
-      asistenciasMesRes,
-      asistenciasRecientesRes,
-      rutinaRes
+      membresiasRes,
+      sucursalesRes,
+      asistenciaAbiertaRes,
+      asistenciasGymRes,
+      rutinaRes,
+      progresoRes
     ] = await Promise.all([
-      // a. Datos del socio y de su gimnasio
-      supabase
-        .from('socio')
+      gymId
+        ? db
+            .from('membresia_socio')
+            .select(`
+              *,
+              membresia_gimnasio (id_membresia_gimnasio, nombre, descripcion, precio, duracion_dias, estado)
+            `)
+            .eq('id_socio', idSocio)
+            .eq('id_gimnasio', gymId)
+            .order('fecha_vencimiento', { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      gymId
+        ? db
+            .from('sucursal')
+            .select('id_sucursal, direccion, telefono, descripcion, estado, id_gimnasio')
+            .eq('id_gimnasio', gymId)
+            .eq('estado', true)
+            .order('id_sucursal', { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+      db
+        .from('asistencia_socio')
         .select(`
-          id_socio,
-          nombre,
-          apellido,
-          dni,
-          email,
-          telefono,
-          id_gimnasio,
-          gimnasio:id_gimnasio (
-            id_gimnasio,
-            nombre,
+          id_asistencia_socio,
+          id_sucursal,
+          hora_ingreso,
+          estado,
+          sucursal:id_sucursal (
+            id_sucursal,
             direccion,
-            telefono
+            id_gimnasio,
+            gimnasio:id_gimnasio (id_gimnasio, nombre)
           )
         `)
         .eq('id_socio', idSocio)
-        .single(),
-
-      // b. Membresías del socio (para resolver membresía activa vigente)
-      supabase
-        .from('membresia')
-        .select(`
-          id_membresia,
-          fecha_inicio,
-          fecha_vencimiento,
-          estado,
-          precio,
-          plan_membresia (
-            id_plan_membresia,
-            nombre,
-            precio,
-            duracion_dias,
-            estado
-          )
-        `)
-        .eq('id_socio', idSocio)
-        .order('fecha_vencimiento', { ascending: false }),
-
-      // c. Último pago realizado
-      supabase
-        .from('pago')
-        .select(`
-          id_pago,
-          monto,
-          fecha_pago,
-          metodo_pago,
-          estado,
-          comprobante,
-          membresia!inner (
-            id_socio
-          )
-        `)
-        .eq('membresia.id_socio', idSocio)
-        .order('fecha_pago', { ascending: false })
-        .limit(1)
+        .eq('estado', 'presente')
+        .is('hora_salida', null)
         .maybeSingle(),
-
-      // d. Último registro de progreso (Peso actual)
-      supabase
-        .from('progreso')
-        .select('id_progreso, peso, fecha, observaciones')
-        .eq('id_socio', idSocio)
-        .order('fecha', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-
-      // d.2. Historial de progreso reciente (para evolución y gráfica)
-      supabase
-        .from('progreso')
-        .select('id_progreso, peso, fecha, observaciones')
-        .eq('id_socio', idSocio)
-        .order('fecha', { ascending: false })
-        .limit(6),
-
-      // e.1 Total histórico de asistencias
-      supabase
-        .from('asistencia')
-        .select('id_asistencia', { count: 'exact', head: true })
-        .eq('id_socio', idSocio),
-
-      // e.2 Asistencias del mes actual
-      supabase
-        .from('asistencia')
-        .select('id_asistencia', { count: 'exact', head: true })
-        .eq('id_socio', idSocio)
-        .gte('hora_ingreso', inicioMes.toISOString()),
-
-      // e.3 Asistencias recientes con fecha y hora
-      supabase
-        .from('asistencia')
-        .select('id_asistencia, hora_ingreso, hora_salida, estado')
-        .eq('id_socio', idSocio)
-        .order('hora_ingreso', { ascending: false })
-        .limit(14),
-
-      // f. Rutina activa con detalle de ejercicios
-      supabase
+      gymId
+        ? db
+            .from('asistencia_socio')
+            .select(`
+              id_asistencia_socio,
+              id_sucursal,
+              hora_ingreso,
+              hora_salida,
+              estado,
+              sucursal!inner (
+                id_sucursal,
+                direccion,
+                id_gimnasio,
+                gimnasio:id_gimnasio (id_gimnasio, nombre)
+              )
+            `)
+            .eq('id_socio', idSocio)
+            .eq('sucursal.id_gimnasio', gymId)
+            .neq('estado', 'anulada')
+            .order('hora_ingreso', { ascending: false })
+        : Promise.resolve({ data: [], error: null }),
+      db
         .from('rutina')
         .select(`
           id_rutina,
@@ -168,188 +114,226 @@ const getDashboardSocio = async (req, res) => {
               id_ejercicio,
               nombre,
               grupo_muscular,
-              dificultad
+              dificultad,
+              id_gimnasio,
+              id_socio
             )
           )
         `)
         .eq('id_socio', idSocio)
-        .in('estado', ['activa', 'asignada'])
+        .eq('estado', true)
         .order('id_rutina', { ascending: false })
         .limit(1)
-        .maybeSingle()
+        .maybeSingle(),
+      db
+        .from('progreso')
+        .select('id_progreso, peso, fecha, observaciones')
+        .eq('id_socio', idSocio)
+        .order('fecha', { ascending: false })
+        .limit(6)
     ]);
 
-    // Validar error en datos de socio
-    if (socioRes.error || !socioRes.data) {
-      return res.status(404).json({ error: 'No se encontraron datos del socio en el sistema.' });
+    const membresiasGym = membresiasRes.data || [];
+    const membresia =
+      membresiasGym.find((m) => m.estado === 'activa') ||
+      membresiasGym.find((m) => m.estado !== 'cancelada') ||
+      null;
+
+    // Último pago correspondiente al gimnasio seleccionado
+    let ultimoPago = null;
+    const idsContratosGym = membresiasGym.map((m) => m.id_membresia_socio);
+    if (idsContratosGym.length > 0) {
+      const { data: pagoData } = await db
+        .from('pago')
+        .select('id_pago, monto, fecha_pago, metodo_pago, estado, comprobante, id_membresia_socio')
+        .in('id_membresia_socio', idsContratosGym)
+        .order('fecha_pago', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      ultimoPago = pagoData || null;
     }
 
-    const socio = socioRes.data;
+    const asistenciasGym = (asistenciasGymRes.data || []).map((a) => ({
+      ...a,
+      id_asistencia: a.id_asistencia_socio,
+      id_gimnasio: a.sucursal?.id_gimnasio || gymId || null,
+      gimnasio: a.sucursal?.gimnasio || u.gimnasio || null
+    }));
+    const asistenciaAbierta = asistenciaAbiertaRes.data
+      ? {
+          ...asistenciaAbiertaRes.data,
+          id_asistencia: asistenciaAbiertaRes.data.id_asistencia_socio,
+          id_gimnasio: asistenciaAbiertaRes.data.sucursal?.id_gimnasio || null,
+          gimnasio: asistenciaAbiertaRes.data.sucursal?.gimnasio || null
+        }
+      : null;
+    const totalAsistencias = asistenciasGym.length;
+    const asistenciasMes = asistenciasGym.filter(
+      (a) => a.hora_ingreso && new Date(a.hora_ingreso) >= inicioMes
+    ).length;
 
-    // Filtrar para encontrar la membresía activa vigente (excluyendo pausadas, canceladas o inactivas)
-    const ESTADOS_EXCLUIDOS = ['inactivo', 'inactiva', 'pausa', 'pausado', 'pausada', 'cancelado', 'cancelada', 'eliminado', 'eliminada', 'sin_membresia'];
-    const rawMembresias = membresiaRes.data ? (Array.isArray(membresiaRes.data) ? membresiaRes.data : [membresiaRes.data]) : [];
-    
-    const membresia = rawMembresias.find(m => {
-      const estMemb = (m.estado || '').toLowerCase().trim();
-      const estPlan = (m.plan_membresia?.estado || '').toLowerCase().trim();
-      return estMemb && !ESTADOS_EXCLUIDOS.includes(estMemb) && (!m.plan_membresia || !ESTADOS_EXCLUIDOS.includes(estPlan));
-    }) || null;
+    const historialProgreso = progresoRes.error ? [] : (progresoRes.data || []);
+    const ultimoProgreso = historialProgreso[0] || null;
+    let variacionPeso = null;
+    if (historialProgreso.length >= 2) {
+      const diff = Number(historialProgreso[0].peso) - Number(historialProgreso[1].peso);
+      if (!isNaN(diff)) variacionPeso = Number(diff.toFixed(1));
+    }
 
-    const ultimoPago = ultimoPagoRes.data || null;
-    const ultimoProgreso = progresoRes.data || null;
-    const historialProgreso = progresoHistorialRes.data || [];
-    const totalAsistencias = asistenciasTotalRes.count || 0;
-    const asistenciasMes = asistenciasMesRes.count || 0;
-    const asistenciasRecientes = asistenciasRecientesRes.data || [];
-    const rutinaActiva = rutinaRes.data || null;
-
-    // Calcular días restantes y porcentaje de membresía
+    // Métricas de membresía
     let diasRestantes = null;
-    let porcentajeTranscurrido = null;
-    let membresiaExpirada = false;
+    let porcentajeTranscurrido = 0;
+    let membresiaExpirada = true;
 
     if (membresia?.fecha_vencimiento) {
       const hoy = new Date();
       hoy.setHours(0, 0, 0, 0);
-      const fin = new Date(membresia.fecha_vencimiento);
-      fin.setHours(0, 0, 0, 0);
-
-      const diffTime = fin.getTime() - hoy.getTime();
-      diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      membresiaExpirada = diasRestantes < 0;
+      const fin = new Date(`${String(membresia.fecha_vencimiento).split('T')[0]}T00:00:00`);
+      diasRestantes = Math.ceil((fin.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
+      membresiaExpirada = diasRestantes < 0 || membresia.estado !== 'activa';
 
       if (membresia.fecha_inicio) {
-        const inicio = new Date(membresia.fecha_inicio);
+        const inicio = new Date(`${String(membresia.fecha_inicio).split('T')[0]}T00:00:00`);
         const totalDias = Math.max(1, Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)));
-        const diasUsados = Math.max(0, Math.ceil((hoy - inicio) / (1000 * 60 * 60 * 24)));
-        porcentajeTranscurrido = Math.min(100, Math.max(0, Math.round((diasUsados / totalDias) * 100)));
+        const usados = Math.max(0, Math.ceil((hoy - inicio) / (1000 * 60 * 60 * 24)));
+        porcentajeTranscurrido = Math.min(100, Math.max(0, Math.round((usados / totalDias) * 100)));
       }
     }
 
-    // Calcular variación de peso respecto al registro anterior
-    let variacionPeso = null;
-    if (historialProgreso.length >= 2) {
-      const actual = Number(historialProgreso[0].peso);
-      const previo = Number(historialProgreso[1].peso);
-      if (!isNaN(actual) && !isNaN(previo)) {
-        variacionPeso = Number((actual - previo).toFixed(1));
-      }
-    }
-
-    // Ordenar ejercicios de la rutina por el campo orden
-    let ejerciciosOrdenados = [];
-    if (rutinaActiva?.rutina_ejercicio && Array.isArray(rutinaActiva.rutina_ejercicio)) {
-      ejerciciosOrdenados = [...rutinaActiva.rutina_ejercicio].sort((a, b) => (a.orden || 0) - (b.orden || 0));
-    }
+    const rutinaActiva = rutinaRes.data || null;
+    const ejerciciosOrdenados = Array.isArray(rutinaActiva?.rutina_ejercicio)
+      ? [...rutinaActiva.rutina_ejercicio].sort((a, b) => (a.orden || 0) - (b.orden || 0))
+      : [];
 
     return res.status(200).json({
       socio: {
-        id_socio: socio.id_socio,
-        nombre: socio.nombre,
-        apellido: socio.apellido,
-        dni: socio.dni,
-        email: socio.email,
-        telefono: socio.telefono
+        ...u.socio,
+        estado_bool: u.socio.estado,
+        estado: u.socio.estado ? 'activo' : 'inactivo'
       },
-      gimnasio: socio.gimnasio || {
-        nombre: 'GymTrack Fitness Club',
-        direccion: 'Av. Central 1234',
-        telefono: '+54 11 5555-8888'
-      },
-      membresia: membresia ? {
-        id_membresia: membresia.id_membresia,
-        plan: membresia.plan_membresia?.nombre || 'Plan Personalizado',
-        descripcion_plan: membresia.plan_membresia?.descripcion || '',
-        estado: membresia.estado,
-        fecha_inicio: membresia.fecha_inicio,
-        fecha_vencimiento: membresia.fecha_vencimiento,
-        precio: membresia.precio || membresia.plan_membresia?.precio || 0,
-        dias_restantes: diasRestantes,
-        porcentaje_transcurrido: porcentajeTranscurrido,
-        expirada: membresiaExpirada
-      } : {
-        id_membresia: null,
-        estado: 'sin_membresia',
-        plan: 'Sin Membresía Activa',
-        mensaje: 'No tienes una membresía activa asignada actualmente.',
-        dias_restantes: 0,
-        porcentaje_transcurrido: 0,
-        expirada: true
-      },
-      ultimo_pago: ultimoPago ? {
-        id_pago: ultimoPago.id_pago,
-        monto: ultimoPago.monto,
-        fecha_pago: ultimoPago.fecha_pago,
-        metodo_pago: ultimoPago.metodo_pago,
-        estado: ultimoPago.estado,
-        comprobante: ultimoPago.comprobante
-      } : null,
+      gimnasio: u.gimnasio || null,
+      gimnasios: u.gimnasios || [],
+      sucursales_activas: sucursalesRes.data || [],
+      asistencia_abierta: asistenciaAbierta,
+      membresia: membresia
+        ? {
+            id_membresia: membresia.id_membresia_socio,
+            id_membresia_socio: membresia.id_membresia_socio,
+            plan: membresia.membresia_gimnasio?.nombre || 'Plan Contratado',
+            descripcion_plan: membresia.membresia_gimnasio?.descripcion || '',
+            estado: membresia.estado,
+            fecha_inicio: membresia.fecha_inicio,
+            fecha_vencimiento: membresia.fecha_vencimiento,
+            precio: Number(membresia.precio || 0),
+            duracion_dias: membresia.duracion_dias_contratados,
+            dias_restantes: diasRestantes,
+            porcentaje_transcurrido: porcentajeTranscurrido,
+            expirada: membresiaExpirada
+          }
+        : {
+            id_membresia: null,
+            id_membresia_socio: null,
+            estado: 'sin_membresia',
+            plan: 'Sin Membresía Activa',
+            dias_restantes: 0,
+            porcentaje_transcurrido: 0,
+            expirada: true
+          },
+      ultimo_pago: ultimoPago,
       progreso: {
-        peso_actual: ultimoProgreso?.peso || null,
-        observaciones: ultimoProgreso?.observaciones || null,
-        fecha_ultimo_registro: ultimoProgreso?.fecha || null,
+        peso_actual: ultimoProgreso?.peso ?? null,
+        observaciones: ultimoProgreso?.observaciones ?? null,
+        fecha_ultimo_registro: ultimoProgreso?.fecha ?? null,
         variacion_mes: variacionPeso,
         historial: historialProgreso
       },
       entrenamientos: {
         total_asistencias: totalAsistencias,
         asistencias_mes: asistenciasMes,
-        recientes: asistenciasRecientes
+        recientes: asistenciasGym.slice(0, 14)
       },
-      rutina_activa: rutinaActiva ? {
-        id_rutina: rutinaActiva.id_rutina,
-        nombre: rutinaActiva.nombre,
-        descripcion: rutinaActiva.descripcion,
-        ejercicios: ejerciciosOrdenados
-      } : null,
-      acciones_rapidas: [
-        { clave: 'ver_rutina', titulo: 'Mi Rutina', activo: !!rutinaActiva, link: '/rutinas' },
-        { clave: 'mi_membresia', titulo: 'Membresía', activo: true, link: '/socio/membresia' },
-        { clave: 'asistencias', titulo: 'Asistencias', activo: true, link: '/asistencias' },
-        { clave: 'ejercicios', titulo: 'Ejercicios', activo: true, link: '/ejercicios' },
-        { clave: 'perfil', titulo: 'Mi Perfil', activo: true, link: '/perfil' }
-      ]
+      rutina_activa: rutinaActiva
+        ? {
+            id_rutina: rutinaActiva.id_rutina,
+            nombre: rutinaActiva.nombre,
+            descripcion: rutinaActiva.descripcion,
+            ejercicios: ejerciciosOrdenados
+          }
+        : null
     });
-
   } catch (error) {
-    console.error('Error en getDashboardSocio:', error);
-    return res.status(500).json({ error: 'Error interno del servidor al cargar el dashboard: ' + error.message });
+    return res.status(500).json({ error: 'Error interno al cargar el dashboard del socio: ' + error.message });
   }
 };
 
 /**
  * POST /api/socio/checkin
- * Permite al socio marcar su asistencia directamente desde su panel
+ * Registra ingreso en una sucursal específica del gimnasio seleccionado mediante RPC.
  */
 const registrarCheckinSocio = async (req, res) => {
   try {
-    const idSocio = await resolverIdSocio(req);
-    if (!idSocio) {
-      return res.status(401).json({ error: 'Usuario no autenticado como socio.' });
+    const db = req.supabase;
+    const u = req.usuario;
+
+    if (u.rol !== 'socio' || !u.id_socio) {
+      return res.status(403).json({ error: 'Acceso reservado para socios autenticados.' });
     }
 
-    const horaIngreso = new Date().toISOString();
+    const { id_sucursal } = req.body;
+    if (!id_sucursal) {
+      return res.status(400).json({ error: 'Debes seleccionar la sucursal donde estás entrenando.' });
+    }
 
-    const { data, error } = await supabase
-      .from('asistencia')
-      .insert([
-        {
-          id_socio: idSocio,
-          hora_ingreso: horaIngreso,
-          estado: 'presente'
-        }
-      ])
-      .select()
-      .single();
+    // Validar que la sucursal existe, está activa y corresponde al gimnasio seleccionado
+    const { data: suc } = await db
+      .from('sucursal')
+      .select('id_sucursal, id_gimnasio, estado, direccion')
+      .eq('id_sucursal', Number(id_sucursal))
+      .maybeSingle();
+
+    if (!suc) {
+      return res.status(404).json({ error: 'Sucursal no encontrada o sin permisos.' });
+    }
+    if (!suc.estado) {
+      return res.status(400).json({ error: 'La sucursal seleccionada se encuentra inactiva.' });
+    }
+    if (u.id_gimnasio && Number(suc.id_gimnasio) !== Number(u.id_gimnasio)) {
+      return res.status(403).json({
+        error: 'La sucursal seleccionada no pertenece al gimnasio actualmente elegido.'
+      });
+    }
+
+    // Validar membresía activa y vigente en el gimnasio de esa sucursal (sin almacenarla en asistencia_socio)
+    const hoyISO = new Date().toISOString().split('T')[0];
+    const { data: membVigente } = await db
+      .from('membresia_socio')
+      .select('id_membresia_socio')
+      .eq('id_socio', u.id_socio)
+      .eq('id_gimnasio', suc.id_gimnasio)
+      .eq('estado', 'activa')
+      .lte('fecha_inicio', hoyISO)
+      .gte('fecha_vencimiento', hoyISO)
+      .limit(1)
+      .maybeSingle();
+
+    if (!membVigente) {
+      return res.status(403).json({
+        error: 'No posees una membresía activa y vigente para ingresar al gimnasio de esta sucursal.'
+      });
+    }
+
+    const { data, error } = await db.rpc('rpc_registrar_ingreso_asistencia', {
+      p_id_sucursal: Number(id_sucursal),
+      p_id_socio: u.id_socio
+    });
 
     if (error) {
-      return res.status(500).json({ error: 'Error al registrar el check-in: ' + error.message });
+      return res.status(400).json({ error: error.message });
     }
 
     return res.status(201).json({
-      mensaje: '¡Asistencia registrada con éxito! Que tengas un gran entrenamiento 💪',
-      asistencia: data
+      mensaje: '¡Ingreso registrado con éxito! Recordá marcar tu salida al terminar.',
+      asistencia: { ...data, id_asistencia: data.id_asistencia_socio }
     });
   } catch (error) {
     return res.status(500).json({ error: 'Error interno al registrar check-in: ' + error.message });
@@ -357,35 +341,66 @@ const registrarCheckinSocio = async (req, res) => {
 };
 
 /**
+ * POST /api/socio/checkout
+ * Registra salida de una asistencia abierta del socio mediante RPC.
+ */
+const registrarCheckoutSocio = async (req, res) => {
+  try {
+    const db = req.supabase;
+    const u = req.usuario;
+
+    if (u.rol !== 'socio' || !u.id_socio) {
+      return res.status(403).json({ error: 'Acceso reservado para socios autenticados.' });
+    }
+
+    const asistenciaId = req.body.id_asistencia_socio || req.body.id_asistencia || null;
+
+    const { data, error } = await db.rpc('rpc_registrar_salida_asistencia', {
+      p_id_asistencia_socio: asistenciaId ? Number(asistenciaId) : null,
+      p_id_socio: u.id_socio
+    });
+
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    return res.status(200).json({
+      mensaje: '¡Salida registrada con éxito!',
+      asistencia: { ...data, id_asistencia: data.id_asistencia_socio }
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Error interno al registrar salida: ' + error.message });
+  }
+};
+
+/**
  * POST /api/socio/progreso
- * Permite al socio cargar su peso actual y notas desde su panel
  */
 const registrarProgresoSocio = async (req, res) => {
   try {
-    const idSocio = await resolverIdSocio(req);
-    if (!idSocio) {
-      return res.status(401).json({ error: 'Usuario no autenticado como socio.' });
+    const db = req.supabase;
+    const u = req.usuario;
+
+    if (u.rol !== 'socio' || !u.id_socio) {
+      return res.status(403).json({ error: 'Acceso reservado para socios autenticados.' });
     }
 
     const { peso, observaciones, fecha } = req.body;
-
     if (!peso || isNaN(peso) || Number(peso) <= 0) {
       return res.status(400).json({ error: 'Debes ingresar un valor de peso válido en kg.' });
     }
 
-    const fechaRegistro = fecha || new Date().toISOString().split('T')[0];
-
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('progreso')
       .insert([
         {
-          id_socio: idSocio,
+          id_socio: u.id_socio,
           peso: Number(peso),
-          fecha: fechaRegistro,
-          observaciones: observaciones || null
+          fecha: fecha || new Date().toISOString().split('T')[0],
+          observaciones: observaciones ? String(observaciones).trim() : null
         }
       ])
-      .select()
+      .select('*')
       .single();
 
     if (error) {
@@ -404,5 +419,6 @@ const registrarProgresoSocio = async (req, res) => {
 module.exports = {
   getDashboardSocio,
   registrarCheckinSocio,
+  registrarCheckoutSocio,
   registrarProgresoSocio
-};
+};

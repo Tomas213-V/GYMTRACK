@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar-dueno/sidebar';
+import { useGymContext } from '../../context/GymContext';
 import {
   getEjerciciosDueno,
   crearEjercicioDueno,
@@ -12,13 +13,11 @@ import {
   FaDumbbell,
   FaSearch,
   FaBuilding,
-  FaGlobe,
   FaPlus,
   FaEdit,
   FaTrashAlt,
   FaTimes,
   FaCheck,
-  FaLayerGroup,
   FaExclamationTriangle
 } from 'react-icons/fa';
 
@@ -36,8 +35,8 @@ const GRUPOS_MUSCULARES = [
 ];
 
 export default function EjerciciosDueno() {
-  const usuarioLocal = JSON.parse(localStorage.getItem('usuario') || 'null');
-  const gymIdActual = usuarioLocal?.id_gimnasio || usuarioLocal?.gimnasio?.id_gimnasio || null;
+  const { gimnasioActivo, gimnasioActivoId, contextVersion } = useGymContext();
+  const gymIdActual = gimnasioActivoId || null;
 
   const [ejercicios, setEjercicios] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +44,6 @@ export default function EjerciciosDueno() {
   const [exitoMsg, setExitoMsg] = useState('');
 
   // Filtros
-  const [filtroOrigen, setFiltroOrigen] = useState('todos'); // 'todos' | 'gimnasio' | 'base'
   const [filtroGrupo, setFiltroGrupo] = useState('todos');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -66,6 +64,11 @@ export default function EjerciciosDueno() {
   const [eliminando, setEliminando] = useState(false);
 
   const loadEjercicios = useCallback(async () => {
+    if (!gimnasioActivoId) {
+      setEjercicios([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setErrorMsg('');
     try {
@@ -76,30 +79,17 @@ export default function EjerciciosDueno() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [gimnasioActivoId]);
 
   useEffect(() => {
     loadEjercicios();
-  }, [loadEjercicios]);
+  }, [loadEjercicios, contextVersion]);
 
-  // Métricas reales del catálogo
   const totalCount = ejercicios.length;
-  const gymOwnCount = useMemo(
-    () => ejercicios.filter((ej) => Boolean(ej.id_gimnasio)).length,
-    [ejercicios]
-  );
-  const baseCount = useMemo(
-    () => ejercicios.filter((ej) => !ej.id_gimnasio).length,
-    [ejercicios]
-  );
 
-  // Filtrado combinado en cliente para mantener métricas estables y búsqueda instantánea
   const ejerciciosFiltrados = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     return ejercicios.filter((ej) => {
-      if (filtroOrigen === 'gimnasio' && !ej.id_gimnasio) return false;
-      if (filtroOrigen === 'base' && ej.id_gimnasio) return false;
-
       if (filtroGrupo !== 'todos') {
         const gm = (ej.grupo_muscular || '').toLowerCase();
         if (!gm.includes(filtroGrupo.toLowerCase())) return false;
@@ -114,7 +104,7 @@ export default function EjerciciosDueno() {
 
       return true;
     });
-  }, [ejercicios, filtroOrigen, filtroGrupo, searchTerm]);
+  }, [ejercicios, filtroGrupo, searchTerm]);
 
   const mostrarExito = (msg) => {
     setExitoMsg(msg);
@@ -165,7 +155,7 @@ export default function EjerciciosDueno() {
       };
 
       if (editingItem) {
-        await actualizarEjercicioDueno(editingItem.id_ejercicio, payload);
+        await actualizarEjercicioDueno(editingItem.id_ejercicio_gimnasio, payload);
         mostrarExito(`Ejercicio "${payload.nombre}" actualizado con éxito.`);
       } else {
         await crearEjercicioDueno({
@@ -189,7 +179,7 @@ export default function EjerciciosDueno() {
     setEliminando(true);
     setErrorMsg('');
     try {
-      await eliminarEjercicioDueno(deleteTarget.id_ejercicio);
+      await eliminarEjercicioDueno(deleteTarget.id_ejercicio_gimnasio);
       const nombre = deleteTarget.nombre;
       setDeleteTarget(null);
       mostrarExito(`El ejercicio "${nombre}" fue eliminado del catálogo.`);
@@ -271,27 +261,9 @@ export default function EjerciciosDueno() {
                 </div>
 
                 <div className="ed-origin-tabs">
-                  <button
-                    type="button"
-                    className={`ed-origin-tab-btn ${filtroOrigen === 'todos' ? 'active' : ''}`}
-                    onClick={() => setFiltroOrigen('todos')}
-                  >
-                    Todos ({totalCount})
-                  </button>
-                  <button
-                    type="button"
-                    className={`ed-origin-tab-btn gimnasio-tab ${filtroOrigen === 'gimnasio' ? 'active' : ''}`}
-                    onClick={() => setFiltroOrigen('gimnasio')}
-                  >
-                    <FaBuilding style={{ fontSize: '10px' }} /> Mi Gimnasio ({gymOwnCount})
-                  </button>
-                  <button
-                    type="button"
-                    className={`ed-origin-tab-btn base-tab ${filtroOrigen === 'base' ? 'active' : ''}`}
-                    onClick={() => setFiltroOrigen('base')}
-                  >
-                    <FaGlobe style={{ fontSize: '10px' }} /> Base ({baseCount})
-                  </button>
+                  <span className="ed-origin-tab-btn gimnasio-tab active" style={{ cursor: 'default' }}>
+                    <FaBuilding style={{ fontSize: '10px' }} /> {gimnasioActivo?.nombre || 'Mi Gimnasio'} ({totalCount})
+                  </span>
                 </div>
               </div>
 
@@ -330,28 +302,17 @@ export default function EjerciciosDueno() {
             </div>
           ) : (
             <div className="ed-exercises-grid">
-              {ejerciciosFiltrados.map((ej) => {
-                const esDelGimnasio = Boolean(ej.id_gimnasio);
-
-                return (
+              {ejerciciosFiltrados.map((ej) => (
                   <div
-                    key={ej.id_ejercicio}
-                    className={`ed-exercise-card ${esDelGimnasio ? 'gimnasio' : 'base'}`}
+                    key={ej.id_ejercicio_gimnasio}
+                    className="ed-exercise-card gimnasio"
                   >
                     <div>
                       <div className="ed-card-header">
                         <span className="ed-card-muscle-pill">{ej.grupo_muscular || 'General'}</span>
 
-                        <span className={`ed-origin-badge ${esDelGimnasio ? 'gimnasio' : 'base'}`}>
-                          {esDelGimnasio ? (
-                            <>
-                              <FaBuilding style={{ fontSize: '10px' }} /> Mi Gimnasio
-                            </>
-                          ) : (
-                            <>
-                              <FaGlobe style={{ fontSize: '10px' }} /> Base
-                            </>
-                          )}
+                        <span className="ed-origin-badge gimnasio">
+                          <FaBuilding style={{ fontSize: '10px' }} /> Mi Gimnasio
                         </span>
                       </div>
 
@@ -371,45 +332,30 @@ export default function EjerciciosDueno() {
 
                     <div className="ed-card-footer">
                       <span className="ed-card-owner-text">
-                        {esDelGimnasio ? (
-                          <>
-                            <FaBuilding style={{ color: '#a3e635' }} /> Asignado a tu gimnasio
-                          </>
-                        ) : (
-                          <>
-                            <FaGlobe style={{ color: '#60a5fa' }} /> Ejercicio base del sistema
-                          </>
-                        )}
+                        <FaBuilding style={{ color: '#a3e635' }} /> Catálogo oficial del gimnasio
                       </span>
 
-                      {esDelGimnasio ? (
-                        <div className="ed-card-actions">
-                          <button
-                            type="button"
-                            className="ed-btn-icon-edit"
-                            onClick={() => handleOpenEditar(ej)}
-                            title="Editar ejercicio"
-                          >
-                            <FaEdit />
-                          </button>
-                          <button
-                            type="button"
-                            className="ed-btn-icon-delete"
-                            onClick={() => setDeleteTarget(ej)}
-                            title="Eliminar ejercicio"
-                          >
-                            <FaTrashAlt />
-                          </button>
-                        </div>
-                      ) : (
-                        <span style={{ fontSize: '11px', color: '#64748b', fontStyle: 'italic' }}>
-                          Global
-                        </span>
-                      )}
+                      <div className="ed-card-actions">
+                        <button
+                          type="button"
+                          className="ed-btn-icon-edit"
+                          onClick={() => handleOpenEditar(ej)}
+                          title="Editar ejercicio"
+                        >
+                          <FaEdit />
+                        </button>
+                        <button
+                          type="button"
+                          className="ed-btn-icon-delete"
+                          onClick={() => setDeleteTarget(ej)}
+                          title="Eliminar ejercicio"
+                        >
+                          <FaTrashAlt />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                );
-              })}
+              ))}
             </div>
           )}
         </main>

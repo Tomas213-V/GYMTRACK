@@ -27,6 +27,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { login } from '../../services/authService.js'
+import { useGymContext } from '../../context/GymContext.jsx'
 import logoImg from '../../assets/logo_verde.jpg'
 import PasswordInput from '../../components/PasswordInput/PasswordInput'
 import './login.css'
@@ -34,6 +35,7 @@ import './login.css'
 function Login() {
   // Hook de enrutamiento programático
   const navigate = useNavigate()
+  const { setSession } = useGymContext()
 
   // ---------------------------------------------------------------------------------------
   // PASO 1: DEFINICIÓN DE ESTADOS REACTIVOS
@@ -111,31 +113,31 @@ function Login() {
 
     try {
 
-      // Mandamos los datos al backend.
+      // Mandamos los datos al backend (Supabase Auth).
       const data = await login({
         email: formData.email,
         contrasena: formData.contrasena,
       })
 
-      console.log('Login exitoso:', data)
+      setSession({
+        token: data.token,
+        refresh_token: data.refresh_token,
+        usuario: data.usuario,
+        gimnasios: data.gimnasios,
+        sucursales: data.sucursales,
+        sucursales_asignadas: data.sucursales_asignadas,
+      })
 
-      // Limpiar sesión de socio para evitar colisiones entre roles
-      localStorage.removeItem('socio')
-
-      // Guardamos el token JWT.
-      localStorage.setItem('token', data.token)
-
-      // Guardamos el rol explícitamente como dueño.
-      localStorage.setItem('rol', 'dueño')
-
-      // Guardamos también los datos del usuario.
-      localStorage.setItem(
-        'usuario',
-        JSON.stringify(data.usuario)
+      // Si es administrador organizacional, empleado o dueño con al menos un gimnasio, ir al dashboard
+      const rolUsuario = data.usuario?.rol
+      const tieneGym = Boolean(
+        data.usuario?.gimnasio?.id_gimnasio ||
+        (Array.isArray(data.gimnasios) && data.gimnasios.length > 0) ||
+        rolUsuario === 'empleado' ||
+        rolUsuario === 'administrador'
       )
 
-      // Comprobamos si el usuario tiene un gimnasio asociado.
-      if (data.usuario?.gimnasio?.id_gimnasio) {
+      if (tieneGym) {
         navigate('/dashboard-dueño')
       } else {
         navigate('/crear-gimnasio-dueño')
@@ -210,7 +212,7 @@ function Login() {
             placeholder="************"
             label="Contraseña"
             error={errors.contrasena}
-            />
+          />
 
           {/* LINKS */}
 
@@ -265,7 +267,7 @@ function Login() {
 
           {/* GOOGLE */}
 
-          <div className="google-section">
+          {/* <div className="google-section">
 
             <span>Continuar con</span>
 
@@ -282,7 +284,7 @@ function Login() {
 
             </button>
 
-          </div>
+          </div> */}
 
         </form>
 

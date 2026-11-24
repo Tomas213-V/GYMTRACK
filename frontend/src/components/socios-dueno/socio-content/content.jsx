@@ -20,6 +20,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
+import { useGymContext } from '../../../context/GymContext'
 import { fetchSocios } from '../../../services/socioService'
 import SocioHeader from '../socio-header/header'
 import SocioResumen from '../socio-resumen/resumen'
@@ -30,36 +31,32 @@ import SocioDetalleModal from '../socio-detalle-modal/detalle-modal'
 import './content.css'
 
 function SociosContent() {
+  const { gimnasioActivoId, contextVersion } = useGymContext()
   const [socios, setSocios] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  // Filtros y Búsqueda (Solamente DNI o Teléfono)
   const [search, setSearch] = useState('')
   const [estado, setEstado] = useState('todos')
 
-
-  // Paginación
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalSocios, setTotalSocios] = useState(0)
 
-  // Sub-ventanas / Modales
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [selectedSocio, setSelectedSocio] = useState(null)
 
-  const gymId = (() => {
-    try {
-      const u = JSON.parse(localStorage.getItem('usuario') || '{}')
-      const user = Array.isArray(u) ? u[0] : u
-      return user?.id_gimnasio || user?.gimnasio_id || null
-    } catch {
-      return null
-    }
-  })()
+  const gymId = gimnasioActivoId || null
 
   const loadSocios = useCallback(async () => {
+    if (!gimnasioActivoId) {
+      setSocios([])
+      setTotalSocios(0)
+      setTotalPages(1)
+      setLoading(false)
+      return
+    }
     try {
       setLoading(true)
       setError('')
@@ -72,11 +69,15 @@ function SociosContent() {
     } finally {
       setLoading(false)
     }
-  }, [page, estado, search])
+  }, [gimnasioActivoId, page, estado, search])
+
+  useEffect(() => {
+    setPage(1)
+  }, [gimnasioActivoId])
 
   useEffect(() => {
     loadSocios()
-  }, [loadSocios])
+  }, [loadSocios, contextVersion])
 
   const handleOpenCreateModal = () => {
     setShowCreateModal(true)
@@ -104,9 +105,9 @@ function SociosContent() {
       <SocioResumen
         stats={{
           total: totalSocios,
-          activos: socios.filter((s) => s.estado === 'activo').length,
+          activos: socios.filter((s) => s.estado === true || s.estado === 'activo').length,
           pendientes: socios.filter((s) => s.estado === 'pendiente').length,
-          inactivos: socios.filter((s) => s.estado === 'inactivo').length,
+          inactivos: socios.filter((s) => s.estado === false || s.estado === 'inactivo').length,
         }}
       />
 
