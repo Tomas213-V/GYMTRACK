@@ -37,7 +37,7 @@ import PagosModal from "../../components/pagos-dueno/modal/modal";
 import PagosDetalleModal from "../../components/pagos-dueno/detalle-modal/detalle-modal";
 import { getPagos, getResumenPagos, registrarPago, actualizarEstadoPago, eliminarPago } from "../../services/pagoService";
 import { createSocio } from "../../services/socioService";
-import { createMembresiaSocio } from "../../services/membresiaAdminService";
+import { createMembresiaSocio, deleteMembresiaSocio } from "../../services/membresiaAdminService";
 import "./pagos.css";
 
 function Pagos() {
@@ -96,15 +96,26 @@ function Pagos() {
           const dni = socio.dni || "S/D";
           const planNombre = memb.membresia_gimnasio?.nombre || "Plan";
 
+          const estadoPagoNorm = (item.estado || "aprobado").toLowerCase();
+          const estadoMembNorm = String(memb.estado || "").toLowerCase();
+          const fechaVenc = memb.fecha_vencimiento || "";
+          const hoyIso = new Date().toISOString().split("T")[0];
+          let estadoCuota = estadoMembNorm || (estadoPagoNorm === "aprobado" ? "activa" : "pendiente");
+          if (estadoCuota === "activa" && fechaVenc && fechaVenc.split("T")[0] < hoyIso) {
+            estadoCuota = "vencida";
+          }
+
           return {
             id: item.id_pago,
             socio: { nombre: nombreCompleto, dni },
             plan: planNombre,
             fecha: formatearFecha(item.fecha_pago),
             fechaOriginal: item.fecha_pago,
+            fechaVencimiento: fechaVenc ? formatearFecha(fechaVenc) : "",
+            estadoCuota,
             monto: Number(item.monto) || 0,
             metodo_pago: item.metodo_pago || "efectivo",
-            estado: (item.estado || "aprobado").toLowerCase()
+            estado: estadoPagoNorm
           };
         });
       }
@@ -147,7 +158,10 @@ function Pagos() {
   }, [cargarDatos, contextVersion]);
 
   const handleGuardarPago = async (formulario) => {
-    let idMembresiaSocio = formulario.id_membresia_socio ? Number(formulario.id_membresia_socio) : null;
+    let idMembresiaSocio =
+      !formulario.cambioPlan && formulario.id_membresia_socio
+        ? Number(formulario.id_membresia_socio)
+        : null;
     let idSocio = formulario.id_socio ? Number(formulario.id_socio) : null;
 
     // Si es un socio nuevo desde caja, crear/asociar identidad primero en POST /api/socios
@@ -162,10 +176,17 @@ function Pagos() {
       idSocio = resSocio?.socio?.id_socio || null;
     }
 
-    // Si aún no tiene contratación activa/pendiente, crearla mediante POST /api/membresias
+    // Si aún no tiene contratación activa/pendiente (o solicitó cambio de plan), crearla mediante POST /api/membresias
     if (!idMembresiaSocio) {
       if (!idSocio || !formulario.id_membresia_gimnasio) {
         throw new Error("Debés seleccionar un socio y un plan de membresía para registrar el pago.");
+      }
+      if (
+        formulario.cambioPlan &&
+        formulario.id_membresia_socio_anterior &&
+        formulario.estado_membresia_anterior === "pendiente"
+      ) {
+        await deleteMembresiaSocio(Number(formulario.id_membresia_socio_anterior));
       }
       const resMemb = await createMembresiaSocio({
         id_socio: idSocio,

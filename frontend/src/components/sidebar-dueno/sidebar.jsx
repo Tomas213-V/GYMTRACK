@@ -39,6 +39,51 @@ function Sidebar() {
     setAbiertoMovil((prev) => (prev ? false : prev));
   }, [location.pathname]);
 
+  const opcionesEmpleado = [
+    {
+      ruta: '/socios-dueño',
+      nombre: 'Socios',
+      icono: <FaUsers />,
+      alias: ['/socios', '/socios-dueno', '/empleado/socios'],
+      visible: true
+    },
+    {
+      ruta: '/rutinas-dueño',
+      nombre: 'Rutinas',
+      icono: <FaDumbbell />,
+      alias: ['/rutinas', '/rutinas-dueno', '/empleado/rutinas'],
+      visible: true
+    },
+    {
+      ruta: '/ejercicios-dueño',
+      nombre: 'Ejercicios',
+      icono: <FaRunning />,
+      alias: ['/ejercicios-dueno', '/ejercicios', '/empleado/ejercicios'],
+      visible: true
+    },
+    {
+      ruta: '/pagos-dueño',
+      nombre: 'Pagos',
+      icono: <FaMoneyBill />,
+      alias: ['/pagos', '/pagos-dueno', '/empleado/pagos'],
+      visible: true
+    },
+    {
+      ruta: '/asistencias-dueño',
+      nombre: 'Asistencia',
+      icono: <FaCalendarCheck />,
+      alias: ['/asistencias', '/asistencias-dueno', '/empleado/asistencias'],
+      visible: true
+    },
+    {
+      ruta: '/perfil-dueño',
+      nombre: 'Perfil',
+      icono: <FaUser />,
+      alias: ['/perfil', '/perfil-dueno', '/empleado/perfil'],
+      visible: true
+    }
+  ];
+
   const todasLasOpciones = [
     {
       ruta: '/dashboard-dueño',
@@ -72,7 +117,7 @@ function Sidebar() {
       ruta: '/socios-dueño',
       nombre: 'Socios',
       icono: <FaUsers />,
-      alias: ['/socios', '/socios-dueno'],
+      alias: ['/socios', '/socios-dueno', '/empleado/socios'],
       visible: esDueno || hasPermission('gestionar_socios') || hasPermission('ver_socios')
     },
     {
@@ -86,35 +131,35 @@ function Sidebar() {
       ruta: '/asistencias-dueño',
       nombre: 'Asistencias',
       icono: <FaCalendarCheck />,
-      alias: ['/asistencias', '/asistencias-dueno'],
+      alias: ['/asistencias', '/asistencias-dueno', '/empleado/asistencias'],
       visible: esDueno || hasPermission('gestionar_asistencias') || hasPermission('ver_asistencias')
     },
     {
       ruta: '/ejercicios-dueño',
       nombre: 'Ejercicios',
       icono: <FaRunning />,
-      alias: ['/ejercicios-dueno', '/ejercicios'],
+      alias: ['/ejercicios-dueno', '/ejercicios', '/empleado/ejercicios'],
       visible: esDueno || hasPermission('gestionar_ejercicios')
     },
     {
       ruta: '/rutinas-dueño',
       nombre: 'Rutinas',
       icono: <FaDumbbell />,
-      alias: ['/rutinas', '/rutinas-dueno'],
+      alias: ['/rutinas', '/rutinas-dueno', '/empleado/rutinas'],
       visible: esDueno || hasPermission('gestionar_rutinas')
     },
     {
       ruta: '/pagos-dueño',
       nombre: 'Pagos',
       icono: <FaMoneyBill />,
-      alias: ['/pagos', '/pagos-dueno'],
+      alias: ['/pagos', '/pagos-dueno', '/empleado/pagos'],
       visible: esDueno || hasPermission('gestionar_pagos')
     },
     {
       ruta: '/perfil-dueño',
       nombre: 'Mi Perfil',
       icono: <FaUser />,
-      alias: ['/perfil', '/perfil-dueno'],
+      alias: ['/perfil', '/perfil-dueno', '/empleado/perfil'],
       visible: true
     },
     {
@@ -126,7 +171,9 @@ function Sidebar() {
     }
   ];
 
-  const opciones = todasLasOpciones.filter((op) => op.visible);
+  const opciones = esEmpleado
+    ? opcionesEmpleado
+    : todasLasOpciones.filter((op) => op.visible);
 
   const handleLogout = () => {
     const destino = esAdministrador

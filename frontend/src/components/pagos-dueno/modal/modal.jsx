@@ -47,6 +47,7 @@ function extraerDatosSocio(s, planesDisponibles = []) {
     nombreCompleto,
     dni,
     id_membresia_socio: idMembresiaSocio,
+    estadoMembresiaActual: String(membActiva?.estado || '').toLowerCase(),
     id_membresia_gimnasio: idPlan,
     planNombre,
     precio
@@ -57,6 +58,8 @@ function PagosModal({ abierto, onCerrar, onGuardarPago, gymId }) {
   const [sociosDisponibles, setSociosDisponibles] = useState([]);
   const [planesDisponibles, setPlanesDisponibles] = useState([]);
   const [modoSeleccion, setModoSeleccion] = useState("existente"); // 'existente' o 'nuevo'
+  const [planOriginalId, setPlanOriginalId] = useState("");
+  const [estadoMembresiaOriginal, setEstadoMembresiaOriginal] = useState("");
 
   const [formulario, setFormulario] = useState({
     id_socio: "",
@@ -110,6 +113,8 @@ function PagosModal({ abierto, onCerrar, onGuardarPago, gymId }) {
               ? String(info.precio)
               : (planMatch?.precio != null ? String(planMatch.precio) : '0');
 
+          setPlanOriginalId(info.id_membresia_gimnasio ? String(info.id_membresia_gimnasio) : "");
+          setEstadoMembresiaOriginal(info.estadoMembresiaActual || "");
           setFormulario((prev) => ({
             ...prev,
             id_socio: info.id_socio || "",
@@ -128,6 +133,8 @@ function PagosModal({ abierto, onCerrar, onGuardarPago, gymId }) {
           setModoSeleccion("existente");
         } else {
           setModoSeleccion("nuevo");
+          setPlanOriginalId("");
+          setEstadoMembresiaOriginal("");
           const defaultPlan = planesValidos[0];
           setFormulario((prev) => ({
             ...prev,
@@ -172,6 +179,8 @@ function PagosModal({ abierto, onCerrar, onGuardarPago, gymId }) {
         : (planObj?.precio != null ? String(planObj.precio) : formulario.monto);
 
     setModoSeleccion("existente");
+    setPlanOriginalId(info.id_membresia_gimnasio ? String(info.id_membresia_gimnasio) : "");
+    setEstadoMembresiaOriginal(info.estadoMembresiaActual || "");
     setFormulario((prev) => ({
       ...prev,
       id_socio: info.id_socio || "",
@@ -194,6 +203,8 @@ function PagosModal({ abierto, onCerrar, onGuardarPago, gymId }) {
 
   const handleCambiarAModoNuevo = () => {
     setModoSeleccion("nuevo");
+    setPlanOriginalId("");
+    setEstadoMembresiaOriginal("");
     const defaultPlan = planesDisponibles[0];
     setFormulario((prev) => ({
       ...prev,
@@ -231,6 +242,13 @@ function PagosModal({ abierto, onCerrar, onGuardarPago, gymId }) {
     });
   };
 
+  const esCambioPlan =
+    modoSeleccion === "existente" &&
+    Boolean(formulario.id_membresia_socio) &&
+    Boolean(planOriginalId) &&
+    Boolean(formulario.id_membresia_gimnasio) &&
+    String(formulario.id_membresia_gimnasio) !== String(planOriginalId);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMensajeError("");
@@ -240,8 +258,14 @@ function PagosModal({ abierto, onCerrar, onGuardarPago, gymId }) {
     try {
       const payload = {
         ...formulario,
+        cambioPlan: esCambioPlan,
+        id_membresia_socio_anterior: esCambioPlan ? (formulario.id_membresia_socio || undefined) : undefined,
+        estado_membresia_anterior: esCambioPlan ? estadoMembresiaOriginal : undefined,
         id_socio: modoSeleccion === "nuevo" ? undefined : (formulario.id_socio || undefined),
-        id_membresia_socio: modoSeleccion === "nuevo" ? undefined : (formulario.id_membresia_socio || undefined),
+        id_membresia_socio:
+          modoSeleccion === "nuevo" || esCambioPlan
+            ? undefined
+            : (formulario.id_membresia_socio || undefined),
         id_membresia_gimnasio: formulario.id_membresia_gimnasio || undefined
       };
       await onGuardarPago(payload);
@@ -412,6 +436,12 @@ function PagosModal({ abierto, onCerrar, onGuardarPago, gymId }) {
               />
             </div>
           </div>
+
+          {esCambioPlan && (
+            <div className="Caja-pagos-aviso-nuevo">
+              ↻ Cambio de plan detectado: se creará una nueva contratación con el plan seleccionado y se asociará este pago.
+            </div>
+          )}
 
           <div className="Caja-pagos-form-fila">
             <div className="Caja-pagos-form-grupo">

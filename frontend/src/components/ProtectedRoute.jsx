@@ -9,13 +9,16 @@ import { useGymContext } from '../context/GymContext';
  * @param {Object} props
  * @param {React.ReactNode} props.children
  * @param {boolean} [props.permitirSinGimnasio=false]
- * @param {'dueño'|'staff'|'socio'|null} [props.rolRequerido=null]
+ * @param {boolean} [props.permitirSinContexto=false]
+ * @param {boolean} [props.bloquearEmpleado=false]
+ * @param {'dueño'|'administrador'|'empleado'|'staff'|'socio'|null} [props.rolRequerido=null]
  * @param {string|null} [props.permisoRequerido=null]
  */
 function ProtectedRoute({
   children,
   permitirSinGimnasio = false,
   permitirSinContexto = false,
+  bloquearEmpleado = false,
   rolRequerido = null,
   permisoRequerido = null
 }) {
@@ -32,6 +35,8 @@ function ProtectedRoute({
     hasPermission
   } = useGymContext();
 
+  const homeNoAutorizado = esSocio ? '/dashboard-socio' : esEmpleado ? '/socios-dueño' : '/dashboard-dueño';
+
   // 1. Verificar sesión autenticada
   if (!isAuthenticated) {
     if (rolRequerido === 'socio') return <Navigate to="/login-socio" replace />;
@@ -45,18 +50,22 @@ function ProtectedRoute({
     return <Navigate to="/seleccionar-gimnasio" replace />;
   }
 
+  // 1c. Bloquear rutas administrativas/financieras exclusivas de dueño/admin para el rol Empleado
+  if (bloquearEmpleado && esEmpleado) {
+    return <Navigate to="/socios-dueño" replace />;
+  }
+
   // 2. Control de acceso por rol
   if (rolRequerido === 'dueño' && !esDueno) {
-    if (esSocio) return <Navigate to="/dashboard-socio" replace />;
-    if (esAdministrador || esEmpleado) return <Navigate to="/dashboard-dueño" replace />;
+    return <Navigate to={homeNoAutorizado} replace />;
   }
 
   if (rolRequerido === 'administrador' && !esAdministrador) {
-    return <Navigate to={esSocio ? '/dashboard-socio' : '/dashboard-dueño'} replace />;
+    return <Navigate to={homeNoAutorizado} replace />;
   }
 
   if (rolRequerido === 'empleado' && !esEmpleado) {
-    return <Navigate to={esSocio ? '/dashboard-socio' : '/dashboard-dueño'} replace />;
+    return <Navigate to={homeNoAutorizado} replace />;
   }
 
   if (rolRequerido === 'staff' && !esStaff) {
@@ -64,12 +73,12 @@ function ProtectedRoute({
   }
 
   if (rolRequerido === 'socio' && !esSocio) {
-    return <Navigate to="/dashboard-dueño" replace />;
+    return <Navigate to={esEmpleado ? '/socios-dueño' : '/dashboard-dueño'} replace />;
   }
 
   // 3. Control de permiso granular para administradores organizacionales y empleados
   if (permisoRequerido && !hasPermission(permisoRequerido)) {
-    return <Navigate to={esSocio ? '/dashboard-socio' : '/dashboard-dueño'} replace />;
+    return <Navigate to={homeNoAutorizado} replace />;
   }
 
   // 4. Si es socio, permitir acceso incluso si aún no tiene membresías activas

@@ -5,12 +5,13 @@
 
 import { apiRequest } from './apiClient';
 
-export async function fetchSocios({ page = 1, limit = 6, estado = '', search = '', signal } = {}) {
+export async function fetchSocios({ page = 1, limit = 6, estado = '', search = '', id_gimnasio = null, signal } = {}) {
   const params = new URLSearchParams();
   if (page) params.append('page', String(page));
   if (limit) params.append('limit', String(limit));
   if (estado && estado !== 'todos') params.append('estado', String(estado));
   if (search) params.append('search', String(search));
+  if (id_gimnasio) params.append('id_gimnasio', String(id_gimnasio));
 
   return apiRequest(`/socios?${params.toString()}`, { signal });
 }
@@ -72,7 +73,7 @@ export async function getSocioById(id, { signal } = {}) {
 /**
  * Actualiza datos personales de public.socio por personal autorizado (SocioUpdate).
  */
-export async function updateSocio(id, socioData) {
+export async function updateSocio(id, socioData, idGimnasio = null) {
   let estadoBool;
   if (typeof socioData.estado === 'boolean') {
     estadoBool = socioData.estado;
@@ -90,26 +91,31 @@ export async function updateSocio(id, socioData) {
     ...(socioData.email !== undefined ? { email: socioData.email ? String(socioData.email).trim().toLowerCase() : null } : {}),
     ...(estadoBool !== undefined ? { estado: estadoBool } : {})
   };
-  return apiRequest(`/socios/${id}`, {
+  const qs = idGimnasio ? `?id_gimnasio=${encodeURIComponent(idGimnasio)}` : '';
+  return apiRequest(`/socios/${id}${qs}`, {
     method: 'PUT',
     body: payload
   });
 }
 
-export async function deleteSocio(id) {
-  return apiRequest(`/socios/${id}`, {
+export async function deleteSocio(id, idGimnasio = null) {
+  const qs = idGimnasio ? `?id_gimnasio=${encodeURIComponent(idGimnasio)}` : '';
+  return apiRequest(`/socios/${id}${qs}`, {
     method: 'DELETE'
   });
 }
 
-export async function changeEstadoSocio(id, estado) {
+export async function changeEstadoSocio(id, estado, idGimnasio = null) {
   const estadoBool =
     typeof estado === 'boolean'
       ? estado
       : ['activo', 'activa', 'true', '1'].includes(String(estado).toLowerCase().trim());
   return apiRequest(`/socios/${id}/estado`, {
     method: 'PATCH',
-    body: { estado: estadoBool }
+    body: {
+      estado: estadoBool,
+      ...(idGimnasio ? { id_gimnasio: Number(idGimnasio) } : {})
+    }
   });
 }
 

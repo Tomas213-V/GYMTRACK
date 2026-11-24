@@ -17,6 +17,7 @@ import "./detalle-modal.css";
 function SocioDetalleModal({
   abierto,
   socio,
+  gymId,
   onCerrar,
   onEliminarSocio,
   onActualizarSocio
@@ -85,16 +86,16 @@ function SocioDetalleModal({
   const nombreCompleto = s.nombre
     ? `${s.nombre} ${s.apellido || ""}`.trim()
     : (usuarioData.nombre
-        ? `${usuarioData.nombre} ${usuarioData.apellido || ""}`.trim()
-        : "Socio");
+      ? `${usuarioData.nombre} ${usuarioData.apellido || ""}`.trim()
+      : "Socio");
 
   const membActiva = Array.isArray(s.membresia) && s.membresia.length > 0
-    ? (s.membresia.find((m) => ['activa', 'activo'].includes(String(m.estado || '').toLowerCase())) || s.membresia[0])
+    ? (s.membresia.find(m => m.estado === 'activo') || s.membresia[0])
     : (s.membresia && !Array.isArray(s.membresia) ? s.membresia : null);
 
   const planNombre = membActiva?.membresia_gimnasio?.nombre || "Sin Plan";
-  const planPrecio = membActiva?.precio != null 
-    ? `$${Number(membActiva.precio).toLocaleString("es-AR")}` 
+  const planPrecio = membActiva?.precio != null
+    ? `$${Number(membActiva.precio).toLocaleString("es-AR")}`
     : (membActiva?.membresia_gimnasio?.precio != null ? `$${Number(membActiva.membresia_gimnasio.precio).toLocaleString("es-AR")}` : "No definido");
 
   const formatearFecha = (fechaStr) => {
@@ -109,16 +110,14 @@ function SocioDetalleModal({
     : "Sin vencimiento fijo";
 
   const fechaAlta = s.fecha_alta ? formatearFecha(s.fecha_alta) : "No registrada";
-  const estadoActual = typeof s.estado === "boolean"
-    ? (s.estado ? "activo" : "inactivo")
-    : String(s.estado || "activo").toLowerCase();
+  const estadoActual = (s.estado || "activo").toLowerCase();
 
   // Cambiar estado rápido desde el selector
   const handleCambiarEstadoRapido = async (nuevoEstado) => {
     setErrorMsg("");
     try {
       const estadoBool = nuevoEstado === "activo";
-      await changeEstadoSocio(s.id_socio, estadoBool);
+      await changeEstadoSocio(s.id_socio, estadoBool, gymId);
       setDetalle((prev) => ({ ...(prev || s), estado: estadoBool }));
       setFormData((prev) => ({ ...prev, estado: estadoBool ? "activo" : "inactivo" }));
       if (onActualizarSocio) onActualizarSocio();
@@ -144,7 +143,7 @@ function SocioDetalleModal({
         estado: formData.estado === "activo"
       };
 
-      await updateSocio(s.id_socio, payload);
+      await updateSocio(s.id_socio, payload, gymId);
 
       setExitoMsg("¡Datos del socio actualizados exitosamente!");
       setTimeout(() => {
@@ -159,16 +158,16 @@ function SocioDetalleModal({
     }
   };
 
-  // Confirmar y ejecutar eliminación
+  // Confirmar y ejecutar baja del socio en el gimnasio
   const handleConfirmarEliminar = async () => {
     setEliminando(true);
     setErrorMsg("");
     try {
-      await deleteSocio(s.id_socio);
+      await deleteSocio(s.id_socio, gymId);
       if (onEliminarSocio) onEliminarSocio(s.id_socio);
       onCerrar();
     } catch (err) {
-      setErrorMsg(err.message || "Error al eliminar socio.");
+      setErrorMsg(err.message || "Error al dar de baja al socio.");
       setEliminando(false);
     }
   };
@@ -248,6 +247,7 @@ function SocioDetalleModal({
                     onChange={(e) => handleCambiarEstadoRapido(e.target.value)}
                   >
                     <option value="activo">Activo</option>
+                    <option value="pendiente">Pendiente</option>
                     <option value="inactivo">Inactivo</option>
                   </select>
                 </div>
@@ -304,8 +304,8 @@ function SocioDetalleModal({
                       {s.email && !s.email.includes("@gymtrack.local")
                         ? s.email
                         : (usuarioData.email && !usuarioData.email.includes("@gymtrack.local")
-                            ? usuarioData.email
-                            : "No especificado")}
+                          ? usuarioData.email
+                          : "No especificado")}
                     </span>
                   </div>
 
@@ -338,18 +338,18 @@ function SocioDetalleModal({
                 </button>
               </div>
 
-              {/* Zona de Peligro / Eliminación */}
+              {/* Zona de Baja Lógica */}
               <div className="socio-detalle-zona-eliminar">
                 {!confirmandoEliminar ? (
                   <div className="socio-detalle-eliminar-barra">
-                    <p>¿Necesitas dar de baja a este socio del sistema?</p>
+                    <p>¿Necesitas dar de baja a este socio del gimnasio?</p>
                     <button
                       type="button"
                       className="socio-btn-eliminar"
                       onClick={() => setConfirmandoEliminar(true)}
                     >
                       <FaTrash />
-                      <span>Eliminar Socio</span>
+                      <span>Dar de Baja</span>
                     </button>
                   </div>
                 ) : (
@@ -357,8 +357,8 @@ function SocioDetalleModal({
                     <div className="socio-confirmar-texto">
                       <FaExclamationTriangle className="socio-confirmar-icono" />
                       <div>
-                        <strong>¿Estás seguro de eliminar a {nombreCompleto}?</strong>
-                        <p>Esta acción removerá el socio, sus membresías y pagos asociados de forma irreversible.</p>
+                        <strong>¿Estás seguro de dar de baja a {nombreCompleto}?</strong>
+                        <p>Se desactivará su asociación con este gimnasio conservando su historial de pagos y asistencias.</p>
                       </div>
                     </div>
                     <div className="socio-confirmar-botones">
@@ -377,7 +377,7 @@ function SocioDetalleModal({
                         disabled={eliminando}
                       >
                         <FaTrash />
-                        <span>{eliminando ? "Eliminando..." : "Sí, eliminar definitivamente"}</span>
+                        <span>{eliminando ? "Procesando..." : "Sí, dar de baja"}</span>
                       </button>
                     </div>
                   </div>

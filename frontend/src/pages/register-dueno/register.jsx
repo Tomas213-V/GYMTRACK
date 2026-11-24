@@ -43,7 +43,7 @@ import './register.css';
 function Register() {
   // Hook de navegación para redirigir al usuario tras completar el registro
   const navigate = useNavigate();
-  const { setSession } = useGymContext();
+  const { setSession, logout } = useGymContext();
 
   // ---------------------------------------------------------------------------------------
   // PASO 1: DEFINICIÓN DE ESTADOS LOCALES (STATE HOOKS)
@@ -143,6 +143,9 @@ function Register() {
     setLoading(true);
 
     try {
+      // Limpiar cualquier sesión previa del navegador antes de registrar una cuenta nueva
+      logout();
+
       // Llamada al servicio HTTP para registrar al usuario en Supabase Auth + public.dueno
       const res = await register({
         nombre: formData.nombre.trim(),
@@ -164,7 +167,9 @@ function Register() {
           token: res.token,
           refresh_token: res.refresh_token,
           usuario: res.usuario,
-          gimnasios: res.gimnasio ? [res.gimnasio] : []
+          gimnasios: res.gimnasio ? [res.gimnasio] : [],
+          contextos_disponibles: [],
+          requiere_seleccion_gimnasio: false
         });
         setSuccess(res.mensaje || '¡Cuenta creada correctamente! Redirigiendo...');
         setTimeout(() => {

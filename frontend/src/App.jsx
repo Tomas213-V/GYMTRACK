@@ -74,7 +74,13 @@ import ProtectedRoute from './components/ProtectedRoute'
 import { useGymContext } from './context/GymContext'
 import './App.css'
 
-function RoleAwareRoute({ socioElement, staffElement, publicElement = null, staffPermiso = null }) {
+function RoleAwareRoute({
+  socioElement,
+  staffElement,
+  publicElement = null,
+  staffPermiso = null,
+  bloquearEmpleado = false
+}) {
   const { isAuthenticated, esSocio } = useGymContext()
 
   if (!isAuthenticated) {
@@ -87,7 +93,11 @@ function RoleAwareRoute({ socioElement, staffElement, publicElement = null, staf
   }
 
   return (
-    <ProtectedRoute rolRequerido="staff" permisoRequerido={staffPermiso}>
+    <ProtectedRoute
+      rolRequerido="staff"
+      permisoRequerido={staffPermiso}
+      bloquearEmpleado={bloquearEmpleado}
+    >
       {staffElement}
     </ProtectedRoute>
   )
@@ -145,7 +155,7 @@ function App() {
         <Route
           path="/dashboard-dueño"
           element={
-            <ProtectedRoute rolRequerido="staff">
+            <ProtectedRoute rolRequerido="staff" bloquearEmpleado={true}>
               <Dashboard />
             </ProtectedRoute>
           }
@@ -153,7 +163,7 @@ function App() {
         <Route
           path="/dashboard-dueno"
           element={
-            <ProtectedRoute rolRequerido="staff">
+            <ProtectedRoute rolRequerido="staff" bloquearEmpleado={true}>
               <Dashboard />
             </ProtectedRoute>
           }
@@ -161,7 +171,7 @@ function App() {
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute rolRequerido="staff">
+            <ProtectedRoute rolRequerido="staff" bloquearEmpleado={true}>
               <Dashboard />
             </ProtectedRoute>
           }
@@ -170,7 +180,7 @@ function App() {
         <Route
           path="/sucursales-dueño"
           element={
-            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_sucursales">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_sucursales" bloquearEmpleado={true}>
               <SucursalesDueno />
             </ProtectedRoute>
           }
@@ -178,7 +188,7 @@ function App() {
         <Route
           path="/sucursales-dueno"
           element={
-            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_sucursales">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_sucursales" bloquearEmpleado={true}>
               <SucursalesDueno />
             </ProtectedRoute>
           }
@@ -186,7 +196,7 @@ function App() {
         <Route
           path="/sucursales"
           element={
-            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_sucursales">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_sucursales" bloquearEmpleado={true}>
               <SucursalesDueno />
             </ProtectedRoute>
           }
@@ -220,7 +230,7 @@ function App() {
         <Route
           path="/empleados-dueño"
           element={
-            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_empleados">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_empleados" bloquearEmpleado={true}>
               <EmpleadosDueno />
             </ProtectedRoute>
           }
@@ -228,7 +238,7 @@ function App() {
         <Route
           path="/empleados-dueno"
           element={
-            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_empleados">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_empleados" bloquearEmpleado={true}>
               <EmpleadosDueno />
             </ProtectedRoute>
           }
@@ -236,7 +246,7 @@ function App() {
         <Route
           path="/empleados"
           element={
-            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_empleados">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="ver_empleados" bloquearEmpleado={true}>
               <EmpleadosDueno />
             </ProtectedRoute>
           }
@@ -295,7 +305,7 @@ function App() {
         <Route
           path="/membresia-dueño"
           element={
-            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias" bloquearEmpleado={true}>
               <MembresiaAdmin />
             </ProtectedRoute>
           }
@@ -303,7 +313,7 @@ function App() {
         <Route
           path="/membresia-dueno"
           element={
-            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias" bloquearEmpleado={true}>
               <MembresiaAdmin />
             </ProtectedRoute>
           }
@@ -311,7 +321,7 @@ function App() {
         <Route
           path="/membresias-dueño"
           element={
-            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias" bloquearEmpleado={true}>
               <MembresiaAdmin />
             </ProtectedRoute>
           }
@@ -319,7 +329,7 @@ function App() {
         <Route
           path="/membresias-dueno"
           element={
-            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias" bloquearEmpleado={true}>
               <MembresiaAdmin />
             </ProtectedRoute>
           }
@@ -327,7 +337,7 @@ function App() {
         <Route
           path="/membresia-admin"
           element={
-            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias" bloquearEmpleado={true}>
               <MembresiaAdmin />
             </ProtectedRoute>
           }
@@ -335,7 +345,7 @@ function App() {
         <Route
           path="/membresias"
           element={
-            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias" bloquearEmpleado={true}>
               <MembresiaAdmin />
             </ProtectedRoute>
           }
@@ -343,7 +353,7 @@ function App() {
         <Route
           path="/membresias-admin"
           element={
-            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias">
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_membresias" bloquearEmpleado={true}>
               <MembresiaAdmin />
             </ProtectedRoute>
           }
@@ -445,7 +455,7 @@ function App() {
         <Route
           path="/support-dueño"
           element={
-            <ProtectedRoute rolRequerido="staff">
+            <ProtectedRoute rolRequerido="staff" bloquearEmpleado={true}>
               <Soporte />
             </ProtectedRoute>
           }
@@ -453,7 +463,7 @@ function App() {
         <Route
           path="/support-dueno"
           element={
-            <ProtectedRoute rolRequerido="staff">
+            <ProtectedRoute rolRequerido="staff" bloquearEmpleado={true}>
               <Soporte />
             </ProtectedRoute>
           }
@@ -461,7 +471,7 @@ function App() {
         <Route
           path="/soporte-dueño"
           element={
-            <ProtectedRoute rolRequerido="staff">
+            <ProtectedRoute rolRequerido="staff" bloquearEmpleado={true}>
               <Soporte />
             </ProtectedRoute>
           }
@@ -469,8 +479,58 @@ function App() {
         <Route
           path="/soporte-dueno"
           element={
-            <ProtectedRoute rolRequerido="staff">
+            <ProtectedRoute rolRequerido="staff" bloquearEmpleado={true}>
               <Soporte />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Alias dedicados para el rol Empleado (6 secciones operativas) */}
+        <Route
+          path="/empleado/socios"
+          element={
+            <ProtectedRoute rolRequerido="staff">
+              <Socios />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/empleado/rutinas"
+          element={
+            <ProtectedRoute rolRequerido="staff">
+              <Rutinas />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/empleado/ejercicios"
+          element={
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_ejercicios">
+              <EjerciciosDueno />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/empleado/pagos"
+          element={
+            <ProtectedRoute rolRequerido="staff" permisoRequerido="gestionar_pagos">
+              <Pagos />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/empleado/asistencias"
+          element={
+            <ProtectedRoute rolRequerido="staff">
+              <Asistencias />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/empleado/perfil"
+          element={
+            <ProtectedRoute rolRequerido="staff">
+              <PerfilDueno />
             </ProtectedRoute>
           }
         />
@@ -614,6 +674,7 @@ function App() {
               socioElement={<SocioMembresia />}
               staffElement={<MembresiaAdmin />}
               staffPermiso="gestionar_membresias"
+              bloquearEmpleado={true}
             />
           }
         />

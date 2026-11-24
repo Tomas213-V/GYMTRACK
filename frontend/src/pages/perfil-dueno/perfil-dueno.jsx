@@ -35,7 +35,8 @@ import {
   FaEyeSlash,
   FaDumbbell,
   FaUsers,
-  FaCheck
+  FaCheck,
+  FaIdCard
 } from 'react-icons/fa';
 import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar-dueno/sidebar';
@@ -48,7 +49,18 @@ import './perfil-dueno.css';
 function PerfilDueno() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { rol, gimnasioActivo, gimnasioActivoId, contextVersion, refreshProfile } = useGymContext();
+  const {
+    rol,
+    usuario: usuarioContexto,
+    esDueno,
+    esAdministrador,
+    esEmpleado,
+    gimnasioActivo,
+    gimnasioActivoId,
+    sucursalActiva,
+    contextVersion,
+    refreshProfile
+  } = useGymContext();
 
   const queryParams = new URLSearchParams(location.search);
   const socioIdParam = queryParams.get('id');
@@ -66,6 +78,8 @@ function PerfilDueno() {
     nombre: '',
     apellido: '',
     email: '',
+    telefono: '',
+    dni: '',
     rol: 'dueño',
     estado: 'activo',
     fecha_creacion: ''
@@ -99,11 +113,20 @@ function PerfilDueno() {
       const u = res?.usuario || {};
       setPerfil(u);
 
+      // Si el contexto global quedó desfasado respecto al token autenticado real (ej. cambio en otra pestaña), resincronizar
+      const authCtx = usuarioContexto?.auth_user_id || usuarioContexto?.email;
+      const authResp = u?.auth_user_id || u?.email;
+      if (authCtx && authResp && String(authCtx).toLowerCase() !== String(authResp).toLowerCase()) {
+        refreshProfile();
+      }
+
       const estadoUser = u.estado === false ? 'inactivo' : 'activo';
       setOwnerForm({
         nombre: u.nombre || '',
         apellido: u.apellido || '',
         email: u.email || '',
+        telefono: u.telefono || '',
+        dni: u.dni || '',
         rol: u.rol || rol || 'dueño',
         estado: estadoUser,
         fecha_creacion: u.fecha_creacion ? u.fecha_creacion.split('T')[0] : ''
@@ -132,7 +155,7 @@ function PerfilDueno() {
     } finally {
       setCargando(false);
     }
-  }, [socioIdParam, rol, gimnasioActivoId, gimnasioActivo]);
+  }, [socioIdParam, rol, gimnasioActivoId, gimnasioActivo, usuarioContexto, refreshProfile]);
 
   useEffect(() => {
     cargarDatos();
@@ -164,7 +187,7 @@ function PerfilDueno() {
     return (n + a).toUpperCase() || 'GT';
   };
 
-  // Guardar datos personales del dueño
+  // Guardar datos personales (dueño / administrador / empleado)
   const handleGuardarOwner = async (e) => {
     e.preventDefault();
     setAlerta(null);
@@ -176,17 +199,26 @@ function PerfilDueno() {
 
     try {
       setGuardandoOwner(true);
-      await updatePerfilOwner({
+      const payload = {
         nombre: ownerForm.nombre,
         apellido: ownerForm.apellido,
-        email: ownerForm.email
-      });
+        email: ownerForm.email,
+        ...(esEmpleado || esAdministrador ? { telefono: ownerForm.telefono } : {})
+      };
+      const resUpd = await updatePerfilOwner(payload);
+
+      if (resUpd?.token) {
+        localStorage.setItem('token', resUpd.token);
+      }
+      if (resUpd?.refresh_token) {
+        localStorage.setItem('refresh_token', resUpd.refresh_token);
+      }
 
       await refreshProfile();
 
       setAlerta({
         tipo: 'exito',
-        mensaje: 'Tus datos personales fueron actualizados exitosamente.'
+        mensaje: resUpd?.mensaje || 'Tus datos personales fueron actualizados exitosamente.'
       });
       await cargarDatos();
     } catch (err) {
@@ -292,8 +324,20 @@ function PerfilDueno() {
     }
   };
 
-  const gym = perfil?.gimnasio || null;
+  const gym = perfil?.gimnasio || gimnasioActivo || null;
   const stats = perfil?.estadisticas || {};
+  const pestanaEfectiva = esEmpleado && pestanaActiva === 'gimnasio' ? 'dueno' : pestanaActiva;
+  const etiquetaRolPerfil = esEmpleado
+    ? 'Empleado'
+    : esAdministrador
+    ? 'Administrador'
+    : 'Dueño / Administrador';
+  const etiquetaSubrolEmpleado =
+    esEmpleado && Array.isArray(perfil?.roles_empleado) && perfil.roles_empleado.length > 0
+      ? perfil.roles_empleado
+          .map((r) => (r === 'administrador' ? 'Admin. Sucursal' : r.charAt(0).toUpperCase() + r.slice(1)))
+          .join(', ')
+      : 'Empleado operativo';
 
   return (
     <div className="perfil-dueno-layout">
@@ -307,20 +351,24 @@ function PerfilDueno() {
           <div className="perfil-dueno-topbar">
             <div className="perfil-dueno-topbar-left">
               <button
-                onClick={() => navigate('/dashboard-dueño')}
+                onClick={() => navigate(esEmpleado ? '/socios-dueño' : '/dashboard-dueño')}
                 className="perfil-dueno-btn-volver"
               >
-                <FaArrowLeft /> Panel Principal
+                <FaArrowLeft /> {esEmpleado ? 'Volver a Socios' : 'Panel Principal'}
               </button>
               <div>
-                <h1>Mi Perfil & Mi Gimnasio</h1>
-                <p>Gestiona tus credenciales de dueño, la información institucional de tu gimnasio y la seguridad de tu cuenta.</p>
+                <h1>{esEmpleado ? 'Mi Perfil de Empleado' : 'Mi Perfil & Mi Gimnasio'}</h1>
+                <p>
+                  {esEmpleado
+                    ? 'Visualiza y actualiza tus datos personales, teléfono, correo electrónico y contraseña de acceso.'
+                    : 'Gestiona tus credenciales de dueño, la información institucional de tu gimnasio y la seguridad de tu cuenta.'}
+                </p>
               </div>
             </div>
 
             <div className="perfil-dueno-badge-rol">
               <FaShieldAlt className="perfil-dueno-badge-icon" />
-              <span>Dueño / Administrador</span>
+              <span>{etiquetaRolPerfil}</span>
             </div>
           </div>
 
@@ -347,11 +395,11 @@ function PerfilDueno() {
           {cargando ? (
             <div className="perfil-dueno-loading">
               <div className="perfil-dueno-spinner"></div>
-              <p>Cargando información del perfil del dueño...</p>
+              <p>Cargando información del perfil...</p>
             </div>
           ) : (
             <>
-              {/* Hero Banner del Dueño y su Gimnasio */}
+              {/* Hero Banner */}
               <div className="perfil-dueno-hero-card">
                 <div className="perfil-dueno-hero-main">
                   <div className="perfil-dueno-avatar-wrapper">
@@ -370,7 +418,7 @@ function PerfilDueno() {
                     </h2>
                     <div className="perfil-dueno-tags">
                       <span className="perfil-dueno-tag tag-rol">
-                        <FaShieldAlt /> Rol: Dueño
+                        <FaShieldAlt /> Rol: {esEmpleado ? etiquetaSubrolEmpleado : esAdministrador ? 'Administrador' : 'Dueño'}
                       </span>
                       {gym && (
                         <span className="perfil-dueno-tag tag-gym">
@@ -386,12 +434,17 @@ function PerfilDueno() {
                       <span>
                         <FaEnvelope /> {ownerForm.email || 'Sin correo registrado'}
                       </span>
-                      {gym?.telefono && (
+                      {(esEmpleado ? ownerForm.telefono : gym?.telefono) && (
                         <span>
-                          <FaPhone /> {gym.telefono}
+                          <FaPhone /> {esEmpleado ? ownerForm.telefono : gym?.telefono}
                         </span>
                       )}
-                      {gym?.direccion && (
+                      {esEmpleado && sucursalActiva?.direccion && (
+                        <span>
+                          <FaMapMarkerAlt /> {sucursalActiva.direccion}
+                        </span>
+                      )}
+                      {!esEmpleado && gym?.direccion && (
                         <span>
                           <FaMapMarkerAlt /> {gym.direccion}
                         </span>
@@ -403,72 +456,76 @@ function PerfilDueno() {
                   </div>
                 </div>
 
-                {/* Métricas rápidas del Gimnasio */}
-                <div className="perfil-dueno-quick-stats">
-                  <div className="perfil-dueno-stat-box">
-                    <div className="perfil-dueno-stat-icon-wrapper">
-                      <FaUsers />
+                {/* Métricas rápidas del Gimnasio (solo dueño/admin) */}
+                {!esEmpleado && (
+                  <div className="perfil-dueno-quick-stats">
+                    <div className="perfil-dueno-stat-box">
+                      <div className="perfil-dueno-stat-icon-wrapper">
+                        <FaUsers />
+                      </div>
+                      <div>
+                        <span className="perfil-dueno-stat-val accent">
+                          {stats.totalSocios ?? 0}
+                        </span>
+                        <span className="perfil-dueno-stat-label">Socios Totales</span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="perfil-dueno-stat-val accent">
-                        {stats.totalSocios ?? 0}
-                      </span>
-                      <span className="perfil-dueno-stat-label">Socios Totales</span>
-                    </div>
-                  </div>
 
-                  <div className="perfil-dueno-stat-box">
-                    <div className="perfil-dueno-stat-icon-wrapper">
-                      <FaDumbbell />
+                    <div className="perfil-dueno-stat-box">
+                      <div className="perfil-dueno-stat-icon-wrapper">
+                        <FaDumbbell />
+                      </div>
+                      <div>
+                        <span className="perfil-dueno-stat-val">
+                          {stats.sociosActivos ?? 0}
+                        </span>
+                        <span className="perfil-dueno-stat-label">Socios Activos</span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="perfil-dueno-stat-val">
-                        {stats.sociosActivos ?? 0}
-                      </span>
-                      <span className="perfil-dueno-stat-label">Socios Activos</span>
-                    </div>
-                  </div>
 
-                  <div className="perfil-dueno-stat-box">
-                    <div className="perfil-dueno-stat-icon-wrapper">
-                      <FaBuilding />
-                    </div>
-                    <div>
-                      <span className="perfil-dueno-stat-val">
-                        {gym ? 'Activo' : 'Pendiente'}
-                      </span>
-                      <span className="perfil-dueno-stat-label">Estado Gym</span>
+                    <div className="perfil-dueno-stat-box">
+                      <div className="perfil-dueno-stat-icon-wrapper">
+                        <FaBuilding />
+                      </div>
+                      <div>
+                        <span className="perfil-dueno-stat-val">
+                          {gym ? 'Activo' : 'Pendiente'}
+                        </span>
+                        <span className="perfil-dueno-stat-label">Estado Gym</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Pestañas de Navegación */}
               <div className="perfil-dueno-tabs-bar">
                 <button
-                  className={`perfil-dueno-tab-btn ${pestanaActiva === 'dueno' ? 'activo' : ''}`}
+                  className={`perfil-dueno-tab-btn ${pestanaEfectiva === 'dueno' ? 'activo' : ''}`}
                   onClick={() => setPestanaActiva('dueno')}
                 >
-                  <FaUser /> Datos del Dueño
+                  <FaUser /> {esEmpleado ? 'Datos Personales' : 'Datos del Dueño'}
                 </button>
 
-                <button
-                  className={`perfil-dueno-tab-btn ${pestanaActiva === 'gimnasio' ? 'activo' : ''}`}
-                  onClick={() => setPestanaActiva('gimnasio')}
-                >
-                  <FaBuilding /> Datos del Gimnasio
-                </button>
+                {!esEmpleado && (
+                  <button
+                    className={`perfil-dueno-tab-btn ${pestanaEfectiva === 'gimnasio' ? 'activo' : ''}`}
+                    onClick={() => setPestanaActiva('gimnasio')}
+                  >
+                    <FaBuilding /> Datos del Gimnasio
+                  </button>
+                )}
 
                 <button
-                  className={`perfil-dueno-tab-btn ${pestanaActiva === 'seguridad' ? 'activo' : ''}`}
+                  className={`perfil-dueno-tab-btn ${pestanaEfectiva === 'seguridad' ? 'activo' : ''}`}
                   onClick={() => setPestanaActiva('seguridad')}
                 >
                   <FaShieldAlt /> Seguridad & Contraseña
                 </button>
               </div>
 
-              {/* CONTENIDO PESTAÑA 1: DATOS DEL DUEÑO */}
-              {pestanaActiva === 'dueno' && (
+              {/* CONTENIDO PESTAÑA 1: DATOS PERSONALES */}
+              {pestanaEfectiva === 'dueno' && (
                 <div className="perfil-dueno-tab-content">
                   <div className="perfil-dueno-grid">
                     <div className="perfil-dueno-card">
@@ -477,8 +534,12 @@ function PerfilDueno() {
                           <FaUser />
                         </div>
                         <div>
-                          <h3>Información Personal del Dueño</h3>
-                          <p>Modifica tu nombre, apellido y dirección de correo de acceso a GymTrack</p>
+                          <h3>{esEmpleado ? 'Información Personal del Empleado' : 'Información Personal del Dueño'}</h3>
+                          <p>
+                            {esEmpleado
+                              ? 'Modifica tu nombre, apellido, teléfono y correo electrónico de acceso a GymTrack'
+                              : 'Modifica tu nombre, apellido y dirección de correo de acceso a GymTrack'}
+                          </p>
                         </div>
                       </div>
 
@@ -518,6 +579,38 @@ function PerfilDueno() {
                           </div>
                         </div>
 
+                        {(esEmpleado || esAdministrador) && (
+                          <div className="perfil-dueno-form-row">
+                            <div className="perfil-dueno-form-group">
+                              <label htmlFor="owner-telefono">Teléfono</label>
+                              <div className="perfil-dueno-input-wrapper">
+                                <FaPhone className="perfil-dueno-input-icon" />
+                                <input
+                                  id="owner-telefono"
+                                  type="tel"
+                                  className="perfil-dueno-input"
+                                  value={ownerForm.telefono}
+                                  onChange={(e) => setOwnerForm({ ...ownerForm, telefono: e.target.value })}
+                                  placeholder="Ej: +54 9 11 4567-8901"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="perfil-dueno-form-group">
+                              <label>DNI</label>
+                              <div className="perfil-dueno-input-wrapper">
+                                <FaIdCard className="perfil-dueno-input-icon" />
+                                <input
+                                  type="text"
+                                  className="perfil-dueno-input read-only"
+                                  value={ownerForm.dni || 'No registrado'}
+                                  disabled
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="perfil-dueno-form-group">
                           <label htmlFor="owner-email">
                             Correo Electrónico de Acceso <span className="req">*</span>
@@ -530,12 +623,14 @@ function PerfilDueno() {
                               className="perfil-dueno-input"
                               value={ownerForm.email}
                               onChange={(e) => setOwnerForm({ ...ownerForm, email: e.target.value })}
-                              placeholder="admin@tu-gimnasio.com"
+                              placeholder={esEmpleado ? 'empleado@tu-gimnasio.com' : 'admin@tu-gimnasio.com'}
                               required
                             />
                           </div>
                           <span className="perfil-dueno-input-help">
-                            Este email es utilizado para iniciar sesión en GymTrack como administrador.
+                            {esEmpleado
+                              ? 'Este email es utilizado para iniciar sesión en GymTrack con tu cuenta de empleado.'
+                              : 'Este email es utilizado para iniciar sesión en GymTrack como administrador.'}
                           </span>
                         </div>
 
@@ -547,7 +642,13 @@ function PerfilDueno() {
                               <input
                                 type="text"
                                 className="perfil-dueno-input read-only"
-                                value="Dueño / Propietario del Gimnasio"
+                                value={
+                                  esEmpleado
+                                    ? `Empleado (${etiquetaSubrolEmpleado})`
+                                    : esAdministrador
+                                    ? 'Administrador de Gimnasio'
+                                    : 'Dueño / Propietario del Gimnasio'
+                                }
                                 disabled
                               />
                             </div>
@@ -583,35 +684,55 @@ function PerfilDueno() {
                     {/* Tarjeta lateral Informativa */}
                     <div className="perfil-dueno-side-card">
                       <div className="perfil-dueno-side-card-badge">
-                        <FaShieldAlt /> Administrador Principal
+                        <FaShieldAlt /> {esEmpleado ? 'Cuenta de Empleado' : esDueno ? 'Administrador Principal' : 'Administrador'}
                       </div>
-                      <h4>Control Total del Gimnasio</h4>
+                      <h4>{esEmpleado ? 'Operación del Gimnasio' : 'Control Total del Gimnasio'}</h4>
                       <p>
-                        Como titular de la cuenta tienes acceso completo para gestionar socios,
-                        tarifas y planes de membresía, control de caja y registro de rutinas.
+                        {esEmpleado
+                          ? `Operás dentro de ${gym?.nombre || 'tu gimnasio asignado'} con acceso a las herramientas operativas diarias.`
+                          : 'Como titular de la cuenta tienes acceso completo para gestionar socios, tarifas y planes de membresía, control de caja y registro de rutinas.'}
                       </p>
 
                       <div className="perfil-dueno-checklist">
-                        <div className="perfil-dueno-checklist-item">
-                          <FaCheck className="chk-icon" />
-                          <span>Alta y gestión de socios ilimitada</span>
-                        </div>
-                        <div className="perfil-dueno-checklist-item">
-                          <FaCheck className="chk-icon" />
-                          <span>Control financiero y cobros</span>
-                        </div>
-                        <div className="perfil-dueno-checklist-item">
-                          <FaCheck className="chk-icon" />
-                          <span>Configuración de planes y rutinas</span>
-                        </div>
+                        {esEmpleado ? (
+                          <>
+                            <div className="perfil-dueno-checklist-item">
+                              <FaCheck className="chk-icon" />
+                              <span>Gestión de socios, cuotas y cobros</span>
+                            </div>
+                            <div className="perfil-dueno-checklist-item">
+                              <FaCheck className="chk-icon" />
+                              <span>Control de entrada y salida de asistencias</span>
+                            </div>
+                            <div className="perfil-dueno-checklist-item">
+                              <FaCheck className="chk-icon" />
+                              <span>Catálogo de ejercicios, rutinas y asignaciones</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="perfil-dueno-checklist-item">
+                              <FaCheck className="chk-icon" />
+                              <span>Alta y gestión de socios ilimitada</span>
+                            </div>
+                            <div className="perfil-dueno-checklist-item">
+                              <FaCheck className="chk-icon" />
+                              <span>Control financiero y cobros</span>
+                            </div>
+                            <div className="perfil-dueno-checklist-item">
+                              <FaCheck className="chk-icon" />
+                              <span>Configuración de planes y rutinas</span>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* CONTENIDO PESTAÑA 2: DATOS DEL GIMNASIO */}
-              {pestanaActiva === 'gimnasio' && (
+              {/* CONTENIDO PESTAÑA 2: DATOS DEL GIMNASIO (solo dueño/admin) */}
+              {!esEmpleado && pestanaEfectiva === 'gimnasio' && (
                 <div className="perfil-dueno-tab-content">
                   <div className="perfil-dueno-grid">
                     <div className="perfil-dueno-card">
@@ -761,7 +882,7 @@ function PerfilDueno() {
               )}
 
               {/* CONTENIDO PESTAÑA 3: SEGURIDAD & CONTRASEÑA */}
-              {pestanaActiva === 'seguridad' && (
+              {pestanaEfectiva === 'seguridad' && (
                 <div className="perfil-dueno-tab-content">
                   <div className="perfil-dueno-grid">
                     <div className="perfil-dueno-card">
@@ -771,7 +892,11 @@ function PerfilDueno() {
                         </div>
                         <div>
                           <h3>Seguridad & Contraseña</h3>
-                          <p>Actualiza la clave de acceso de tu cuenta de dueño/administrador</p>
+                          <p>
+                            {esEmpleado
+                              ? 'Actualiza la clave de acceso de tu cuenta de empleado'
+                              : 'Actualiza la clave de acceso de tu cuenta de dueño/administrador'}
+                          </p>
                         </div>
                       </div>
 
@@ -873,7 +998,9 @@ function PerfilDueno() {
                       </div>
                       <h4>Buenas Prácticas de Acceso</h4>
                       <p>
-                        Tu cuenta de dueño administra los datos de todos los socios y la caja del gimnasio.
+                        {esEmpleado
+                          ? 'Tu cuenta de empleado opera con los datos de los socios, rutinas, asistencias y pagos del gimnasio.'
+                          : 'Tu cuenta de dueño administra los datos de todos los socios y la caja del gimnasio.'}
                       </p>
 
                       <div className="perfil-dueno-checklist">

@@ -8,7 +8,8 @@ export async function register(userData) {
   return apiRequest('/auth/register', {
     method: 'POST',
     body: userData,
-    skipAuthRefresh: true
+    skipAuthRefresh: true,
+    skipAuthHeaders: true
   });
 }
 
@@ -16,7 +17,8 @@ export async function registerSocio(userData) {
   return apiRequest('/auth/register-socio', {
     method: 'POST',
     body: userData,
-    skipAuthRefresh: true
+    skipAuthRefresh: true,
+    skipAuthHeaders: true
   });
 }
 
@@ -24,7 +26,8 @@ export async function login(userData) {
   return apiRequest('/auth/login', {
     method: 'POST',
     body: userData,
-    skipAuthRefresh: true
+    skipAuthRefresh: true,
+    skipAuthHeaders: true
   });
 }
 
@@ -32,7 +35,8 @@ export async function loginDueno(userData) {
   return apiRequest('/auth/login-dueno', {
     method: 'POST',
     body: userData,
-    skipAuthRefresh: true
+    skipAuthRefresh: true,
+    skipAuthHeaders: true
   });
 }
 
@@ -40,7 +44,8 @@ export async function loginAdministrador(userData) {
   return apiRequest('/auth/login-administrador', {
     method: 'POST',
     body: userData,
-    skipAuthRefresh: true
+    skipAuthRefresh: true,
+    skipAuthHeaders: true
   });
 }
 
@@ -48,7 +53,8 @@ export async function loginEmpleado(userData) {
   return apiRequest('/auth/login-empleado', {
     method: 'POST',
     body: userData,
-    skipAuthRefresh: true
+    skipAuthRefresh: true,
+    skipAuthHeaders: true
   });
 }
 
@@ -56,7 +62,8 @@ export async function loginSocio(userData) {
   return apiRequest('/auth/login-socio', {
     method: 'POST',
     body: userData,
-    skipAuthRefresh: true
+    skipAuthRefresh: true,
+    skipAuthHeaders: true
   });
 }
 
@@ -92,7 +99,8 @@ export async function recuperarContrasena(email) {
   return apiRequest('/auth/recuperar-contrasena', {
     method: 'POST',
     body: { email: String(email || '').trim().toLowerCase() },
-    skipAuthRefresh: true
+    skipAuthRefresh: true,
+    skipAuthHeaders: true
   });
 }
 

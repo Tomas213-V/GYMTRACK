@@ -60,7 +60,13 @@ function SociosContent() {
     try {
       setLoading(true)
       setError('')
-      const response = await fetchSocios({ page, limit: 6, estado, search })
+      const response = await fetchSocios({
+        page,
+        limit: 6,
+        estado,
+        search,
+        id_gimnasio: gimnasioActivoId
+      })
       setSocios(response.socios || [])
       setTotalPages(response.totalPages || 1)
       setTotalSocios(response.total || 0)

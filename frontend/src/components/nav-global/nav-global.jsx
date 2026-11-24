@@ -14,8 +14,8 @@ function calcularIniciales(usuario) {
       ? `${usuario.nombre} ${usuario.apellido}`.trim()
       : usuario.nombre
     : usuario.email
-    ? usuario.email.split('@')[0]
-    : 'Usuario';
+      ? usuario.email.split('@')[0]
+      : 'Usuario';
 
   let ini = 'GT';
   const partes = nombreCompleto.trim().split(/\s+/);
@@ -36,24 +36,33 @@ function NavGlobal() {
     esDueno,
     esAdministrador,
     esEmpleado,
-    gimnasioActivo,
-    sucursalActiva,
-    gimnasios
+    gimnasios,
+    gimnasioActivoId,
+    seleccionarGimnasio
   } = useGymContext();
 
   const { nombre: nombreUsuario, iniciales } = calcularIniciales(usuario);
 
+  const handleCambioGimnasio = (e) => {
+    const val = e.target.value;
+    if (val === '__nuevo__') {
+      navigate('/crear-gimnasio-dueño');
+      return;
+    }
+    seleccionarGimnasio(Number(val));
+  };
+
   const etiquetaRol = esDueno
     ? 'Dueño'
     : esAdministrador
-    ? 'Admin. Org.'
-    : esEmpleado
-    ? (usuario?.roles_empleado?.[0]
-        ? usuario.roles_empleado[0] === 'administrador'
-          ? 'Admin. Sucursal'
-          : usuario.roles_empleado[0].charAt(0).toUpperCase() + usuario.roles_empleado[0].slice(1)
-        : 'Empleado')
-    : 'Socio';
+      ? 'Admin. Org.'
+      : esEmpleado
+        ? (usuario?.roles_empleado?.[0]
+          ? usuario.roles_empleado[0] === 'administrador'
+            ? 'Admin. Sucursal'
+            : usuario.roles_empleado[0].charAt(0).toUpperCase() + usuario.roles_empleado[0].slice(1)
+          : 'Empleado')
+        : 'Socio';
 
   return (
     <header className="Caja-nav-global">
@@ -66,50 +75,44 @@ function NavGlobal() {
           <FaBars />
         </button>
 
-        <Link to={esSocio ? '/dashboard-socio' : '/dashboard-dueño'} className="Caja-nav-global-marca">
+        <Link
+          to={esSocio ? '/dashboard-socio' : esEmpleado ? '/socios-dueño' : '/dashboard-dueño'}
+          className="Caja-nav-global-marca"
+        >
           <b>
             GYM<span>TRACK</span>
           </b>
         </Link>
 
-        {/* CONTEXTO DE GIMNASIO ACTIVO (SOLO LECTURA — PARA CAMBIAR DE GIMNASIO CERRAR SESIÓN) */}
-        {(gimnasioActivo || gimnasios.length > 0 || esDueno) && (
-          <div
-            className="Caja-nav-global-gym-selector"
-            title="Para ingresar a otro gimnasio, cerrá sesión y volvé a iniciar sesión."
-          >
+        {/* SELECTOR DE GIMNASIO ACTIVO (Socio multigimnasio / Dueño multigimnasio / Empleado) */}
+        {(gimnasios.length > 0 || esDueno) && (
+          <div className="Caja-nav-global-gym-selector">
             <FaBuilding className="Caja-nav-global-gym-icon" />
             <span className="Caja-nav-global-gym-label">
               {esSocio ? 'Mi gimnasio:' : 'Gimnasio:'}
             </span>
-            {gimnasioActivo ? (
-              <span
+            {gimnasios.length > 0 ? (
+              <select
+                aria-label="Seleccionar gimnasio activo"
                 className="Caja-nav-global-gym-select"
-                style={{ cursor: 'default', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                value={gimnasioActivoId || ''}
+                onChange={handleCambioGimnasio}
               >
-                {gimnasioActivo.nombre}
-                {esEmpleado && sucursalActiva?.direccion ? ` — ${sucursalActiva.direccion}` : ''}
-                {gimnasioActivo.estado === false ? ' (Inactivo)' : ''}
-              </span>
+                {gimnasios.map((g) => (
+                  <option key={g.id_gimnasio} value={g.id_gimnasio}>
+                    {g.nombre}
+                    {g.estado === false ? ' (Inactivo)' : ''}
+                  </option>
+                ))}
+                {esDueno && <option value="__nuevo__">+ Registrar nuevo gimnasio</option>}
+              </select>
             ) : (
-              esDueno && (
-                <button
-                  type="button"
-                  className="Caja-nav-global-gym-add-btn"
-                  onClick={() => navigate('/crear-gimnasio-dueño')}
-                >
-                  <FaPlus /> Crear gimnasio
-                </button>
-              )
-            )}
-            {esDueno && gimnasioActivo && (
               <button
                 type="button"
                 className="Caja-nav-global-gym-add-btn"
                 onClick={() => navigate('/crear-gimnasio-dueño')}
-                title="Registrar un nuevo gimnasio"
               >
-                <FaPlus /> Nuevo
+                <FaPlus /> Crear gimnasio
               </button>
             )}
           </div>

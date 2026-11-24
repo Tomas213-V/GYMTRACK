@@ -143,6 +143,8 @@ export function GymProvider({ children }) {
 
   /**
    * Establece la sesión tras login o registro exitoso.
+   * Limpia primero cualquier rastro de sesiones previas (token, refresh_token, gimnasio/sucursal activa)
+   * para evitar cualquier cruce de cuentas o gimnasios entre usuarios en el mismo navegador.
    */
   const setSession = useCallback(
     ({
@@ -156,6 +158,14 @@ export function GymProvider({ children }) {
       contextos_disponibles: contextosParam,
       requiere_seleccion_gimnasio: reqSelParam
     }) => {
+      if (activeAbortRef.current) {
+        activeAbortRef.current.abort();
+      }
+      activeAbortRef.current = new AbortController();
+
+      // Limpieza total previa para que jamás sobreviva un refresh_token o id_gimnasio de otra cuenta
+      clearSessionStorage();
+
       const targetUser = socioObj || userObj || null;
       const roleValue = normalizeRoleInternal(targetUser?.rol || (socioObj ? 'socio' : 'dueño'));
       const gymsList = Array.isArray(gymsParam)
@@ -175,6 +185,8 @@ export function GymProvider({ children }) {
       if (newToken) {
         localStorage.setItem('token', newToken);
         setToken(newToken);
+      } else {
+        setToken(null);
       }
       if (newRefreshToken) {
         localStorage.setItem('refresh_token', newRefreshToken);
@@ -316,6 +328,25 @@ export function GymProvider({ children }) {
     return () => window.removeEventListener('gymtrack:session-expired', handleExpired);
   }, [resetLocalState]);
 
+  // Sincronizar automáticamente si otra pestaña inicia o cierra sesión en el mismo navegador
+  useEffect(() => {
+    const handleStorageChange = (event) => {
+      if (event.key !== 'token' && event.key !== null) return;
+      const latestToken = getStoredToken();
+      if (!latestToken) {
+        if (activeAbortRef.current) {
+          activeAbortRef.current.abort();
+        }
+        resetLocalState();
+      } else {
+        setToken(latestToken);
+        refreshProfile();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [resetLocalState, refreshProfile]);
+
   useEffect(() => {
     if (getStoredToken()) {
       refreshProfile();
@@ -431,6 +462,19 @@ export function GymProvider({ children }) {
   const hasPermission = useCallback(
     (permiso) => {
       if (rol === 'dueño') return true;
+      if (rol === 'empleado') {
+        const permisosEmpleado = [
+          'ver_socios',
+          'gestionar_socios',
+          'gestionar_membresias',
+          'gestionar_pagos',
+          'ver_asistencias',
+          'gestionar_asistencias',
+          'gestionar_ejercicios',
+          'gestionar_rutinas'
+        ];
+        return permisosEmpleado.includes(permiso);
+      }
       const perms = usuario?.permisos || [];
       return perms.includes('*') || perms.includes(permiso);
     },

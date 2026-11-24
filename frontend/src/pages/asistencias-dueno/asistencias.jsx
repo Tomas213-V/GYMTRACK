@@ -64,9 +64,21 @@ import {
 import './asistencias.css';
 
 export default function Asistencias() {
-  const { rol, esDueno, esAdministrador, esAdminSucursal, hasPermission, gimnasioActivoId, contextVersion } = useGymContext();
+  const {
+    rol,
+    esDueno,
+    esAdministrador,
+    esAdminSucursal,
+    esEmpleado,
+    hasPermission,
+    gimnasioActivoId,
+    sucursalActivaId,
+    sucursalesAsignadas,
+    contextVersion
+  } = useGymContext();
   const esSocio = rol === 'socio';
-  const puedeGestionarAsistencia = esDueno || esAdministrador || esAdminSucursal || hasPermission('gestionar_asistencias');
+  const puedeGestionarAsistencia =
+    esDueno || esAdministrador || esAdminSucursal || esEmpleado || hasPermission('gestionar_asistencias');
 
   // Estados para datos
   const [asistencias, setAsistencias] = useState([]);
@@ -148,25 +160,45 @@ export default function Asistencias() {
     const loadCatalogs = async () => {
       try {
         const [resSocios, resSuc] = await Promise.all([
-          fetchSocios({ limit: 200 }),
-          getSucursales({ estado: 'true' })
+          fetchSocios({ limit: 200, id_gimnasio: gimnasioActivoId }),
+          getSucursales({ estado: 'true', id_gimnasio: gimnasioActivoId }).catch(() => [])
         ]);
+        const sucsLista =
+          Array.isArray(resSuc) && resSuc.length > 0
+            ? resSuc
+            : (sucursalesAsignadas || []).filter(
+                (s) =>
+                  s.estado !== false &&
+                  (!s.id_gimnasio || Number(s.id_gimnasio) === Number(gimnasioActivoId))
+              );
         setSociosList(resSocios?.socios || []);
-        setSucursales(resSuc || []);
+        setSucursales(sucsLista);
         setFiltroSucursalId('');
-        setSucursalCheckinId(resSuc?.[0]?.id_sucursal ? String(resSuc[0].id_sucursal) : '');
+        const preferida =
+          sucursalActivaId &&
+          sucsLista.find((s) => Number(s.id_sucursal) === Number(sucursalActivaId));
+        setSucursalCheckinId(
+          preferida?.id_sucursal
+            ? String(preferida.id_sucursal)
+            : sucsLista?.[0]?.id_sucursal
+            ? String(sucsLista[0].id_sucursal)
+            : ''
+        );
       } catch (err) {
         console.error('Error cargando socios/sucursales:', err);
       }
     };
     loadCatalogs();
-  }, [gimnasioActivoId, contextVersion]);
+  }, [gimnasioActivoId, sucursalActivaId, sucursalesAsignadas, contextVersion]);
 
   // Cargar estadísticas
   const loadStats = useCallback(async () => {
     if (!gimnasioActivoId) return;
     try {
-      const data = await fetchEstadisticasAsistencias({ id_sucursal: filtroSucursalId });
+      const data = await fetchEstadisticasAsistencias({
+        id_sucursal: filtroSucursalId,
+        id_gimnasio: gimnasioActivoId
+      });
       setStats(data);
     } catch (err) {
       console.error('Error cargando estadísticas:', err);
@@ -179,13 +211,7 @@ export default function Asistencias() {
 
   // Cargar tabla de asistencias según filtros y página
   const loadAsistencias = useCallback(async () => {
-    if (!gimnasioActivoId) {
-      setAsistencias([]);
-      setTotalAsistencias(0);
-      setTotalPages(1);
-      setLoading(false);
-      return;
-    }
+    if (!gimnasioActivoId) return;
     setLoading(true);
     try {
       const data = await fetchAsistencias({
@@ -195,7 +221,8 @@ export default function Asistencias() {
         desde: fechaDesde,
         hasta: fechaHasta,
         id_socio: filtroSocioId,
-        id_sucursal: filtroSucursalId
+        id_sucursal: filtroSucursalId,
+        id_gimnasio: gimnasioActivoId
       });
 
       setAsistencias(data.asistencias || []);
@@ -222,11 +249,18 @@ export default function Asistencias() {
       return;
     }
     const clean = val.toLowerCase().trim();
+    const cleanDigits = clean.replace(/\D/g, '');
     const matches = sociosList.filter((s) => {
       const nomCompleto = `${s.nombre || ''} ${s.apellido || ''}`.toLowerCase();
       const dni = (s.dni || '').toString();
+      const dniDigits = dni.replace(/\D/g, '');
       const id = (s.id_socio || '').toString();
-      return nomCompleto.includes(clean) || dni.includes(clean) || id === clean;
+      return (
+        nomCompleto.includes(clean) ||
+        dni.includes(clean) ||
+        (cleanDigits.length > 0 && dniDigits.includes(cleanDigits)) ||
+        id === clean
+      );
     });
     setFilteredSociosSuggestions(matches.slice(0, 6));
     setShowSuggestions(true);
@@ -640,11 +674,11 @@ export default function Asistencias() {
                           <span
                             className="asist-badge-status"
                             style={{
-                              backgroundColor: (socio.estado === true || socio.estado === 'activo') ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
-                              color: (socio.estado === true || socio.estado === 'activo') ? '#4ade80' : '#f87171'
+                              backgroundColor: socio.estado === 'activo' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                              color: socio.estado === 'activo' ? '#4ade80' : '#f87171'
                             }}
                           >
-                            {typeof socio.estado === 'boolean' ? (socio.estado ? 'Activo' : 'Inactivo') : (socio.estado || 'Activo')}
+                            {socio.estado || 'Activo'}
                           </span>
                         </div>
                       ))}
@@ -666,8 +700,8 @@ export default function Asistencias() {
                         </h4>
                         <p>
                           DNI: {formatDni(selectedSocio.dni)} • Estado:{' '}
-                          <b style={{ color: (selectedSocio.estado === true || selectedSocio.estado === 'activo') ? '#a3e635' : '#f87171' }}>
-                            {typeof selectedSocio.estado === 'boolean' ? (selectedSocio.estado ? 'Activo' : 'Inactivo') : (selectedSocio.estado || 'Activo')}
+                          <b style={{ color: selectedSocio.estado === 'activo' ? '#a3e635' : '#f87171' }}>
+                            {selectedSocio.estado || 'Activo'}
                           </b>
                         </p>
                       </div>
@@ -696,9 +730,8 @@ export default function Asistencias() {
                 {/* Mensaje de Feedback */}
                 {feedbackMessage && (
                   <div
-                    className={`asist-alert-message ${
-                      feedbackMessage.type === 'success' ? 'asist-alert-success' : 'asist-alert-error'
-                    }`}
+                    className={`asist-alert-message ${feedbackMessage.type === 'success' ? 'asist-alert-success' : 'asist-alert-error'
+                      }`}
                   >
                     {feedbackMessage.type === 'success' ? <FaCheck /> : <FaTimes />}
                     <span>{feedbackMessage.text}</span>
@@ -741,7 +774,8 @@ export default function Asistencias() {
                   <thead>
                     <tr>
                       <th>Fecha</th>
-                      <th>Ingreso / Salida</th>
+                      <th>Entrada</th>
+                      <th>Salida</th>
                       <th>Sucursal</th>
                       <th>Socio</th>
                       <th>DNI</th>
@@ -752,13 +786,13 @@ export default function Asistencias() {
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan="7" className="asist-empty-state">
+                        <td colSpan="8" className="asist-empty-state">
                           Cargando asistencias...
                         </td>
                       </tr>
                     ) : asistencias.length === 0 ? (
                       <tr>
-                        <td colSpan="7" className="asist-empty-state">
+                        <td colSpan="8" className="asist-empty-state">
                           No se encontraron asistencias registradas con los filtros actuales.
                         </td>
                       </tr>
@@ -774,10 +808,14 @@ export default function Asistencias() {
                           <tr key={rowId}>
                             <td>{fechaStr}</td>
                             <td>
-                              <div>{horaStr} hs</div>
-                              <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>
-                                {salidaStr ? `Salida: ${salidaStr} hs` : 'En curso'}
-                              </div>
+                              <span style={{ fontWeight: 600, color: '#e2e8f0' }}>{horaStr} hs</span>
+                            </td>
+                            <td>
+                              {salidaStr ? (
+                                <span style={{ color: '#cbd5e1' }}>{salidaStr} hs</span>
+                              ) : (
+                                <span style={{ fontSize: '12px', color: '#94a3b8' }}>En curso</span>
+                              )}
                             </td>
                             <td>{item.sucursal?.direccion || '-'}</td>
                             <td className="asist-table-socio-name">
@@ -792,16 +830,40 @@ export default function Asistencias() {
                               </span>
                             </td>
                             <td className="asist-actions-cell">
-                              <button
-                                type="button"
-                                className="asist-btn-actions"
-                                onClick={() =>
-                                  setActiveMenuId(activeMenuId === rowId ? null : rowId)
-                                }
-                                title="Acciones"
-                              >
-                                <FaEllipsisV />
-                              </button>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                {abierta && puedeGestionarAsistencia && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCheckoutAsistencia(rowId)}
+                                    title="Registrar salida del socio"
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '5px',
+                                      padding: '5px 10px',
+                                      borderRadius: '8px',
+                                      border: '1px solid rgba(163, 230, 53, 0.35)',
+                                      background: 'rgba(163, 230, 53, 0.12)',
+                                      color: '#bef264',
+                                      fontSize: '12px',
+                                      fontWeight: 600,
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    <FaSignOutAlt /> Salida
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className="asist-btn-actions"
+                                  onClick={() =>
+                                    setActiveMenuId(activeMenuId === rowId ? null : rowId)
+                                  }
+                                  title="Acciones"
+                                >
+                                  <FaEllipsisV />
+                                </button>
+                              </div>
 
                               {activeMenuId === rowId && (
                                 <div className="asist-action-menu">

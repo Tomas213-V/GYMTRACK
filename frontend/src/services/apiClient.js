@@ -157,22 +157,41 @@ export function extractApiErrorMessage(data, status) {
   }
 }
 
+export function extractJwtSubject(token) {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded));
+    return typeof payload?.sub === 'string' && payload.sub.trim() ? payload.sub.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 export function buildAuthHeaders({
   gimnasioId = undefined,
   sucursalId = undefined,
   activeRole = undefined,
-  extraHeaders = {}
+  extraHeaders = {},
+  skipAuthHeaders = false
 } = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...extraHeaders
+  };
+
+  if (skipAuthHeaders) {
+    return headers;
+  }
+
   const token = getStoredToken();
   const rolRaw = activeRole !== undefined ? activeRole : localStorage.getItem('rol');
   const rolHeader = normalizeRoleForHeader(rolRaw);
   const activeGymId = gimnasioId !== undefined ? gimnasioId : getStoredActiveGymId();
   const activeSucursalId = sucursalId !== undefined ? sucursalId : getStoredActiveSucursalId();
-
-  const headers = {
-    'Content-Type': 'application/json',
-    ...extraHeaders
-  };
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -195,6 +214,7 @@ let refreshPromise = null;
 async function tryRefreshAccessToken() {
   const refreshToken = getStoredRefreshToken();
   if (!refreshToken) return null;
+  const expectedSub = extractJwtSubject(getStoredToken());
 
   if (!refreshPromise) {
     refreshPromise = fetch(`${API_URL}/auth/refresh`, {
@@ -206,6 +226,11 @@ async function tryRefreshAccessToken() {
         if (!res.ok) return null;
         const data = await res.json().catch(() => null);
         if (data?.token) {
+          const refreshedSub = extractJwtSubject(data.token);
+          // Defensa anti-cruce de sesión: jamás sustituir el token por el de otra identidad
+          if (expectedSub && refreshedSub && expectedSub !== refreshedSub) {
+            return null;
+          }
           localStorage.setItem('token', data.token);
           if (data.refresh_token) {
             localStorage.setItem('refresh_token', data.refresh_token);
@@ -242,7 +267,8 @@ export async function apiRequest(path, options = {}) {
     activeRole = undefined,
     headers: extraHeaders = {},
     signal = undefined,
-    skipAuthRefresh = false
+    skipAuthRefresh = false,
+    skipAuthHeaders = false
   } = options;
 
   const url = path.startsWith('http')
@@ -253,7 +279,7 @@ export async function apiRequest(path, options = {}) {
   const doFetch = async () =>
     fetch(url, {
       method,
-      headers: buildAuthHeaders({ gimnasioId, sucursalId, activeRole, extraHeaders }),
+      headers: buildAuthHeaders({ gimnasioId, sucursalId, activeRole, extraHeaders, skipAuthHeaders }),
       ...(body !== undefined ? { body: typeof body === 'string' ? body : JSON.stringify(body) } : {}),
       ...(signal ? { signal } : {})
     });

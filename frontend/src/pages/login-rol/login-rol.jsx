@@ -85,6 +85,8 @@ export default function LoginRol({ rolFormulario = 'administrador' }) {
 
       if (data.requiere_seleccion_gimnasio) {
         navigate('/seleccionar-gimnasio', { replace: true });
+      } else if (rolFormulario === 'empleado' || data.usuario?.rol === 'empleado') {
+        navigate('/socios-dueño', { replace: true });
       } else {
         navigate('/dashboard-dueño', { replace: true });
       }

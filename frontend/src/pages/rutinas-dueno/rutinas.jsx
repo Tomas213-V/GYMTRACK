@@ -18,7 +18,6 @@ import {
   fetchRutinaGimnasioById,
   createRutinaGimnasio,
   updateRutinaGimnasio,
-  deleteRutinaGimnasio,
   addEjercicioRutinaGimnasio,
   updateEjercicioRutinaGimnasio,
   removeEjercicioRutinaGimnasio,
@@ -54,7 +53,8 @@ import {
   FaUserPlus,
   FaUserTie,
   FaFlagCheckered,
-  FaExclamationTriangle
+  FaExclamationTriangle,
+  FaPowerOff
 } from 'react-icons/fa';
 
 import './rutinas.css';
@@ -84,7 +84,7 @@ function parseDescripcion(desc) {
 }
 
 export default function Rutinas() {
-  const { rol, gimnasioActivoId, contextVersion } = useGymContext();
+  const { rol, esEmpleado, usuario, gimnasioActivoId, contextVersion } = useGymContext();
 
   // Vista activa: 'plantillas' | 'asignaciones'
   const [vistaActiva, setVistaActiva] = useState('plantillas');
@@ -150,12 +150,13 @@ export default function Rutinas() {
   });
   const [guardandoNuevoEj, setGuardandoNuevoEj] = useState(false);
 
-  // Modal Asignar Plantilla a Socio (`POST /rutinas/asignaciones`)
+  // Modal Asignar Plantilla a uno o varios Socios (`POST /rutinas/asignaciones`)
   const [showAsignarModal, setShowAsignarModal] = useState(false);
   const [guardandoAsignacion, setGuardandoAsignacion] = useState(false);
+  const [sociosSeleccionadosIds, setSociosSeleccionadosIds] = useState([]);
+  const [busquedaSocioAsignar, setBusquedaSocioAsignar] = useState('');
   const [asignarFormData, setAsignarFormData] = useState({
     id_rutina_gimnasio: '',
-    id_socio_gimnasio: '',
     id_empleado_responsable: '',
     fecha_finalizacion: '',
     observaciones: ''
@@ -199,16 +200,23 @@ export default function Rutinas() {
     try {
       const [ejData, socRes, empRes] = await Promise.all([
         getEjerciciosDueno({ id_gimnasio: gimnasioActivoId }).catch(() => []),
-        fetchSocios({ limit: 200 }).catch(() => ({ socios: [] })),
-        getEmpleados({ id_gimnasio: gimnasioActivoId }).catch(() => ({ empleados: [] }))
+        fetchSocios({ limit: 200, id_gimnasio: gimnasioActivoId }).catch(() => ({ socios: [] })),
+        esEmpleado
+          ? Promise.resolve(usuario?.id_empleado ? [usuario] : [])
+          : getEmpleados({ id_gimnasio: gimnasioActivoId }).catch(() => [])
       ]);
       setCatalogoEjercicios(Array.isArray(ejData) ? ejData : []);
       setSociosList(Array.isArray(socRes?.socios) ? socRes.socios : []);
-      setEmpleadosList(Array.isArray(empRes?.empleados) ? empRes.empleados : []);
+      const empLista = Array.isArray(empRes)
+        ? empRes
+        : Array.isArray(empRes?.empleados)
+        ? empRes.empleados
+        : [];
+      setEmpleadosList(empLista);
     } catch (err) {
       console.error('Error cargando catálogos de rutinas:', err);
     }
-  }, [gimnasioActivoId]);
+  }, [gimnasioActivoId, esEmpleado, usuario]);
 
   const cargarRutinasYAsignaciones = useCallback(async (preservarId = null) => {
     if (!gimnasioActivoId) {
@@ -256,8 +264,25 @@ export default function Rutinas() {
 
   // Socios con asociación activa (`id_socio_gimnasio`)
   const sociosAsignables = useMemo(() => {
-    return sociosList.filter((s) => s.id_socio_gimnasio);
+    return sociosList.filter((s) => s.id_socio_gimnasio && s.estado !== false);
   }, [sociosList]);
+
+  // Socios filtrados dentro del modal "Asignar a usuarios" (siempre declarado antes de cualquier return)
+  const sociosAsignablesFiltrados = useMemo(() => {
+    const q = busquedaSocioAsignar.trim().toLowerCase();
+    const qDigits = q.replace(/\D/g, '');
+    if (!q) return sociosAsignables;
+    return sociosAsignables.filter((s) => {
+      const nom = `${s.nombre || ''} ${s.apellido || ''}`.toLowerCase();
+      const dni = String(s.dni || '').toLowerCase();
+      const dniDigits = dni.replace(/\D/g, '');
+      return (
+        nom.includes(q) ||
+        dni.includes(q) ||
+        (qDigits.length > 0 && dniDigits.includes(qDigits))
+      );
+    });
+  }, [sociosAsignables, busquedaSocioAsignar]);
 
   // Filtrado de plantillas
   const plantillasFiltradas = useMemo(() => {
@@ -443,21 +468,27 @@ export default function Rutinas() {
     }
   };
 
-  const handleDeleteRutina = async (rutina) => {
+  const handleToggleEstadoRutina = async (rutina) => {
     setActiveCardMenuId(null);
-    if (
-      !window.confirm(
-        `¿Deseás eliminar/desactivar la plantilla "${rutina.nombre}"? Si ya tuvo asignaciones a socios, se desactivará lógicamente para preservar el historial.`
-      )
-    ) {
+    const estaActiva = rutina.estado !== false;
+    const accion = estaActiva ? 'desactivar' : 'reactivar';
+    const detalleMsg = estaActiva
+      ? `¿Deseás desactivar la plantilla "${rutina.nombre}"? Pasará a estado inactiva para conservarla por si se vuelve a usar, sin borrarla definitivamente.`
+      : `¿Deseás reactivar la plantilla "${rutina.nombre}" para volver a asignarla a los socios?`;
+
+    if (!window.confirm(detalleMsg)) {
       return;
     }
     try {
-      const res = await deleteRutinaGimnasio(rutina.id_rutina_gimnasio);
-      mostrarExito(res?.mensaje || 'Plantilla procesada correctamente.');
-      await cargarRutinasYAsignaciones();
+      await updateRutinaGimnasio(rutina.id_rutina_gimnasio, { estado: !estaActiva });
+      mostrarExito(
+        estaActiva
+          ? `Plantilla "${rutina.nombre}" desactivada correctamente (conservada en historial).`
+          : `Plantilla "${rutina.nombre}" reactivada correctamente.`
+      );
+      await cargarRutinasYAsignaciones(rutina.id_rutina_gimnasio);
     } catch (err) {
-      alert(err.message || 'Error al eliminar la rutina.');
+      alert(err.message || `Error al ${accion} la rutina.`);
     }
   };
 
@@ -616,43 +647,81 @@ export default function Rutinas() {
   };
 
   // --------------------------------------------------------------------------
-  // ASIGNACIONES DE RUTINAS A SOCIOS (`rutinas_asignadas_socio_gimnasio`)
+  // ASIGNACIONES DE RUTINAS A UNO O VARIOS SOCIOS (`rutinas_asignadas_socio_gimnasio`)
   // --------------------------------------------------------------------------
   const handleOpenAsignarModal = (plantilla = null) => {
     setActiveCardMenuId(null);
     const defaultRut = plantilla || selectedRutina || rutinasGym.find((r) => r.estado !== false);
     setAsignarFormData({
       id_rutina_gimnasio: defaultRut?.id_rutina_gimnasio ? String(defaultRut.id_rutina_gimnasio) : '',
-      id_socio_gimnasio: sociosAsignables[0]?.id_socio_gimnasio ? String(sociosAsignables[0].id_socio_gimnasio) : '',
-      id_empleado_responsable: '',
+      id_empleado_responsable:
+        esEmpleado && usuario?.id_empleado ? String(usuario.id_empleado) : '',
       fecha_finalizacion: '',
       observaciones: ''
     });
+    setSociosSeleccionadosIds([]);
+    setBusquedaSocioAsignar('');
     setShowAsignarModal(true);
+  };
+
+  const handleToggleSocioAsignar = (idSocioGimnasio) => {
+    const idStr = String(idSocioGimnasio);
+    setSociosSeleccionadosIds((prev) =>
+      prev.includes(idStr) ? prev.filter((item) => item !== idStr) : [...prev, idStr]
+    );
+  };
+
+  const handleToggleTodosSociosAsignar = () => {
+    const visiblesIds = sociosAsignablesFiltrados.map((s) => String(s.id_socio_gimnasio));
+    const todosMarcados =
+      visiblesIds.length > 0 && visiblesIds.every((id) => sociosSeleccionadosIds.includes(id));
+    if (todosMarcados) {
+      setSociosSeleccionadosIds((prev) => prev.filter((id) => !visiblesIds.includes(id)));
+    } else {
+      setSociosSeleccionadosIds((prev) => Array.from(new Set([...prev, ...visiblesIds])));
+    }
   };
 
   const handleGuardarAsignacion = async (e) => {
     e.preventDefault();
-    if (!asignarFormData.id_rutina_gimnasio || !asignarFormData.id_socio_gimnasio) {
-      alert('Debés seleccionar una plantilla y un socio asociado al gimnasio.');
+    if (!asignarFormData.id_rutina_gimnasio || sociosSeleccionadosIds.length === 0) {
+      alert('Debés seleccionar una plantilla y al menos un socio asociado al gimnasio.');
       return;
     }
     setGuardandoAsignacion(true);
+    let exitosos = 0;
+    const errores = [];
     try {
-      const res = await asignarRutinaASocio({
-        id_rutina_gimnasio: Number(asignarFormData.id_rutina_gimnasio),
-        id_socio_gimnasio: Number(asignarFormData.id_socio_gimnasio),
-        id_empleado_responsable: asignarFormData.id_empleado_responsable
-          ? Number(asignarFormData.id_empleado_responsable)
-          : null,
-        fecha_finalizacion: asignarFormData.fecha_finalizacion || null,
-        observaciones: asignarFormData.observaciones.trim() || null
-      });
-      setShowAsignarModal(false);
-      mostrarExito(res?.mensaje || 'Rutina asignada exitosamente al socio.');
-      await cargarRutinasYAsignaciones(selectedRutina?.id_rutina_gimnasio);
-    } catch (err) {
-      alert(err.message || 'No se pudo asignar la rutina al socio.');
+      for (const sgId of sociosSeleccionadosIds) {
+        try {
+          await asignarRutinaASocio({
+            id_rutina_gimnasio: Number(asignarFormData.id_rutina_gimnasio),
+            id_socio_gimnasio: Number(sgId),
+            id_empleado_responsable: asignarFormData.id_empleado_responsable
+              ? Number(asignarFormData.id_empleado_responsable)
+              : null,
+            fecha_finalizacion: asignarFormData.fecha_finalizacion || null,
+            observaciones: asignarFormData.observaciones.trim() || null
+          });
+          exitosos += 1;
+        } catch (errItem) {
+          const socioObj = sociosAsignables.find((s) => String(s.id_socio_gimnasio) === String(sgId));
+          const etiqueta = socioObj ? `${socioObj.nombre} ${socioObj.apellido}`.trim() : `Socio #${sgId}`;
+          errores.push(`${etiqueta}: ${errItem.message || 'error al asignar'}`);
+        }
+      }
+
+      if (exitosos > 0) {
+        setShowAsignarModal(false);
+        const resumen =
+          errores.length === 0
+            ? `Rutina asignada exitosamente a ${exitosos} ${exitosos === 1 ? 'usuario' : 'usuarios'}.`
+            : `Rutina asignada a ${exitosos} usuario(s). Omitidos (${errores.length}): ${errores.join(' | ')}`;
+        mostrarExito(resumen);
+        await cargarRutinasYAsignaciones(selectedRutina?.id_rutina_gimnasio);
+      } else {
+        alert(`No se pudo asignar la rutina:\n${errores.join('\n')}`);
+      }
     } finally {
       setGuardandoAsignacion(false);
     }
@@ -763,7 +832,7 @@ export default function Rutinas() {
                   onClick={() => handleOpenAsignarModal()}
                   disabled={rutinasGym.length === 0 || sociosAsignables.length === 0}
                 >
-                  <FaUserPlus /> Asignar a socio
+                  <FaUserPlus /> Asignar a usuarios
                 </button>
                 <button type="button" className="rut-btn-primary" onClick={handleOpenNuevaRutina}>
                   <FaPlus /> Nueva plantilla
@@ -969,16 +1038,16 @@ export default function Rutinas() {
                             {activeCardMenuId === r.id_rutina_gimnasio && (
                               <div className="rut-card-context-menu" onClick={(e) => e.stopPropagation()}>
                                 <div className="rut-context-item" onClick={() => handleOpenAsignarModal(r)}>
-                                  <FaUserPlus /> Asignar a socio
+                                  <FaUserPlus /> Asignar a usuarios
                                 </div>
                                 <div className="rut-context-item" onClick={() => handleOpenEditRutina(r)}>
                                   <FaEdit /> Editar
                                 </div>
                                 <div
-                                  className="rut-context-item delete"
-                                  onClick={() => handleDeleteRutina(r)}
+                                  className={`rut-context-item ${r.estado !== false ? 'delete' : ''}`}
+                                  onClick={() => handleToggleEstadoRutina(r)}
                                 >
-                                  <FaTrashAlt /> Eliminar / Desactivar
+                                  <FaPowerOff /> {r.estado !== false ? 'Desactivar rutina' : 'Reactivar rutina'}
                                 </div>
                               </div>
                             )}
@@ -1058,7 +1127,7 @@ export default function Rutinas() {
                             onClick={() => handleOpenAsignarModal(selectedRutina)}
                             disabled={selectedRutina.estado === false || sociosAsignables.length === 0}
                           >
-                            <FaUserPlus /> Asignar a un socio
+                            <FaUserPlus /> Asignar a usuarios
                           </button>
                           <button
                             type="button"
@@ -1066,6 +1135,18 @@ export default function Rutinas() {
                             onClick={() => handleOpenEditRutina(selectedRutina)}
                           >
                             <FaEdit /> Editar plantilla
+                          </button>
+                          <button
+                            type="button"
+                            className="rut-btn-edit-general"
+                            onClick={() => handleToggleEstadoRutina(selectedRutina)}
+                            style={
+                              selectedRutina.estado !== false
+                                ? { borderColor: 'rgba(239, 68, 68, 0.35)', color: '#fca5a5' }
+                                : { borderColor: 'rgba(163, 230, 53, 0.35)', color: '#bef264' }
+                            }
+                          >
+                            <FaPowerOff /> {selectedRutina.estado !== false ? 'Desactivar' : 'Reactivar'}
                           </button>
                         </div>
                       </div>
@@ -1859,18 +1940,18 @@ export default function Rutinas() {
         </div>
       )}
 
-      {/* MODAL 4: ASIGNAR PLANTILLA A SOCIO */}
+      {/* MODAL 4: ASIGNAR PLANTILLA A UNO O VARIOS USUARIOS */}
       {showAsignarModal && (
         <div className="rut-modal-overlay" onClick={() => setShowAsignarModal(false)}>
-          <div className="rut-modal-card" style={{ maxWidth: '520px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="rut-modal-card" style={{ maxWidth: '580px', width: '94%' }} onClick={(e) => e.stopPropagation()}>
             <div className="rut-modal-header">
-              <h3><FaUserPlus style={{ color: '#a3e635', marginRight: '8px' }} />Asignar Rutina a Socio</h3>
+              <h3><FaUserPlus style={{ color: '#a3e635', marginRight: '8px' }} />Asignar Rutina a Usuarios</h3>
               <button type="button" className="rut-modal-close-btn" onClick={() => setShowAsignarModal(false)}>
                 <FaTimes />
               </button>
             </div>
             <form onSubmit={handleGuardarAsignacion}>
-              <div className="rut-modal-body">
+              <div className="rut-modal-body" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
                 <div className="rut-form-field">
                   <label>Plantilla del Gimnasio *</label>
                   <select
@@ -1891,20 +1972,95 @@ export default function Rutinas() {
                 </div>
 
                 <div className="rut-form-field">
-                  <label>Socio Asociado al Gimnasio *</label>
-                  <select
-                    className="rut-form-select"
-                    value={asignarFormData.id_socio_gimnasio}
-                    onChange={(e) => setAsignarFormData({ ...asignarFormData, id_socio_gimnasio: e.target.value })}
-                    required
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label style={{ margin: 0 }}>
+                      Socios del Gimnasio * ({sociosSeleccionadosIds.length} seleccionado{sociosSeleccionadosIds.length === 1 ? '' : 's'})
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleToggleTodosSociosAsignar}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#bef264',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 600
+                      }}
+                    >
+                      {sociosAsignablesFiltrados.length > 0 &&
+                      sociosAsignablesFiltrados.every((s) =>
+                        sociosSeleccionadosIds.includes(String(s.id_socio_gimnasio))
+                      )
+                        ? 'Deseleccionar visibles'
+                        : 'Seleccionar todos'}
+                    </button>
+                  </div>
+
+                  <div className="rut-filter-box" style={{ height: '36px', marginBottom: '8px' }}>
+                    <FaSearch className="rut-filter-icon" />
+                    <input
+                      type="text"
+                      className="rut-filter-input"
+                      placeholder="Buscar socio por nombre o DNI..."
+                      value={busquedaSocioAsignar}
+                      onChange={(e) => setBusquedaSocioAsignar(e.target.value)}
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      maxHeight: '190px',
+                      overflowY: 'auto',
+                      border: '1px solid #1e293b',
+                      borderRadius: '10px',
+                      background: '#0d131d',
+                      padding: '6px'
+                    }}
                   >
-                    <option value="">-- Seleccionar socio --</option>
-                    {sociosAsignables.map((s) => (
-                      <option key={s.id_socio_gimnasio} value={s.id_socio_gimnasio}>
-                        {s.nombre} {s.apellido} {s.dni ? `(DNI: ${s.dni})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    {sociosAsignablesFiltrados.length === 0 ? (
+                      <p style={{ textAlign: 'center', color: '#64748b', fontSize: '12.5px', padding: '14px 8px', margin: 0 }}>
+                        No se encontraron socios activos con ese criterio.
+                      </p>
+                    ) : (
+                      sociosAsignablesFiltrados.map((s) => {
+                        const sgIdStr = String(s.id_socio_gimnasio);
+                        const checked = sociosSeleccionadosIds.includes(sgIdStr);
+                        return (
+                          <div
+                            key={sgIdStr}
+                            onClick={() => handleToggleSocioAsignar(sgIdStr)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: '10px',
+                              padding: '8px 10px',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              marginBottom: '4px',
+                              background: checked ? 'rgba(163, 230, 53, 0.12)' : 'transparent',
+                              border: checked
+                                ? '1px solid rgba(163, 230, 53, 0.4)'
+                                : '1px solid transparent'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <div className="rut-ej-checkbox">{checked && <FaCheck />}</div>
+                              <div>
+                                <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#f8fafc' }}>
+                                  {s.nombre} {s.apellido}
+                                </div>
+                                <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>
+                                  DNI: {s.dni || 'S/D'}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
 
                 <div className="rut-form-grid-2">
@@ -1950,8 +2106,17 @@ export default function Rutinas() {
                 <button type="button" className="rut-btn-cancel" onClick={() => setShowAsignarModal(false)}>
                   Cancelar
                 </button>
-                <button type="submit" className="rut-btn-primary" disabled={guardandoAsignacion}>
-                  <FaCheck /> {guardandoAsignacion ? 'Asignando...' : 'Asignar Rutina'}
+                <button
+                  type="submit"
+                  className="rut-btn-primary"
+                  disabled={guardandoAsignacion || sociosSeleccionadosIds.length === 0}
+                >
+                  <FaCheck />{' '}
+                  {guardandoAsignacion
+                    ? 'Asignando...'
+                    : `Asignar a ${sociosSeleccionadosIds.length || 0} ${
+                        sociosSeleccionadosIds.length === 1 ? 'usuario' : 'usuarios'
+                      }`}
                 </button>
               </div>
             </form>

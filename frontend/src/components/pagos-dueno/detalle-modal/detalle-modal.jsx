@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
-import { 
-  FaTimes, 
-  FaTrash, 
-  FaUser, 
-  FaMoneyBillWave, 
-  FaCreditCard, 
-  FaExchangeAlt, 
-  FaReceipt, 
-  FaExclamationTriangle
+import {
+  FaTimes,
+  FaTrash,
+  FaUser,
+  FaMoneyBillWave,
+  FaCreditCard,
+  FaExchangeAlt,
+  FaReceipt,
+  FaExclamationTriangle,
+  FaCheckCircle
 } from "react-icons/fa";
 import { getPagoById } from "../../../services/pagoService";
 import "./detalle-modal.css";
@@ -93,7 +94,18 @@ function PagosDetalleModal({
   const planNombre = membData.membresia_gimnasio?.nombre || pago.plan || "Plan General";
   const vencimientoMembresia = membData.fecha_vencimiento
     ? formatearFecha(membData.fecha_vencimiento)
-    : "Sin vencimiento fijo";
+    : (pago.fechaVencimiento || "Sin vencimiento fijo");
+  const estadoCuotaRaw = String(membData.estado || pago.estadoCuota || "").toLowerCase();
+  const estadoCuotaLabel =
+    estadoCuotaRaw === "activa" || estadoCuotaRaw === "al_dia"
+      ? "Al día"
+      : estadoCuotaRaw === "pendiente"
+        ? "Pendiente"
+        : estadoCuotaRaw === "cancelada"
+          ? "Cancelada"
+          : estadoCuotaRaw === "vencida"
+            ? "Vencida"
+            : "Sin especificar";
 
   // Manejador de eliminación con confirmación
   const handleConfirmarEliminar = async () => {
@@ -159,13 +171,12 @@ function PagosDetalleModal({
             <div className="Caja-pagos-detalle-estado-selector">
               <label>Estado del Pago:</label>
               <select
-                className={`Caja-pagos-badge Caja-pagos-badge-select Caja-pagos-badge-${
-                  estadoActual === "aprobado" || estadoActual === "pagado"
-                    ? "pagado"
-                    : estadoActual === "pendiente"
+                className={`Caja-pagos-badge Caja-pagos-badge-select Caja-pagos-badge-${estadoActual === "aprobado" || estadoActual === "pagado"
+                  ? "pagado"
+                  : estadoActual === "pendiente"
                     ? "pendiente"
                     : "vencido"
-                }`}
+                  }`}
                 value={estadoActual === "pagado" ? "aprobado" : estadoActual}
                 onChange={(e) => onCambiarEstado && onCambiarEstado(pago.id, e.target.value)}
               >
@@ -174,6 +185,28 @@ function PagosDetalleModal({
                 <option value="rechazado">Rechazado</option>
                 <option value="anulado">Anulado</option>
               </select>
+              {estadoActual === "pendiente" && onCambiarEstado && (
+                <button
+                  type="button"
+                  onClick={() => onCambiarEstado(pago.id, "aprobado")}
+                  style={{
+                    marginTop: '8px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(163, 230, 53, 0.5)',
+                    background: 'rgba(163, 230, 53, 0.16)',
+                    color: '#bef264',
+                    fontSize: '12.5px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <FaCheckCircle /> Marcar como pagado
+                </button>
+              )}
             </div>
           </div>
 
@@ -222,6 +255,11 @@ function PagosDetalleModal({
               <div className="Caja-pagos-detalle-item">
                 <span className="Caja-pagos-detalle-item-label">Vencimiento Cuota</span>
                 <span className="Caja-pagos-detalle-item-valor">{vencimientoMembresia}</span>
+              </div>
+
+              <div className="Caja-pagos-detalle-item">
+                <span className="Caja-pagos-detalle-item-label">Estado de Cuota</span>
+                <span className="Caja-pagos-detalle-item-valor">{estadoCuotaLabel}</span>
               </div>
             </div>
           </div>

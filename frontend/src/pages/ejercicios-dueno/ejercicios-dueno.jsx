@@ -5,8 +5,7 @@ import { useGymContext } from '../../context/GymContext';
 import {
   getEjerciciosDueno,
   crearEjercicioDueno,
-  actualizarEjercicioDueno,
-  eliminarEjercicioDueno
+  actualizarEjercicioDueno
 } from '../../services/ejercicioService';
 
 import {
@@ -15,7 +14,7 @@ import {
   FaBuilding,
   FaPlus,
   FaEdit,
-  FaTrashAlt,
+  FaPowerOff,
   FaTimes,
   FaCheck,
   FaExclamationTriangle
@@ -45,6 +44,7 @@ export default function EjerciciosDueno() {
 
   // Filtros
   const [filtroGrupo, setFiltroGrupo] = useState('todos');
+  const [filtroEstado, setFiltroEstado] = useState('todos'); // 'todos' | 'activos' | 'inactivos'
   const [searchTerm, setSearchTerm] = useState('');
 
   // Modal Crear / Editar Ejercicio del Gimnasio
@@ -59,9 +59,9 @@ export default function EjerciciosDueno() {
     descripcion: ''
   });
 
-  // Modal Confirmar Eliminación
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [eliminando, setEliminando] = useState(false);
+  // Modal Confirmar Desactivación / Reactivación lógica (estado = false / true)
+  const [toggleEstadoTarget, setToggleEstadoTarget] = useState(null);
+  const [actualizandoEstado, setActualizandoEstado] = useState(false);
 
   const loadEjercicios = useCallback(async () => {
     if (!gimnasioActivoId) {
@@ -72,7 +72,7 @@ export default function EjerciciosDueno() {
     setLoading(true);
     setErrorMsg('');
     try {
-      const data = await getEjerciciosDueno();
+      const data = await getEjerciciosDueno({ id_gimnasio: gimnasioActivoId });
       setEjercicios(data || []);
     } catch (err) {
       setErrorMsg(err.message || 'Error al cargar los ejercicios del gimnasio.');
@@ -90,6 +90,9 @@ export default function EjerciciosDueno() {
   const ejerciciosFiltrados = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     return ejercicios.filter((ej) => {
+      if (filtroEstado === 'activos' && ej.estado === false) return false;
+      if (filtroEstado === 'inactivos' && ej.estado !== false) return false;
+
       if (filtroGrupo !== 'todos') {
         const gm = (ej.grupo_muscular || '').toLowerCase();
         if (!gm.includes(filtroGrupo.toLowerCase())) return false;
@@ -104,7 +107,7 @@ export default function EjerciciosDueno() {
 
       return true;
     });
-  }, [ejercicios, filtroGrupo, searchTerm]);
+  }, [ejercicios, filtroGrupo, filtroEstado, searchTerm]);
 
   const mostrarExito = (msg) => {
     setExitoMsg(msg);
@@ -174,21 +177,29 @@ export default function EjerciciosDueno() {
     }
   };
 
-  const handleConfirmDelete = async () => {
-    if (!deleteTarget) return;
-    setEliminando(true);
+  const handleConfirmToggleEstado = async () => {
+    if (!toggleEstadoTarget) return;
+    setActualizandoEstado(true);
     setErrorMsg('');
     try {
-      await eliminarEjercicioDueno(deleteTarget.id_ejercicio_gimnasio);
-      const nombre = deleteTarget.nombre;
-      setDeleteTarget(null);
-      mostrarExito(`El ejercicio "${nombre}" fue eliminado del catálogo.`);
+      const estaActivo = toggleEstadoTarget.estado !== false;
+      const nuevoEstado = !estaActivo;
+      await actualizarEjercicioDueno(toggleEstadoTarget.id_ejercicio_gimnasio, {
+        estado: nuevoEstado
+      });
+      const nombre = toggleEstadoTarget.nombre;
+      setToggleEstadoTarget(null);
+      mostrarExito(
+        nuevoEstado
+          ? `El ejercicio "${nombre}" fue reactivado en el catálogo.`
+          : `El ejercicio "${nombre}" fue desactivado y conservado en el historial.`
+      );
       await loadEjercicios();
     } catch (err) {
-      setErrorMsg(err.message || 'No se pudo eliminar el ejercicio.');
-      setDeleteTarget(null);
+      setErrorMsg(err.message || 'No se pudo cambiar el estado del ejercicio.');
+      setToggleEstadoTarget(null);
     } finally {
-      setEliminando(false);
+      setActualizandoEstado(false);
     }
   };
 
@@ -267,18 +278,30 @@ export default function EjerciciosDueno() {
                 </div>
               </div>
 
-              <select
-                className="ed-select-filtro"
-                value={filtroGrupo}
-                onChange={(e) => setFiltroGrupo(e.target.value)}
-              >
-                <option value="todos">Todos los músculos</option>
-                {GRUPOS_MUSCULARES.map((grupo) => (
-                  <option key={grupo} value={grupo}>
-                    {grupo}
-                  </option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <select
+                  className="ed-select-filtro"
+                  value={filtroEstado}
+                  onChange={(e) => setFiltroEstado(e.target.value)}
+                >
+                  <option value="todos">Todos los estados</option>
+                  <option value="activos">Solo activos</option>
+                  <option value="inactivos">Inactivos</option>
+                </select>
+
+                <select
+                  className="ed-select-filtro"
+                  value={filtroGrupo}
+                  onChange={(e) => setFiltroGrupo(e.target.value)}
+                >
+                  <option value="todos">Todos los músculos</option>
+                  {GRUPOS_MUSCULARES.map((grupo) => (
+                    <option key={grupo} value={grupo}>
+                      {grupo}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </section>
 
@@ -302,17 +325,31 @@ export default function EjerciciosDueno() {
             </div>
           ) : (
             <div className="ed-exercises-grid">
-              {ejerciciosFiltrados.map((ej) => (
+              {ejerciciosFiltrados.map((ej) => {
+                const estaActivo = ej.estado !== false;
+                return (
                   <div
                     key={ej.id_ejercicio_gimnasio}
                     className="ed-exercise-card gimnasio"
+                    style={estaActivo ? undefined : { opacity: 0.7 }}
                   >
                     <div>
                       <div className="ed-card-header">
                         <span className="ed-card-muscle-pill">{ej.grupo_muscular || 'General'}</span>
 
-                        <span className="ed-origin-badge gimnasio">
-                          <FaBuilding style={{ fontSize: '10px' }} /> Mi Gimnasio
+                        <span
+                          className="ed-origin-badge gimnasio"
+                          style={
+                            estaActivo
+                              ? undefined
+                              : {
+                                background: 'rgba(239, 68, 68, 0.14)',
+                                color: '#fca5a5',
+                                borderColor: 'rgba(239, 68, 68, 0.35)'
+                              }
+                          }
+                        >
+                          <FaBuilding style={{ fontSize: '10px' }} /> {estaActivo ? 'Activo' : 'Inactivo'}
                         </span>
                       </div>
 
@@ -347,156 +384,187 @@ export default function EjerciciosDueno() {
                         <button
                           type="button"
                           className="ed-btn-icon-delete"
-                          onClick={() => setDeleteTarget(ej)}
-                          title="Eliminar ejercicio"
+                          onClick={() => setToggleEstadoTarget(ej)}
+                          title={estaActivo ? 'Desactivar ejercicio' : 'Reactivar ejercicio'}
+                          style={
+                            estaActivo
+                              ? undefined
+                              : {
+                                color: '#86efac',
+                                borderColor: 'rgba(34, 197, 94, 0.35)',
+                                background: 'rgba(34, 197, 94, 0.12)'
+                              }
+                          }
                         >
-                          <FaTrashAlt />
+                          <FaPowerOff />
                         </button>
                       </div>
                     </div>
                   </div>
-              ))}
-            </div>
-          )}
-        </main>
+          );
+              })}
       </div>
+          )}
+    </main>
+      </div >
 
-      {/* MODAL CREAR / EDITAR EJERCICIO */}
-      {showModal && (
-        <div className="ed-modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="ed-modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="ed-modal-header">
-              <h3>
-                <FaBuilding style={{ color: '#a3e635' }} />
-                {editingItem ? 'Editar Ejercicio del Gimnasio' : 'Nuevo Ejercicio del Gimnasio'}
-              </h3>
-              <button type="button" className="ed-modal-close-btn" onClick={() => setShowModal(false)}>
-                <FaTimes />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitForm}>
-              <div className="ed-modal-body">
-                {modalError && (
-                  <div className="ed-alert ed-alert-error" style={{ marginBottom: 0 }}>
-                    <span>{modalError}</span>
-                  </div>
-                )}
-
-                <div className="ed-form-field">
-                  <label>Nombre del Ejercicio *</label>
-                  <input
-                    type="text"
-                    className="ed-form-input"
-                    placeholder="Ej: Press de banca con barra"
-                    value={formData.nombre}
-                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="ed-form-grid-2">
-                  <div className="ed-form-field">
-                    <label>Grupo Muscular</label>
-                    <select
-                      className="ed-form-select"
-                      value={formData.grupo_muscular}
-                      onChange={(e) => setFormData({ ...formData, grupo_muscular: e.target.value })}
-                    >
-                      {GRUPOS_MUSCULARES.map((grupo) => (
-                        <option key={grupo} value={grupo}>
-                          {grupo}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="ed-form-field">
-                    <label>Dificultad</label>
-                    <select
-                      className="ed-form-select"
-                      value={formData.dificultad}
-                      onChange={(e) => setFormData({ ...formData, dificultad: e.target.value })}
-                    >
-                      <option value="Principiante">Principiante</option>
-                      <option value="Intermedia">Intermedia</option>
-                      <option value="Avanzada">Avanzada</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="ed-form-field">
-                  <label>Descripción / Instrucciones Técnicas (Opcional)</label>
-                  <textarea
-                    rows="3"
-                    className="ed-form-textarea"
-                    placeholder="Detalles sobre técnica, postura, rango de movimiento o variantes..."
-                    value={formData.descripcion}
-                    onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="ed-modal-footer">
-                <button type="button" className="ed-btn-cancel" onClick={() => setShowModal(false)}>
-                  Cancelar
-                </button>
-                <button type="submit" className="ed-btn-primary" disabled={guardando}>
-                  <FaCheck /> {guardando ? 'Guardando...' : editingItem ? 'Guardar Cambios' : 'Crear Ejercicio'}
-                </button>
-              </div>
-            </form>
+    {/* MODAL CREAR / EDITAR EJERCICIO */ }
+  {
+    showModal && (
+      <div className="ed-modal-overlay" onClick={() => setShowModal(false)}>
+        <div className="ed-modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="ed-modal-header">
+            <h3>
+              <FaBuilding style={{ color: '#a3e635' }} />
+              {editingItem ? 'Editar Ejercicio del Gimnasio' : 'Nuevo Ejercicio del Gimnasio'}
+            </h3>
+            <button type="button" className="ed-modal-close-btn" onClick={() => setShowModal(false)}>
+              <FaTimes />
+            </button>
           </div>
-        </div>
-      )}
 
-      {/* MODAL CONFIRMAR ELIMINACIÓN */}
-      {deleteTarget && (
-        <div className="ed-modal-overlay" onClick={() => !eliminando && setDeleteTarget(null)}>
-          <div className="ed-modal-card" style={{ maxWidth: '430px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="ed-modal-header">
-              <h3>
-                <FaExclamationTriangle style={{ color: '#f87171' }} />
-                Eliminar Ejercicio
-              </h3>
-              <button
-                type="button"
-                className="ed-modal-close-btn"
-                onClick={() => !eliminando && setDeleteTarget(null)}
-              >
-                <FaTimes />
-              </button>
-            </div>
-
+          <form onSubmit={handleSubmitForm}>
             <div className="ed-modal-body">
-              <p style={{ margin: 0, fontSize: '14px', color: '#cbd5e1', lineHeight: 1.5 }}>
-                ¿Estás seguro de que querés eliminar el ejercicio{' '}
-                <strong style={{ color: '#ffffff' }}>"{deleteTarget.nombre}"</strong>?
-                Esta acción no se puede deshacer.
-              </p>
+              {modalError && (
+                <div className="ed-alert ed-alert-error" style={{ marginBottom: 0 }}>
+                  <span>{modalError}</span>
+                </div>
+              )}
+
+              <div className="ed-form-field">
+                <label>Nombre del Ejercicio *</label>
+                <input
+                  type="text"
+                  className="ed-form-input"
+                  placeholder="Ej: Press de banca con barra"
+                  value={formData.nombre}
+                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="ed-form-grid-2">
+                <div className="ed-form-field">
+                  <label>Grupo Muscular</label>
+                  <select
+                    className="ed-form-select"
+                    value={formData.grupo_muscular}
+                    onChange={(e) => setFormData({ ...formData, grupo_muscular: e.target.value })}
+                  >
+                    {GRUPOS_MUSCULARES.map((grupo) => (
+                      <option key={grupo} value={grupo}>
+                        {grupo}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="ed-form-field">
+                  <label>Dificultad</label>
+                  <select
+                    className="ed-form-select"
+                    value={formData.dificultad}
+                    onChange={(e) => setFormData({ ...formData, dificultad: e.target.value })}
+                  >
+                    <option value="Principiante">Principiante</option>
+                    <option value="Intermedia">Intermedia</option>
+                    <option value="Avanzada">Avanzada</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="ed-form-field">
+                <label>Descripción / Instrucciones Técnicas (Opcional)</label>
+                <textarea
+                  rows="3"
+                  className="ed-form-textarea"
+                  placeholder="Detalles sobre técnica, postura, rango de movimiento o variantes..."
+                  value={formData.descripcion}
+                  onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                />
+              </div>
             </div>
 
             <div className="ed-modal-footer">
-              <button
-                type="button"
-                className="ed-btn-cancel"
-                disabled={eliminando}
-                onClick={() => setDeleteTarget(null)}
-              >
+              <button type="button" className="ed-btn-cancel" onClick={() => setShowModal(false)}>
                 Cancelar
               </button>
-              <button
-                type="button"
-                className="ed-btn-danger"
-                disabled={eliminando}
-                onClick={handleConfirmDelete}
-              >
-                <FaTrashAlt /> {eliminando ? 'Eliminando...' : 'Eliminar'}
+              <button type="submit" className="ed-btn-primary" disabled={guardando}>
+                <FaCheck /> {guardando ? 'Guardando...' : editingItem ? 'Guardar Cambios' : 'Crear Ejercicio'}
               </button>
             </div>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  {/* MODAL CONFIRMAR DESACTIVACIÓN / REACTIVACIÓN */ }
+  {
+    toggleEstadoTarget && (
+      <div className="ed-modal-overlay" onClick={() => !actualizandoEstado && setToggleEstadoTarget(null)}>
+        <div className="ed-modal-card" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="ed-modal-header">
+            <h3>
+              <FaPowerOff
+                style={{ color: toggleEstadoTarget.estado !== false ? '#f87171' : '#a3e635' }}
+              />
+              {toggleEstadoTarget.estado !== false ? 'Desactivar Ejercicio' : 'Reactivar Ejercicio'}
+            </h3>
+            <button
+              type="button"
+              className="ed-modal-close-btn"
+              onClick={() => !actualizandoEstado && setToggleEstadoTarget(null)}
+            >
+              <FaTimes />
+            </button>
+          </div>
+
+          <div className="ed-modal-body">
+            <p style={{ margin: 0, fontSize: '14px', color: '#cbd5e1', lineHeight: 1.5 }}>
+              {toggleEstadoTarget.estado !== false ? (
+                <>
+                  ¿Querés desactivar el ejercicio{' '}
+                  <strong style={{ color: '#ffffff' }}>"{toggleEstadoTarget.nombre}"</strong>?
+                  Pasará a estado inactivo para conservar las rutinas históricas y podrás reactivarlo cuando lo necesites.
+                </>
+              ) : (
+                <>
+                  ¿Querés reactivar el ejercicio{' '}
+                  <strong style={{ color: '#ffffff' }}>"{toggleEstadoTarget.nombre}"</strong>?
+                  Volverá a estar disponible para agregarlo en nuevas rutinas del gimnasio.
+                </>
+              )}
+            </p>
+          </div>
+
+          <div className="ed-modal-footer">
+            <button
+              type="button"
+              className="ed-btn-cancel"
+              disabled={actualizandoEstado}
+              onClick={() => setToggleEstadoTarget(null)}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className={toggleEstadoTarget.estado !== false ? 'ed-btn-danger' : 'ed-btn-primary'}
+              disabled={actualizandoEstado}
+              onClick={handleConfirmToggleEstado}
+            >
+              <FaPowerOff />{' '}
+              {actualizandoEstado
+                ? 'Procesando...'
+                : toggleEstadoTarget.estado !== false
+                  ? 'Desactivar'
+                  : 'Reactivar'}
+            </button>
           </div>
         </div>
-      )}
-    </div>
+      </div>
+    )
+  }
+    </div >
   );
 }

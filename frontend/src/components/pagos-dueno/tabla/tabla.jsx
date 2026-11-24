@@ -1,5 +1,19 @@
-import { FaUser, FaChevronRight, FaChevronLeft, FaChevronDown } from "react-icons/fa";
+import { FaUser, FaChevronRight, FaChevronLeft, FaChevronDown, FaCheckCircle } from "react-icons/fa";
 import "./tabla.css";
+
+function getEstadoCuotaMeta(estadoCuota) {
+  const est = String(estadoCuota || "").toLowerCase();
+  if (est === "activa" || est === "al_dia") {
+    return { label: "Al día", bg: "rgba(34, 197, 94, 0.14)", color: "#86efac", border: "rgba(34, 197, 94, 0.35)" };
+  }
+  if (est === "pendiente") {
+    return { label: "Pendiente", bg: "rgba(245, 158, 11, 0.14)", color: "#fcd34d", border: "rgba(245, 158, 11, 0.35)" };
+  }
+  if (est === "cancelada") {
+    return { label: "Cancelada", bg: "rgba(148, 163, 184, 0.14)", color: "#cbd5e1", border: "rgba(148, 163, 184, 0.35)" };
+  }
+  return { label: "Vencida", bg: "rgba(239, 68, 68, 0.14)", color: "#fca5a5", border: "rgba(239, 68, 68, 0.35)" };
+}
 
 function PagosTabla({
   pagos = [],
@@ -43,19 +57,23 @@ function PagosTabla({
               <th className="Caja-pagos-th-plan">Plan</th>
               <th className="Caja-pagos-th-fecha">Fecha</th>
               <th className="Caja-pagos-th-monto">Monto</th>
-              <th className="Caja-pagos-th-estado">Estado (Editable)</th>
+              <th className="Caja-pagos-th-plan">Estado de cuota</th>
+              <th className="Caja-pagos-th-estado">Estado Pago</th>
               <th className="Caja-pagos-th-accion"></th>
             </tr>
           </thead>
           <tbody>
             {cargando ? (
               <tr>
-                <td colSpan="6" className="Caja-pagos-sin-resultados" style={{ color: '#10b981', padding: '32px' }}>
+                <td colSpan="7" className="Caja-pagos-sin-resultados" style={{ color: '#10b981', padding: '32px' }}>
                   Cargando listado de pagos...
                 </td>
               </tr>
             ) : pagos.length > 0 ? (
-              pagos.map((item) => (
+              pagos.map((item) => {
+                const estadoPago = (item.estado || "aprobado").toLowerCase();
+                const cuotaMeta = getEstadoCuotaMeta(item.estadoCuota);
+                return (
                 <tr key={item.id} className="Caja-pagos-fila">
                   {/* Socio con Avatar */}
                   <td className="Caja-pagos-td-socio">
@@ -79,27 +97,76 @@ function PagosTabla({
                   {/* Monto */}
                   <td className="Caja-pagos-td-monto">{formatearMonto(item.monto)}</td>
 
-                  {/* Estado Badge / Selector manual editable */}
-                  <td className="Caja-pagos-td-estado">
-                    <div className="Caja-pagos-estado-selector-wrapper">
-                      <select
-                        className={`Caja-pagos-badge Caja-pagos-badge-select Caja-pagos-badge-${
-                          (item.estado || "aprobado").toLowerCase() === "aprobado"
-                            ? "pagado"
-                            : (item.estado || "aprobado").toLowerCase() === "pendiente"
-                            ? "pendiente"
-                            : "vencido"
-                        }`}
-                        value={(item.estado || "aprobado").toLowerCase()}
-                        onChange={(e) => onCambiarEstado && onCambiarEstado(item.id, e.target.value)}
-                        title="Haz clic para cambiar el estado manualmente"
+                  {/* Estado de cuota */}
+                  <td className="Caja-pagos-td-plan">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' }}>
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          padding: '3px 9px',
+                          borderRadius: '999px',
+                          fontSize: '11.5px',
+                          fontWeight: 600,
+                          background: cuotaMeta.bg,
+                          color: cuotaMeta.color,
+                          border: `1px solid ${cuotaMeta.border}`
+                        }}
                       >
-                        <option value="aprobado">Aprobado</option>
-                        <option value="pendiente">Pendiente</option>
-                        <option value="rechazado">Rechazado</option>
-                        <option value="anulado">Anulado</option>
-                      </select>
-                      <FaChevronDown className="Caja-pagos-badge-flecha" />
+                        {cuotaMeta.label}
+                      </span>
+                      {item.fechaVencimiento && (
+                        <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                          Vto: {item.fechaVencimiento}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* Estado Badge / Selector manual editable + Marcar como pagado */}
+                  <td className="Caja-pagos-td-estado">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-start' }}>
+                      <div className="Caja-pagos-estado-selector-wrapper">
+                        <select
+                          className={`Caja-pagos-badge Caja-pagos-badge-select Caja-pagos-badge-${
+                            estadoPago === "aprobado"
+                              ? "pagado"
+                              : estadoPago === "pendiente"
+                              ? "pendiente"
+                              : "vencido"
+                          }`}
+                          value={estadoPago}
+                          onChange={(e) => onCambiarEstado && onCambiarEstado(item.id, e.target.value)}
+                          title="Haz clic para cambiar el estado manualmente"
+                        >
+                          <option value="aprobado">Aprobado</option>
+                          <option value="pendiente">Pendiente</option>
+                          <option value="rechazado">Rechazado</option>
+                          <option value="anulado">Anulado</option>
+                        </select>
+                        <FaChevronDown className="Caja-pagos-badge-flecha" />
+                      </div>
+                      {estadoPago === "pendiente" && onCambiarEstado && (
+                        <button
+                          type="button"
+                          onClick={() => onCambiarEstado(item.id, "aprobado")}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            padding: '4px 9px',
+                            borderRadius: '7px',
+                            border: '1px solid rgba(163, 230, 53, 0.45)',
+                            background: 'rgba(163, 230, 53, 0.14)',
+                            color: '#bef264',
+                            fontSize: '11.5px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          <FaCheckCircle /> Marcar como pagado
+                        </button>
+                      )}
                     </div>
                   </td>
 
@@ -115,10 +182,11 @@ function PagosTabla({
                     </button>
                   </td>
                 </tr>
-              ))
+                );
+              })
             ) : (
               <tr>
-                <td colSpan="6" className="Caja-pagos-sin-resultados">
+                <td colSpan="7" className="Caja-pagos-sin-resultados">
                   No se encontraron pagos con los filtros aplicados.
                 </td>
               </tr>
@@ -145,9 +213,8 @@ function PagosTabla({
           {Array.from({ length: Math.min(totalPaginas, 5) }, (_, i) => i + 1).map((num) => (
             <button
               key={num}
-              className={`Caja-pagos-pag-btn ${
-                paginaActual === num ? "Caja-pagos-pag-activo" : ""
-              }`}
+              className={`Caja-pagos-pag-btn ${paginaActual === num ? "Caja-pagos-pag-activo" : ""
+                }`}
               onClick={() => setPaginaActual(num)}
             >
               {num}

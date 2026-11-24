@@ -44,7 +44,13 @@ export default function SeleccionarGimnasio() {
         if (list.length === 1) {
           confirmarContexto(list[0]).then((ok) => {
             if (ok) {
-              navigate(esSocio ? '/dashboard-socio' : '/dashboard-dueño', { replace: true });
+              const destino =
+                esSocio || list[0].rol === 'socio'
+                  ? '/dashboard-socio'
+                  : esEmpleado || list[0].rol === 'empleado'
+                  ? '/socios-dueño'
+                  : '/dashboard-dueño';
+              navigate(destino, { replace: true });
             }
           });
         } else if (list.length > 0) {
@@ -60,7 +66,7 @@ export default function SeleccionarGimnasio() {
       });
 
     return () => controller.abort();
-  }, [contextosDisponibles, confirmarContexto, esSocio, navigate]);
+  }, [contextosDisponibles, confirmarContexto, esSocio, esEmpleado, navigate]);
 
   const handleIngresar = async () => {
     const elegido = opciones.find((op) => op.contexto_id === seleccionadoId);
@@ -77,9 +83,13 @@ export default function SeleccionarGimnasio() {
         setErrorMsg('No fue posible validar tu acceso a este gimnasio. Intentá nuevamente.');
         return;
       }
-      navigate(esSocio || elegido.rol === 'socio' ? '/dashboard-socio' : '/dashboard-dueño', {
-        replace: true
-      });
+      const destino =
+        esSocio || elegido.rol === 'socio'
+          ? '/dashboard-socio'
+          : esEmpleado || elegido.rol === 'empleado'
+          ? '/socios-dueño'
+          : '/dashboard-dueño';
+      navigate(destino, { replace: true });
     } catch (err) {
       setErrorMsg(err.message || 'No fue posible iniciar en el gimnasio seleccionado.');
     } finally {
