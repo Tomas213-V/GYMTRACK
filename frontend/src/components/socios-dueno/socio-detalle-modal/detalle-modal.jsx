@@ -89,7 +89,7 @@ function SocioDetalleModal({
         : "Socio");
 
   const membActiva = Array.isArray(s.membresia) && s.membresia.length > 0
-    ? (s.membresia.find(m => m.estado === 'activo') || s.membresia[0])
+    ? (s.membresia.find((m) => ['activa', 'activo'].includes(String(m.estado || '').toLowerCase())) || s.membresia[0])
     : (s.membresia && !Array.isArray(s.membresia) ? s.membresia : null);
 
   const planNombre = membActiva?.membresia_gimnasio?.nombre || "Sin Plan";
@@ -109,15 +109,18 @@ function SocioDetalleModal({
     : "Sin vencimiento fijo";
 
   const fechaAlta = s.fecha_alta ? formatearFecha(s.fecha_alta) : "No registrada";
-  const estadoActual = (s.estado || "activo").toLowerCase();
+  const estadoActual = typeof s.estado === "boolean"
+    ? (s.estado ? "activo" : "inactivo")
+    : String(s.estado || "activo").toLowerCase();
 
   // Cambiar estado rápido desde el selector
   const handleCambiarEstadoRapido = async (nuevoEstado) => {
     setErrorMsg("");
     try {
-      await changeEstadoSocio(s.id_socio, nuevoEstado);
-      setDetalle((prev) => ({ ...prev, estado: nuevoEstado }));
-      setFormData((prev) => ({ ...prev, estado: nuevoEstado }));
+      const estadoBool = nuevoEstado === "activo";
+      await changeEstadoSocio(s.id_socio, estadoBool);
+      setDetalle((prev) => ({ ...(prev || s), estado: estadoBool }));
+      setFormData((prev) => ({ ...prev, estado: estadoBool ? "activo" : "inactivo" }));
       if (onActualizarSocio) onActualizarSocio();
     } catch (err) {
       setErrorMsg(err.message || "Error al cambiar estado.");
@@ -245,7 +248,6 @@ function SocioDetalleModal({
                     onChange={(e) => handleCambiarEstadoRapido(e.target.value)}
                   >
                     <option value="activo">Activo</option>
-                    <option value="pendiente">Pendiente</option>
                     <option value="inactivo">Inactivo</option>
                   </select>
                 </div>

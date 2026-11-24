@@ -110,12 +110,11 @@ export default function DashboardSocio() {
       const [data, sucs, abiertasRes] = await Promise.all([
         fetchDashboardSocio({ id_gimnasio: gimnasioActivoId || null, signal }),
         gimnasioActivoId
-          ? getSucursales({ id_gimnasio: gimnasioActivoId, estado: 'true', signal }).catch(() => [])
+          ? getSucursales({ id_gimnasio: gimnasioActivoId, estado: 'true', signal })
           : Promise.resolve([]),
-        fetchMisAsistencias({ id_gimnasio: gimnasioActivoId || null, estado: 'presente', signal }).catch(() => ({
-          asistencias: []
-        }))
+        fetchMisAsistencias({ id_gimnasio: gimnasioActivoId || null, estado: 'presente', signal })
       ]);
+      if (signal?.aborted) return;
 
       const sucsList = Array.isArray(sucs) ? sucs : [];
       setSucursalesActivas(sucsList);
@@ -164,11 +163,11 @@ export default function DashboardSocio() {
         });
       }
     } catch (err) {
-      if (err.name === 'AbortError') return;
+      if (err.name === 'AbortError' || signal?.aborted) return;
       console.error('Error cargando dashboard del socio:', err);
       setErrorCarga(err.message || 'No se pudieron obtener tus datos actualizados.');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [gimnasioActivoId, gimnasioActivo, usuario]);
 

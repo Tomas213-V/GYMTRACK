@@ -292,9 +292,28 @@ function SocioModal({ onClose, onSuccess, gymId }) {
             </div>
           </div>
 
-          <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 8px 0' }}>
-            El acceso del socio se gestiona vía Supabase Auth: el socio podrá vincular su ficha al iniciar sesión con su correo verificado.
-          </p>
+          <div
+            style={{
+              background: 'rgba(56, 189, 248, 0.08)',
+              border: '1px solid rgba(56, 189, 248, 0.28)',
+              borderRadius: '8px',
+              padding: '10px 12px',
+              fontSize: '12px',
+              color: '#cbd5e1',
+              marginBottom: '8px',
+              lineHeight: 1.45
+            }}
+          >
+            <strong style={{ color: '#7dd3fc' }}>¿Cómo inicia sesión el socio?</strong>{' '}
+            Por seguridad de Supabase Auth, el gimnasio no asigna contraseñas. El socio debe ingresar a{' '}
+            <strong>Portal del Socio → Activar cuenta (/register-socio)</strong> con su{' '}
+            <strong>mismo correo electrónico</strong>, crear su contraseña y confirmar su email para vincular su ficha automáticamente.
+            {!formData.email?.trim() && (
+              <div style={{ color: '#fbbf24', marginTop: '4px' }}>
+                Nota: si dejás el correo vacío, el socio no podrá activar su acceso web hasta cargar un email en su ficha.
+              </div>
+            )}
+          </div>
 
           <div className="socio-modal-acciones">
             <button type="button" className="socio-btn-cancelar" onClick={onClose}>

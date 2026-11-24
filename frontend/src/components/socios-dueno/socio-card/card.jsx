@@ -16,6 +16,10 @@ function SocioCard({ socio, onClick }) {
     ? new Date(memb.fecha_vencimiento).toLocaleDateString('es-AR')
     : 'N/A';
 
+  const estadoLabel = typeof socio.estado === 'boolean'
+    ? (socio.estado ? 'activo' : 'inactivo')
+    : String(socio.estado || 'activo').toLowerCase();
+
   return (
     <div className="socio-card" onClick={() => onClick(socio)}>
       <div className="socio-avatar">👤</div>
@@ -25,7 +29,7 @@ function SocioCard({ socio, onClick }) {
         <p>📞 {socio.telefono || 'Sin teléfono'}</p>
       </div>
       <div className="socio-status-section">
-        <span className={`badge badge-${socio.estado}`}>{socio.estado}</span>
+        <span className={`badge badge-${estadoLabel}`}>{estadoLabel}</span>
         <span className="plan-title">{planNombre}</span>
         <span className="vencimiento-date">Vence {vencimiento}</span>
       </div>

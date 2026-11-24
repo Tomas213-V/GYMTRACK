@@ -71,6 +71,26 @@ export function GymProvider({ children }) {
   const [loadingContext, setLoadingContext] = useState(false);
   const [contextVersion, setContextVersion] = useState(0);
   const activeAbortRef = useRef(null);
+  const rolRef = useRef(rol);
+  const gymIdRef = useRef(gimnasioActivo?.id_gimnasio ?? null);
+  const gymsKeyRef = useRef('');
+  const sucsKeyRef = useRef('');
+
+  useEffect(() => {
+    rolRef.current = rol;
+  }, [rol]);
+
+  useEffect(() => {
+    gymIdRef.current = gimnasioActivo?.id_gimnasio ?? null;
+  }, [gimnasioActivo]);
+
+  useEffect(() => {
+    gymsKeyRef.current = JSON.stringify((gimnasios || []).map((g) => `${g.id_gimnasio}:${g.estado !== false}`));
+  }, [gimnasios]);
+
+  useEffect(() => {
+    sucsKeyRef.current = JSON.stringify((sucursales || []).map((s) => `${s.id_sucursal}:${s.estado !== false}`));
+  }, [sucursales]);
 
   const resetLocalState = useCallback(() => {
     setToken(null);
@@ -172,7 +192,7 @@ export function GymProvider({ children }) {
         const u = data?.usuario;
         if (!u) return null;
 
-        const roleValue = normalizeRoleInternal(u.rol || roleOverride || rol || 'dueño');
+        const roleValue = normalizeRoleInternal(u.rol || roleOverride || rolRef.current || 'dueño');
         const gymsList = Array.isArray(data.gimnasios)
           ? data.gimnasios
           : Array.isArray(u.gimnasios)
@@ -186,6 +206,16 @@ export function GymProvider({ children }) {
         const gymValido = resolverGymValido(gymsList, preferidoGymId || u.id_gimnasio);
         setStoredActiveGymId(gymValido?.id_gimnasio || null);
 
+        const nextGymsKey = JSON.stringify(gymsList.map((g) => `${g.id_gimnasio}:${g.estado !== false}`));
+        const nextSucsKey = JSON.stringify(sucsList.map((s) => `${s.id_sucursal}:${s.estado !== false}`));
+        const changed =
+          roleValue !== rolRef.current ||
+          Number(gymValido?.id_gimnasio || 0) !== Number(gymIdRef.current || 0) ||
+          nextGymsKey !== gymsKeyRef.current ||
+          nextSucsKey !== sucsKeyRef.current ||
+          preferidoGymId !== null ||
+          roleOverride !== undefined;
+
         setToken(getStoredToken());
         setRol(roleValue);
         setGimnasios(gymsList);
@@ -193,6 +223,9 @@ export function GymProvider({ children }) {
         setSucursales(sucsList);
         setSucursalesAsignadas(sucsAsigList);
         sincronizarUsuarioLocal(u, roleValue, gymValido, gymsList, sucsList, sucsAsigList);
+        if (changed) {
+          setContextVersion((v) => v + 1);
+        }
         return { usuario: u, gimnasios: gymsList, gimnasioActivo: gymValido, rol: roleValue };
       } catch (err) {
         if (err.status === 401) {
@@ -204,7 +237,7 @@ export function GymProvider({ children }) {
         setLoadingContext(false);
       }
     },
-    [rol, sincronizarUsuarioLocal, resetLocalState]
+    [sincronizarUsuarioLocal, resetLocalState]
   );
 
   // Escuchar expiración de sesión disparada desde apiClient

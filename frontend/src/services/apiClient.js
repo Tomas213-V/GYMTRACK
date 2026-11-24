@@ -7,7 +7,8 @@
 // - Interpreta errores HTTP 400/401/403/404/409/422 (incl. FastAPI detail[])
 // ==============================================================================
 
-export const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace(/\/+$/, '');
+// Usamos 127.0.0.1 por defecto en lugar de localhost para evitar colisiones IPv6 (::1) en Windows con uvicorn (0.0.0.0)
+export const API_URL = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:3000/api').replace(/\/+$/, '');
 
 const ACTIVE_GYM_STORAGE_KEY = 'gymtrack_active_gym_id';
 
@@ -198,6 +199,7 @@ export async function apiRequest(path, options = {}) {
     ? path
     : `${API_URL}${path.startsWith('/') ? path : `/${path}`}`;
 
+  const isIdempotentGet = method.toUpperCase() === 'GET';
   const doFetch = async () =>
     fetch(url, {
       method,
@@ -206,7 +208,24 @@ export async function apiRequest(path, options = {}) {
       ...(signal ? { signal } : {})
     });
 
-  let response = await doFetch();
+  let response;
+  try {
+    response = await doFetch();
+  } catch (networkErr) {
+    if (networkErr?.name === 'AbortError' || signal?.aborted || !isIdempotentGet) {
+      throw networkErr;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    if (signal?.aborted) throw networkErr;
+    response = await doFetch();
+  }
+
+  if (isIdempotentGet && !signal?.aborted && (response.status === 502 || response.status === 503 || response.status === 504)) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    if (!signal?.aborted) {
+      response = await doFetch();
+    }
+  }
 
   // Reintento único tras refrescar token si expiró
   if (response.status === 401 && !skipAuthRefresh && getStoredToken()) {

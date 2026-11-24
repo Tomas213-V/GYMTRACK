@@ -43,6 +43,7 @@ import Ejercicios from './pages/ejercicios-landing/ejercicios'
 import Login from './pages/login-dueno/login'
 import LoginSocio from './pages/login-socio/login-socio'
 import Register from './pages/register-dueno/register'
+import RegisterSocio from './pages/register-socio/register-socio'
 
 // Páginas del Rol Dueño / Administrador
 import Dashboard from './pages/dashboard-dueno/dashboard'
@@ -464,6 +465,8 @@ function App() {
             RUTAS DE SOCIO (-socio)
             ========================================================= */}
         <Route path="/login-socio" element={<LoginSocio />} />
+        <Route path="/register-socio" element={<RegisterSocio />} />
+        <Route path="/activar-socio" element={<RegisterSocio />} />
 
         <Route
           path="/dashboard-socio"

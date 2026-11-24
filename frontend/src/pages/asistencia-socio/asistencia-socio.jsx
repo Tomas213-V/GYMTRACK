@@ -148,8 +148,8 @@ export default function AsistenciaSocio() {
       // 2. Si hay gimnasio activo, cargar sucursales activas e info del dashboard
       if (gimnasioActivoId) {
         const [sucList, dashData] = await Promise.all([
-          getSucursales({ estado: 'true' }).catch(() => []),
-          fetchDashboardSocio().catch(() => null)
+          getSucursales({ estado: 'true' }),
+          fetchDashboardSocio()
         ]);
 
         setSucursales(sucList || []);
