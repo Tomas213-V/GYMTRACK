@@ -41,9 +41,11 @@ import Ejercicios from './pages/ejercicios-landing/ejercicios'
 
 // Autenticación
 import Login from './pages/login-dueno/login'
+import LoginRol from './pages/login-rol/login-rol'
 import LoginSocio from './pages/login-socio/login-socio'
 import Register from './pages/register-dueno/register'
 import RegisterSocio from './pages/register-socio/register-socio'
+import SeleccionarGimnasio from './pages/seleccionar-gimnasio/seleccionar-gimnasio'
 
 // Páginas del Rol Dueño / Administrador
 import Dashboard from './pages/dashboard-dueno/dashboard'
@@ -122,6 +124,18 @@ function App() {
         <Route path="/login-dueño" element={<Login />} />
         <Route path="/login-dueno" element={<Login />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/login-administrador" element={<LoginRol rolFormulario="administrador" />} />
+        <Route path="/login-admin" element={<LoginRol rolFormulario="administrador" />} />
+        <Route path="/login-empleado" element={<LoginRol rolFormulario="empleado" />} />
+        <Route path="/login-staff" element={<LoginRol rolFormulario="empleado" />} />
+        <Route
+          path="/seleccionar-gimnasio"
+          element={
+            <ProtectedRoute permitirSinGimnasio={true} permitirSinContexto={true}>
+              <SeleccionarGimnasio />
+            </ProtectedRoute>
+          }
+        />
 
         <Route path="/register-dueño" element={<Register />} />
         <Route path="/register-dueno" element={<Register />} />

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { FaUserPlus, FaTimes, FaSave, FaInfoCircle, FaSpinner } from 'react-icons/fa'
-import { createSocio, verificarDniSocio } from '../../../services/socioService'
+import { FaUserPlus, FaTimes, FaSave, FaInfoCircle, FaSpinner, FaEye, FaEyeSlash } from 'react-icons/fa'
+import { createSocio } from '../../../services/socioService'
+import { verificarIdentidad } from '../../../services/authService'
 import { createMembresiaSocio } from '../../../services/membresiaAdminService'
 import { getPlanes } from '../../../services/pagoService'
 import './modal.css'
@@ -11,11 +12,13 @@ function SocioModal({ onClose, onSuccess, gymId }) {
   const [planes, setPlanes] = useState([])
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState('')
+  const [mostrarPass, setMostrarPass] = useState(false)
 
-  // Información de socio existente en GymTrack (multigimnasio: se vincula sin bloquear)
-  const [infoSocioExistente, setInfoSocioExistente] = useState(null)
-  const [verificandoDni, setVerificandoDni] = useState(false)
-  const timeoutDniRef = useRef(null)
+  // Resultado seguro de detección de identidad en GymTrack (sin exponer datos privados ajenos)
+  const [deteccion, setDeteccion] = useState(null)
+  const [confirmarIncorporacion, setConfirmarIncorporacion] = useState(false)
+  const [verificandoIdentidad, setVerificandoIdentidad] = useState(false)
+  const timeoutRef = useRef(null)
 
   const [formData, setFormData] = useState({
     nombre: '',
@@ -23,6 +26,7 @@ function SocioModal({ onClose, onSuccess, gymId }) {
     dni: '',
     telefono: '',
     email: '',
+    contrasena_inicial: '',
     id_membresia_gimnasio: '',
     contratar_plan: false
   })
@@ -43,66 +47,113 @@ function SocioModal({ onClose, onSuccess, gymId }) {
       .catch(() => {})
   }, [gymId])
 
-  // Verificación informativa de DNI (soporte multigimnasio)
-  const verificarDni = async (dniValor) => {
-    const cleanDni = (dniValor || '').toString().trim()
-    if (!cleanDni || cleanDni.length < 5) {
-      setInfoSocioExistente(null)
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
+  }, [])
+
+  const consultarIdentidad = async (dniValor, emailValor) => {
+    const cleanDni = String(dniValor || '').trim()
+    const cleanEmail = String(emailValor || '').trim().toLowerCase()
+    const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)
+
+    if (cleanDni.length < 5 && !emailValido) {
+      setDeteccion(null)
+      setConfirmarIncorporacion(false)
       return null
     }
 
     try {
-      setVerificandoDni(true)
-      const res = await verificarDniSocio(cleanDni)
-      if (res?.existeEnEsteGimnasio) {
-        setError('Este socio ya tiene una membresía activa en este gimnasio.')
-        setInfoSocioExistente(null)
-        return { existeEnEsteGimnasio: true }
-      } else if (res?.cuentaExistente || res?.vinculadoOtroGimnasio || res?.socio) {
-        const socioFound = res.socio || {}
-        const info = {
-          socioNombre: `${socioFound.nombre || ''} ${socioFound.apellido || ''}`.trim(),
-          dni: socioFound.dni || cleanDni,
-          email: socioFound.email || ''
-        }
-        setInfoSocioExistente(info)
-        setFormData((prev) => ({
-          ...prev,
-          nombre: prev.nombre || socioFound.nombre || '',
-          apellido: prev.apellido || socioFound.apellido || '',
-          email: prev.email || socioFound.email || '',
-          telefono: prev.telefono || socioFound.telefono || ''
-        }))
+      setVerificandoIdentidad(true)
+      const res = await verificarIdentidad({
+        tipo_perfil: 'socio',
+        dni: cleanDni.length >= 5 ? cleanDni : null,
+        email: emailValido ? cleanEmail : null,
+        id_gimnasio: gymId || null
+      })
+      setDeteccion(res)
+      if (res?.asociacion_activa_en_este_gimnasio) {
+        setError(res.mensaje || 'Esta persona ya está asociada a tu gimnasio.')
+        setConfirmarIncorporacion(false)
+      } else if (res?.conflicto_identidad) {
+        setError(res.mensaje || 'El DNI y el correo corresponden a personas distintas.')
+        setConfirmarIncorporacion(false)
+      } else if (res?.existe_en_gymtrack) {
         setError('')
-        return { cuentaExistente: true }
+        setFormData((prev) => ({ ...prev, contrasena_inicial: '' }))
       } else {
-        setInfoSocioExistente(null)
-        if (error.includes('DNI') || error.includes('membresía activa')) setError('')
-        return { libre: true }
+        setError('')
+        setConfirmarIncorporacion(false)
       }
+      return res
     } catch {
       return null
     } finally {
-      setVerificandoDni(false)
+      setVerificandoIdentidad(false)
     }
+  }
+
+  const programarVerificacion = (nextDni, nextEmail) => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    timeoutRef.current = setTimeout(() => {
+      consultarIdentidad(nextDni, nextEmail)
+    }, 450)
   }
 
   const handleDniChange = (e) => {
     const val = e.target.value
     setFormData((prev) => ({ ...prev, dni: val }))
-    if (error.includes('DNI') || error.includes('membresía')) setError('')
-
-    if (timeoutDniRef.current) {
-      clearTimeout(timeoutDniRef.current)
-    }
-
-    timeoutDniRef.current = setTimeout(() => {
-      verificarDni(val)
-    }, 500)
+    setError('')
+    setConfirmarIncorporacion(false)
+    programarVerificacion(val, formData.email)
   }
 
-  const ejecutarGuardado = async () => {
+  const handleEmailChange = (e) => {
+    const val = e.target.value
+    setFormData((prev) => ({ ...prev, email: val }))
     setError('')
+    setConfirmarIncorporacion(false)
+    programarVerificacion(formData.dni, val)
+  }
+
+  const personaExistente = Boolean(
+    deteccion?.existe_en_gymtrack &&
+    !deteccion?.asociacion_activa_en_este_gimnasio &&
+    !deteccion?.conflicto_identidad
+  )
+  const mostrarCampoPassword = !deteccion?.tiene_cuenta_auth && !personaExistente
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError('')
+
+    const cheq = await consultarIdentidad(formData.dni, formData.email)
+    if (cheq?.asociacion_activa_en_este_gimnasio) {
+      setError(cheq.mensaje || 'Esta persona ya está asociada a tu gimnasio.')
+      return
+    }
+    if (cheq?.conflicto_identidad) {
+      setError(cheq.mensaje || 'El DNI y el correo electrónico corresponden a personas distintas.')
+      return
+    }
+    if (cheq?.existe_en_gymtrack && !confirmarIncorporacion) {
+      setError('Confirmá que querés incorporar a esta persona existente a tu gimnasio para continuar.')
+      return
+    }
+
+    const pwd = formData.contrasena_inicial.trim()
+    if (!cheq?.existe_en_gymtrack && pwd) {
+      if (!formData.email.trim()) {
+        setError('Para definir una contraseña inicial, el correo electrónico es obligatorio.')
+        return
+      }
+      if (pwd.length < 6) {
+        setError('La contraseña inicial debe tener al menos 6 caracteres.')
+        return
+      }
+    }
+
     setCargando(true)
     try {
       const resSocio = await createSocio({
@@ -111,7 +162,9 @@ function SocioModal({ onClose, onSuccess, gymId }) {
         apellido: formData.apellido,
         dni: formData.dni,
         telefono: formData.telefono,
-        email: formData.email
+        email: formData.email,
+        ...(mostrarCampoPassword && pwd ? { contrasena_inicial: pwd } : {}),
+        ...(cheq?.existe_en_gymtrack ? { confirmar_incorporacion: true } : {})
       })
 
       const idSocioCreado = resSocio?.socio?.id_socio
@@ -126,23 +179,10 @@ function SocioModal({ onClose, onSuccess, gymId }) {
 
       onSuccess()
     } catch (err) {
-      setError(err.message || 'Error al registrar o vincular el socio.')
+      setError(err.message || 'No fue posible completar la asociación. Volvé a intentarlo.')
     } finally {
       setCargando(false)
     }
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
-
-    const cheq = await verificarDni(formData.dni)
-    if (cheq?.existeEnEsteGimnasio) {
-      setError('Este socio ya posee una membresía activa en este gimnasio.')
-      return
-    }
-
-    ejecutarGuardado()
   }
 
   return (
@@ -154,8 +194,8 @@ function SocioModal({ onClose, onSuccess, gymId }) {
               <FaUserPlus />
             </div>
             <div>
-              <h2>Registrar o Vincular Socio</h2>
-              <p>Crea una cuenta nueva o vincula a un socio existente de GymTrack con un plan</p>
+              <h2>Registrar o Incorporar Socio</h2>
+              <p>Creá una cuenta global nueva con contraseña inicial o incorporá a una persona ya registrada</p>
             </div>
           </div>
           <button className="socio-modal-btn-cerrar" onClick={onClose} title="Cerrar">
@@ -165,7 +205,7 @@ function SocioModal({ onClose, onSuccess, gymId }) {
 
         {error && <div className="socio-modal-error">{error}</div>}
 
-        {infoSocioExistente && (
+        {personaExistente && (
           <div
             className="socio-modal-alerta-vinculado"
             style={{
@@ -179,12 +219,21 @@ function SocioModal({ onClose, onSuccess, gymId }) {
             </div>
             <div className="socio-modal-alerta-cuerpo">
               <div className="socio-modal-alerta-titulo" style={{ color: '#bef264' }}>
-                Socio existente en GymTrack (Sistema Multigimnasio)
+                Identidad existente detectada en GymTrack
               </div>
               <p className="socio-modal-alerta-texto">
-                El socio con DNI <strong>{infoSocioExistente.dni}</strong>{' '}
-                {infoSocioExistente.socioNombre ? `(${infoSocioExistente.socioNombre})` : ''} ya cuenta con usuario en GymTrack. Se vinculará a tu gimnasio creando su nueva membresía sin duplicar cuentas.
+                {deteccion?.mensaje || 'Esta persona ya tiene un registro en GymTrack. ¿Querés incorporarla a tu gimnasio?'}
+                {' '}Se reutilizará su cuenta global sin duplicarla ni modificar su contraseña.
               </p>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', cursor: 'pointer', fontSize: '13px', color: '#ecfccb' }}>
+                <input
+                  type="checkbox"
+                  checked={confirmarIncorporacion}
+                  onChange={(e) => setConfirmarIncorporacion(e.target.checked)}
+                  style={{ width: 'auto' }}
+                />
+                <span>Sí, confirmo incorporar esta persona a mi gimnasio</span>
+              </label>
             </div>
           </div>
         )}
@@ -192,32 +241,9 @@ function SocioModal({ onClose, onSuccess, gymId }) {
         <form onSubmit={handleSubmit} className="socio-modal-form">
           <div className="socio-modal-fila">
             <div className="socio-modal-grupo">
-              <label>Nombre</label>
-              <input
-                type="text"
-                placeholder="Ej: Juan"
-                required
-                value={formData.nombre}
-                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-              />
-            </div>
-
-            <div className="socio-modal-grupo">
-              <label>Apellido</label>
-              <input
-                type="text"
-                placeholder="Ej: Pérez"
-                value={formData.apellido}
-                onChange={(e) => setFormData({ ...formData, apellido: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="socio-modal-fila">
-            <div className="socio-modal-grupo">
               <div className="socio-modal-label-row">
-                <label>DNI</label>
-                {verificandoDni && (
+                <label>DNI *</label>
+                {verificandoIdentidad && (
                   <span className="socio-modal-verificando">
                     <FaSpinner className="socio-spinner" /> Verificando...
                   </span>
@@ -229,10 +255,48 @@ function SocioModal({ onClose, onSuccess, gymId }) {
                 required
                 value={formData.dni}
                 onChange={handleDniChange}
-                onBlur={() => verificarDni(formData.dni)}
+                onBlur={() => consultarIdentidad(formData.dni, formData.email)}
               />
             </div>
 
+            <div className="socio-modal-grupo">
+              <label>Correo Electrónico {!personaExistente ? '*' : ''}</label>
+              <input
+                type="email"
+                placeholder="Ej: juan@email.com"
+                required={!personaExistente && Boolean(formData.contrasena_inicial.trim())}
+                value={formData.email}
+                onChange={handleEmailChange}
+                onBlur={() => consultarIdentidad(formData.dni, formData.email)}
+              />
+            </div>
+          </div>
+
+          <div className="socio-modal-fila">
+            <div className="socio-modal-grupo">
+              <label>Nombre {!personaExistente ? '*' : ''}</label>
+              <input
+                type="text"
+                placeholder="Ej: Juan"
+                required={!personaExistente}
+                value={formData.nombre}
+                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+              />
+            </div>
+
+            <div className="socio-modal-grupo">
+              <label>Apellido {!personaExistente ? '*' : ''}</label>
+              <input
+                type="text"
+                placeholder="Ej: Pérez"
+                required={!personaExistente}
+                value={formData.apellido}
+                onChange={(e) => setFormData({ ...formData, apellido: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="socio-modal-fila">
             <div className="socio-modal-grupo">
               <label>Teléfono</label>
               <input
@@ -242,54 +306,73 @@ function SocioModal({ onClose, onSuccess, gymId }) {
                 onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
               />
             </div>
+
+            {mostrarCampoPassword && (
+              <div className="socio-modal-grupo">
+                <label>Contraseña inicial (para cuenta nueva)</label>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={mostrarPass ? 'text' : 'password'}
+                    placeholder="Mínimo 6 caracteres"
+                    value={formData.contrasena_inicial}
+                    onChange={(e) => setFormData({ ...formData, contrasena_inicial: e.target.value })}
+                    autoComplete="new-password"
+                    style={{ width: '100%', paddingRight: '36px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMostrarPass((v) => !v)}
+                    aria-label="Mostrar u ocultar contraseña"
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#94a3b8',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {mostrarPass ? <FaEyeSlash /> : <FaEye />}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="socio-modal-fila">
-            <div className="socio-modal-grupo">
-              <label>Correo Electrónico</label>
+          <div className="socio-modal-grupo">
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
               <input
-                type="email"
-                placeholder="Ej: juan@email.com"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                type="checkbox"
+                checked={formData.contratar_plan}
+                onChange={(e) => setFormData({ ...formData, contratar_plan: e.target.checked })}
+                style={{ width: 'auto' }}
               />
-            </div>
-
-            <div className="socio-modal-grupo">
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={formData.contratar_plan}
-                  onChange={(e) => setFormData({ ...formData, contratar_plan: e.target.checked })}
-                  style={{ width: 'auto' }}
-                />
-                <span>Contratar plan inicial (pendiente de pago)</span>
-              </label>
-              {formData.contratar_plan && (
-                <select
-                  value={formData.id_membresia_gimnasio}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      id_membresia_gimnasio: e.target.value
-                    })
-                  }
-                >
-                  {planes.length > 0 ? (
-                    planes.map((p) => {
-                      const pid = getPlanId(p)
-                      return (
-                        <option key={pid} value={pid}>
-                          {p.nombre} {p.precio != null ? `($${Number(p.precio).toLocaleString('es-AR')})` : ''}
-                        </option>
-                      )
-                    })
-                  ) : (
-                    <option value="">Sin planes creados aún</option>
-                  )}
-                </select>
-              )}
-            </div>
+              <span>Contratar plan inicial (pendiente de pago)</span>
+            </label>
+            {formData.contratar_plan && (
+              <select
+                value={formData.id_membresia_gimnasio}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    id_membresia_gimnasio: e.target.value
+                  })
+                }
+              >
+                {planes.length > 0 ? (
+                  planes.map((p) => {
+                    const pid = getPlanId(p)
+                    return (
+                      <option key={pid} value={pid}>
+                        {p.nombre} {p.precio != null ? `($${Number(p.precio).toLocaleString('es-AR')})` : ''}
+                      </option>
+                    )
+                  })
+                ) : (
+                  <option value="">Sin planes creados aún</option>
+                )}
+              </select>
+            )}
           </div>
 
           <div
@@ -304,14 +387,14 @@ function SocioModal({ onClose, onSuccess, gymId }) {
               lineHeight: 1.45
             }}
           >
-            <strong style={{ color: '#7dd3fc' }}>¿Cómo inicia sesión el socio?</strong>{' '}
-            Por seguridad de Supabase Auth, el gimnasio no asigna contraseñas. El socio debe ingresar a{' '}
-            <strong>Portal del Socio → Activar cuenta (/register-socio)</strong> con su{' '}
-            <strong>mismo correo electrónico</strong>, crear su contraseña y confirmar su email para vincular su ficha automáticamente.
-            {!formData.email?.trim() && (
-              <div style={{ color: '#fbbf24', marginTop: '4px' }}>
-                Nota: si dejás el correo vacío, el socio no podrá activar su acceso web hasta cargar un email en su ficha.
-              </div>
+            {personaExistente ? (
+              <span>
+                Esta persona ya cuenta con identidad global en GymTrack. Ingresará con su correo y contraseña habituales sin crear otra cuenta.
+              </span>
+            ) : (
+              <span>
+                <strong style={{ color: '#7dd3fc' }}>Cuenta global única:</strong> Si definís una contraseña inicial, se aprovisionará la cuenta en Supabase Auth (respetando la confirmación de correo configurada). El socio podrá cambiarla cuando quiera desde su perfil.
+              </span>
             )}
           </div>
 
@@ -322,27 +405,14 @@ function SocioModal({ onClose, onSuccess, gymId }) {
             <button
               type="submit"
               className="socio-btn-guardar"
-              disabled={cargando}
+              disabled={cargando || Boolean(deteccion?.asociacion_activa_en_este_gimnasio)}
               title="Guardar Socio"
             >
               <FaSave />
-              <span>{cargando ? 'Guardando...' : infoSocioExistente ? 'Vincular Socio' : 'Guardar Socio'}</span>
+              <span>{cargando ? 'Guardando...' : personaExistente ? 'Incorporar Socio' : 'Guardar Socio'}</span>
             </button>
           </div>
         </form>
-
-        {/*
-          [PRESERVADO PARA EL FUTURO - MODAL DE CONFIRMACIÓN / BAJA AUTOMÁTICA]
-          En caso de requerir confirmación manual o reactivar la baja automática entre gimnasios:
-          
-          mostrarConfirmacion && (
-            <div className="socio-modal-confirm-overlay">
-              <div className="socio-modal-confirm-card">
-                ...
-              </div>
-            </div>
-          )
-        */}
       </div>
     </div>
   )

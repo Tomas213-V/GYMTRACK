@@ -15,10 +15,19 @@ import {
   getStoredToken,
   getStoredActiveGymId,
   setStoredActiveGymId,
+  getStoredActiveSucursalId,
+  setStoredActiveSucursalId,
+  getStoredContextConfirmed,
+  setStoredContextConfirmed,
+  getStoredContextosDisponibles,
+  setStoredContextosDisponibles,
   clearSessionStorage,
   normalizeRoleInternal
 } from '../services/apiClient';
-import { vincularPerfil as vincularPerfilApi } from '../services/authService';
+import {
+  vincularPerfil as vincularPerfilApi,
+  logoutBackend as logoutBackendApi
+} from '../services/authService';
 
 const GymContext = createContext(null);
 
@@ -68,6 +77,9 @@ export function GymProvider({ children }) {
     const u = leerObjetoLocal('usuario');
     return Array.isArray(u?.sucursales_asignadas) ? u.sucursales_asignadas : [];
   });
+  const [sucursalActivaId, setSucursalActivaId] = useState(() => getStoredActiveSucursalId());
+  const [contextosDisponibles, setContextosDisponibles] = useState(() => getStoredContextosDisponibles());
+  const [contextoConfirmado, setContextoConfirmado] = useState(() => getStoredContextConfirmed());
   const [loadingContext, setLoadingContext] = useState(false);
   const [contextVersion, setContextVersion] = useState(0);
   const activeAbortRef = useRef(null);
@@ -100,6 +112,9 @@ export function GymProvider({ children }) {
     setGimnasioActivo(null);
     setSucursales([]);
     setSucursalesAsignadas([]);
+    setSucursalActivaId(null);
+    setContextosDisponibles([]);
+    setContextoConfirmado(true);
     setContextVersion((v) => v + 1);
   }, []);
 
@@ -137,7 +152,9 @@ export function GymProvider({ children }) {
       socio: socioObj,
       gimnasios: gymsParam,
       sucursales: sucsParam,
-      sucursales_asignadas: sucsAsigParam
+      sucursales_asignadas: sucsAsigParam,
+      contextos_disponibles: contextosParam,
+      requiere_seleccion_gimnasio: reqSelParam
     }) => {
       const targetUser = socioObj || userObj || null;
       const roleValue = normalizeRoleInternal(targetUser?.rol || (socioObj ? 'socio' : 'dueño'));
@@ -152,6 +169,8 @@ export function GymProvider({ children }) {
       const sucsAsigList = Array.isArray(sucsAsigParam)
         ? sucsAsigParam
         : targetUser?.sucursales_asignadas || [];
+      const contextosList = Array.isArray(contextosParam) ? contextosParam : [];
+      const necesitaSelector = Boolean(reqSelParam || contextosList.length > 1);
 
       if (newToken) {
         localStorage.setItem('token', newToken);
@@ -161,14 +180,36 @@ export function GymProvider({ children }) {
         localStorage.setItem('refresh_token', newRefreshToken);
       }
 
-      const gymValido = resolverGymValido(gymsList, targetUser?.id_gimnasio);
-      setStoredActiveGymId(gymValido?.id_gimnasio || null);
+      setStoredContextosDisponibles(contextosList);
+      setContextosDisponibles(contextosList);
+
+      let gymValido = null;
+      let sucIdValida = null;
+
+      if (necesitaSelector) {
+        setStoredActiveGymId(null);
+        setStoredActiveSucursalId(null);
+        setStoredContextConfirmed(false);
+        setContextoConfirmado(false);
+      } else {
+        const unicoCtx = contextosList.length === 1 ? contextosList[0] : null;
+        gymValido = resolverGymValido(gymsList, unicoCtx?.id_gimnasio || targetUser?.id_gimnasio);
+        sucIdValida =
+          roleValue === 'empleado'
+            ? (unicoCtx?.id_sucursal || targetUser?.id_sucursal || null)
+            : null;
+        setStoredActiveGymId(gymValido?.id_gimnasio || null);
+        setStoredActiveSucursalId(sucIdValida);
+        setStoredContextConfirmed(true);
+        setContextoConfirmado(true);
+      }
 
       setRol(roleValue);
       setGimnasios(gymsList);
       setGimnasioActivo(gymValido);
       setSucursales(sucsList);
       setSucursalesAsignadas(sucsAsigList);
+      setSucursalActivaId(sucIdValida);
       sincronizarUsuarioLocal(targetUser, roleValue, gymValido, gymsList, sucsList, sucsAsigList);
       setContextVersion((v) => v + 1);
     },
@@ -179,7 +220,7 @@ export function GymProvider({ children }) {
    * Revalida sesión, rol, permisos y gimnasios autorizados contra /api/auth/me.
    */
   const refreshProfile = useCallback(
-    async (preferidoGymId = null, roleOverride = undefined) => {
+    async (preferidoGymId = null, roleOverride = undefined, preferidoSucursalId = null) => {
       const currentToken = getStoredToken();
       if (!currentToken) return null;
 
@@ -187,7 +228,8 @@ export function GymProvider({ children }) {
         setLoadingContext(true);
         const data = await apiRequest('/auth/me', {
           ...(roleOverride !== undefined ? { activeRole: roleOverride } : {}),
-          ...(preferidoGymId ? { gimnasioId: preferidoGymId } : {})
+          ...(preferidoGymId ? { gimnasioId: preferidoGymId } : {}),
+          ...(preferidoSucursalId ? { sucursalId: preferidoSucursalId } : {})
         });
         const u = data?.usuario;
         if (!u) return null;
@@ -202,9 +244,29 @@ export function GymProvider({ children }) {
         const sucsAsigList = Array.isArray(data.sucursales_asignadas)
           ? data.sucursales_asignadas
           : u.sucursales_asignadas || [];
+        const contextosList = Array.isArray(data.contextos_disponibles)
+          ? data.contextos_disponibles
+          : getStoredContextosDisponibles();
 
-        const gymValido = resolverGymValido(gymsList, preferidoGymId || u.id_gimnasio);
+        setStoredContextosDisponibles(contextosList);
+        setContextosDisponibles(contextosList);
+
+        const confirmedNow = getStoredContextConfirmed();
+        const gymValido =
+          !confirmedNow && contextosList.length > 1 && !preferidoGymId
+            ? null
+            : resolverGymValido(gymsList, preferidoGymId || u.id_gimnasio);
+        const sucIdValida =
+          roleValue === 'empleado'
+            ? (preferidoSucursalId || getStoredActiveSucursalId() || u.id_sucursal || null)
+            : null;
+
         setStoredActiveGymId(gymValido?.id_gimnasio || null);
+        if (roleValue === 'empleado') {
+          setStoredActiveSucursalId(sucIdValida);
+        } else {
+          setStoredActiveSucursalId(null);
+        }
 
         const nextGymsKey = JSON.stringify(gymsList.map((g) => `${g.id_gimnasio}:${g.estado !== false}`));
         const nextSucsKey = JSON.stringify(sucsList.map((s) => `${s.id_sucursal}:${s.estado !== false}`));
@@ -214,6 +276,7 @@ export function GymProvider({ children }) {
           nextGymsKey !== gymsKeyRef.current ||
           nextSucsKey !== sucsKeyRef.current ||
           preferidoGymId !== null ||
+          preferidoSucursalId !== null ||
           roleOverride !== undefined;
 
         setToken(getStoredToken());
@@ -222,11 +285,12 @@ export function GymProvider({ children }) {
         setGimnasioActivo(gymValido);
         setSucursales(sucsList);
         setSucursalesAsignadas(sucsAsigList);
+        setSucursalActivaId(sucIdValida);
         sincronizarUsuarioLocal(u, roleValue, gymValido, gymsList, sucsList, sucsAsigList);
         if (changed) {
           setContextVersion((v) => v + 1);
         }
-        return { usuario: u, gimnasios: gymsList, gimnasioActivo: gymValido, rol: roleValue };
+        return { usuario: u, gimnasios: gymsList, gimnasioActivo: gymValido, rol: roleValue, contextos_disponibles: contextosList };
       } catch (err) {
         if (err.status === 401) {
           clearSessionStorage();
@@ -320,9 +384,45 @@ export function GymProvider({ children }) {
     [refreshProfile]
   );
 
+  /**
+   * Confirma el gimnasio (y sucursal para empleados) elegido en la pantalla de selector post-login.
+   */
+  const confirmarContexto = useCallback(
+    async (contextoElegido) => {
+      if (!contextoElegido || !contextoElegido.id_gimnasio) return false;
+      const targetGymId = Number(contextoElegido.id_gimnasio);
+      const targetSucId = contextoElegido.id_sucursal ? Number(contextoElegido.id_sucursal) : null;
+      const targetRol = normalizeRoleInternal(contextoElegido.rol || rolRef.current);
+
+      if (activeAbortRef.current) {
+        activeAbortRef.current.abort();
+      }
+      activeAbortRef.current = new AbortController();
+
+      setStoredActiveGymId(targetGymId);
+      setStoredActiveSucursalId(targetSucId);
+      setStoredContextConfirmed(true);
+      setContextoConfirmado(true);
+      setSucursalActivaId(targetSucId);
+
+      const refreshed = await refreshProfile(targetGymId, targetRol, targetSucId);
+      if (!refreshed) {
+        setStoredContextConfirmed(false);
+        setContextoConfirmado(false);
+        return false;
+      }
+      setContextVersion((v) => v + 1);
+      return true;
+    },
+    [refreshProfile]
+  );
+
   const logout = useCallback(() => {
     if (activeAbortRef.current) {
       activeAbortRef.current.abort();
+    }
+    if (getStoredToken()) {
+      logoutBackendApi().catch(() => {});
     }
     clearSessionStorage();
     resetLocalState();
@@ -346,6 +446,14 @@ export function GymProvider({ children }) {
     usuario.roles_empleado.includes('administrador');
   const esStaff = esDueno || esAdministrador || esEmpleado;
   const esSocio = rol === 'socio';
+  const requiereSeleccionContexto = Boolean(
+    token && !contextoConfirmado && contextosDisponibles.length > 1
+  );
+  const sucursalActiva = useMemo(() => {
+    if (!sucursalActivaId) return null;
+    const pool = [...(sucursalesAsignadas || []), ...(sucursales || [])];
+    return pool.find((s) => Number(s.id_sucursal) === Number(sucursalActivaId)) || null;
+  }, [sucursalActivaId, sucursalesAsignadas, sucursales]);
 
   const value = useMemo(
     () => ({
@@ -367,12 +475,18 @@ export function GymProvider({ children }) {
       gimnasios,
       gimnasioActivo,
       gimnasioActivoId: gimnasioActivo?.id_gimnasio || null,
+      sucursalActiva,
+      sucursalActivaId,
       sucursales,
       sucursalesAsignadas,
+      contextosDisponibles,
+      contextoConfirmado,
+      requiereSeleccionContexto,
       loadingContext,
       contextVersion,
       setSession,
       seleccionarGimnasio,
+      confirmarContexto,
       cambiarRolActivo,
       vincularPerfilCuenta,
       refreshProfile,
@@ -391,12 +505,18 @@ export function GymProvider({ children }) {
       usuario,
       gimnasios,
       gimnasioActivo,
+      sucursalActiva,
+      sucursalActivaId,
       sucursales,
       sucursalesAsignadas,
+      contextosDisponibles,
+      contextoConfirmado,
+      requiereSeleccionContexto,
       loadingContext,
       contextVersion,
       setSession,
       seleccionarGimnasio,
+      confirmarContexto,
       cambiarRolActivo,
       vincularPerfilCuenta,
       refreshProfile,

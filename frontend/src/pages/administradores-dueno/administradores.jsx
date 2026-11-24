@@ -13,6 +13,7 @@ import {
   updateAdministrador,
   cambiarEstadoAsignacionAdministrador
 } from '../../services/administradorService';
+import { verificarIdentidad } from '../../services/authService';
 import {
   FaUserShield,
   FaPlus,
@@ -43,8 +44,11 @@ export default function AdministradoresDueno() {
     apellido: '',
     email: '',
     dni: '',
-    telefono: ''
+    telefono: '',
+    contrasena_inicial: ''
   });
+  const [deteccionAdmin, setDeteccionAdmin] = useState(null);
+  const [confirmarIncorporacionAdmin, setConfirmarIncorporacionAdmin] = useState(false);
 
   const mostrarExito = (msg) => {
     setExitoMsg(msg);
@@ -83,8 +87,36 @@ export default function AdministradoresDueno() {
 
   const abrirCrear = () => {
     setEditando(null);
-    setFormData({ nombre: '', apellido: '', email: '', dni: '', telefono: '' });
+    setDeteccionAdmin(null);
+    setConfirmarIncorporacionAdmin(false);
+    setFormData({ nombre: '', apellido: '', email: '', dni: '', telefono: '', contrasena_inicial: '' });
     setModalAbierto(true);
+  };
+
+  const verificarAdminExistente = async (dniVal, emailVal) => {
+    const cleanDni = String(dniVal || '').trim();
+    const cleanEmail = String(emailVal || '').trim().toLowerCase();
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail);
+    if (cleanDni.length < 5 && !emailOk) {
+      setDeteccionAdmin(null);
+      setConfirmarIncorporacionAdmin(false);
+      return null;
+    }
+    try {
+      const res = await verificarIdentidad({
+        tipo_perfil: 'administrador',
+        dni: cleanDni.length >= 5 ? cleanDni : null,
+        email: emailOk ? cleanEmail : null,
+        id_gimnasio: gimnasioActivoId || null
+      });
+      setDeteccionAdmin(res);
+      if (res?.existe_en_gymtrack) {
+        setFormData((prev) => ({ ...prev, contrasena_inicial: '' }));
+      }
+      return res;
+    } catch {
+      return null;
+    }
   };
 
   const abrirEditar = (admin) => {
@@ -113,9 +145,31 @@ export default function AdministradoresDueno() {
         await updateAdministrador(editando.id_administrador, formData);
         mostrarExito('Datos del administrador actualizados correctamente.');
       } else {
+        const det = await verificarAdminExistente(formData.dni, formData.email);
+        if (det?.asociacion_activa_en_este_gimnasio) {
+          setErrorMsg(det.mensaje || 'Esta persona ya está asociada a tu gimnasio.');
+          return;
+        }
+        if (det?.conflicto_identidad) {
+          setErrorMsg(det.mensaje || 'El DNI y el correo corresponden a personas distintas.');
+          return;
+        }
+        if (det?.existe_en_gymtrack && !confirmarIncorporacionAdmin) {
+          setErrorMsg('Confirmá que querés incorporar a esta persona existente como administrador de tu gimnasio.');
+          return;
+        }
+        const pwdInicial = formData.contrasena_inicial.trim();
+        if (!det?.tiene_cuenta_auth && !det?.existe_en_gymtrack && pwdInicial && pwdInicial.length < 6) {
+          setErrorMsg('La contraseña inicial debe tener al menos 6 caracteres.');
+          return;
+        }
         const res = await createAdministrador({
           ...formData,
-          id_gimnasio: gimnasioActivoId
+          id_gimnasio: gimnasioActivoId,
+          ...(!det?.tiene_cuenta_auth && !det?.existe_en_gymtrack && pwdInicial
+            ? { contrasena_inicial: pwdInicial }
+            : { contrasena_inicial: '' }),
+          ...(det?.existe_en_gymtrack ? { confirmar_incorporacion: true } : {})
         });
         mostrarExito(res?.mensaje || 'Administrador organizacional registrado correctamente.');
       }
@@ -282,7 +336,11 @@ export default function AdministradoresDueno() {
                   type="email"
                   required
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, email: e.target.value });
+                    setConfirmarIncorporacionAdmin(false);
+                  }}
+                  onBlur={() => !editando && verificarAdminExistente(formData.dni, formData.email)}
                 />
               </label>
 
@@ -292,7 +350,11 @@ export default function AdministradoresDueno() {
                   <input
                     type="text"
                     value={formData.dni}
-                    onChange={(e) => setFormData({ ...formData, dni: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, dni: e.target.value });
+                      setConfirmarIncorporacionAdmin(false);
+                    }}
+                    onBlur={() => !editando && verificarAdminExistente(formData.dni, formData.email)}
                   />
                 </label>
                 <label>
@@ -305,10 +367,48 @@ export default function AdministradoresDueno() {
                 </label>
               </div>
 
+              {!editando && deteccionAdmin?.existe_en_gymtrack && !deteccionAdmin?.asociacion_activa_en_este_gimnasio && (
+                <div
+                  style={{
+                    background: 'rgba(158, 240, 26, 0.08)',
+                    border: '1px solid rgba(158, 240, 26, 0.35)',
+                    borderRadius: '8px',
+                    padding: '10px 12px',
+                    fontSize: '12px',
+                    color: '#d9f99d'
+                  }}
+                >
+                  <div>
+                    <strong>{deteccionAdmin.mensaje}</strong> Se reutilizará su cuenta global sin duplicarla ni cambiar su contraseña.
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={confirmarIncorporacionAdmin}
+                      onChange={(e) => setConfirmarIncorporacionAdmin(e.target.checked)}
+                      style={{ width: 'auto' }}
+                    />
+                    <span>Confirmo incorporar este administrador existente</span>
+                  </label>
+                </div>
+              )}
+
+              {!editando && !deteccionAdmin?.existe_en_gymtrack && !deteccionAdmin?.tiene_cuenta_auth && (
+                <label>
+                  Contraseña inicial (para cuenta nueva)
+                  <input
+                    type="password"
+                    placeholder="Mínimo 6 caracteres"
+                    autoComplete="new-password"
+                    value={formData.contrasena_inicial}
+                    onChange={(e) => setFormData({ ...formData, contrasena_inicial: e.target.value })}
+                  />
+                </label>
+              )}
+
               {!editando && (
                 <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>
-                  Si el correo ya corresponde a un administrador en GymTrack, se vinculará a este gimnasio sin duplicar su perfil.
-                  El administrador enlazará su cuenta al iniciar sesión con su correo verificado en Supabase Auth.
+                  Si el correo o DNI ya existe en GymTrack, se vinculará a este gimnasio reutilizando su cuenta global sin modificar su contraseña.
                 </p>
               )}
 

@@ -15,17 +15,20 @@ export async function fetchSocios({ page = 1, limit = 6, estado = '', search = '
   return apiRequest(`/socios?${params.toString()}`, { signal });
 }
 
-export async function verificarDniSocio(dni, idGimnasio = null) {
+export async function verificarDniSocio(dni, idGimnasio = null, email = null) {
   const cleanDni = String(dni || '').trim();
-  if (!cleanDni) return null;
-  const params = new URLSearchParams({ dni: cleanDni });
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  if (!cleanDni && !cleanEmail) return null;
+  const params = new URLSearchParams();
+  if (cleanDni) params.append('dni', cleanDni);
+  if (cleanEmail) params.append('email', cleanEmail);
   if (idGimnasio) params.append('id_gimnasio', String(idGimnasio));
   return apiRequest(`/socios/verificar-dni?${params.toString()}`);
 }
 
 /**
- * Crea un socio nuevo o reutiliza una identidad existente y la asocia al gimnasio activo.
- * Respeta SocioCreate (sin contrasena, sin password, sin id_plan_membresia).
+ * Crea un socio nuevo (con contraseña inicial opcional vía Supabase Auth) o reutiliza una
+ * identidad existente y la asocia al gimnasio activo.
  */
 export async function createSocio(socioData) {
   const payload = {
@@ -34,7 +37,11 @@ export async function createSocio(socioData) {
     ...(socioData.apellido ? { apellido: String(socioData.apellido).trim() } : {}),
     ...(socioData.dni ? { dni: String(socioData.dni).trim() } : {}),
     ...(socioData.telefono ? { telefono: String(socioData.telefono).trim() } : {}),
-    ...(socioData.email ? { email: String(socioData.email).trim().toLowerCase() } : {})
+    ...(socioData.email ? { email: String(socioData.email).trim().toLowerCase() } : {}),
+    ...(socioData.contrasena_inicial && String(socioData.contrasena_inicial).trim()
+      ? { contrasena_inicial: String(socioData.contrasena_inicial).trim() }
+      : {}),
+    ...(socioData.confirmar_incorporacion ? { confirmar_incorporacion: true } : {})
   };
   return apiRequest('/socios', {
     method: 'POST',
