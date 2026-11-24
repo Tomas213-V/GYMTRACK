@@ -204,10 +204,19 @@ function LoginSocio() {
             {loading ? 'Ingresando...' : 'Ingresar como Socio'}
           </button>
 
+          {/* BOTÓN ACTIVAR CUENTA / CREAR CONTRASEÑA DE SOCIO */}
+          <Link
+            to="/register-socio"
+            className="register-button-login"
+          >
+            ¿Primera vez? Activar cuenta / Crear contraseña
+          </Link>
+
           {/* BOTÓN REGRESAR AL LOGIN DE DUEÑO */}
           <Link
             to="/login-dueño"
             className="register-button-login"
+            style={{ marginTop: '8px', opacity: 0.85 }}
           >
             Acceso para Administradores
           </Link>

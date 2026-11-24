@@ -139,9 +139,9 @@ export default function MembresiaAdmin() {
     try {
       setLoading(true);
       const [planesData, membresiasData, sociosData] = await Promise.all([
-        getPlanesMembresia('todos').catch(() => []),
-        getMembresiasSocios({ estado: 'todos' }).catch(() => []),
-        getSociosDropdown().catch(() => [])
+        getPlanesMembresia('todos'),
+        getMembresiasSocios({ estado: 'todos' }),
+        getSociosDropdown()
       ]);
 
       setPlanes(planesData);

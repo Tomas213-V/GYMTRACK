@@ -148,8 +148,8 @@ export default function Asistencias() {
     const loadCatalogs = async () => {
       try {
         const [resSocios, resSuc] = await Promise.all([
-          fetchSocios({ limit: 200 }).catch(() => ({ socios: [] })),
-          getSucursales({ estado: 'true' }).catch(() => [])
+          fetchSocios({ limit: 200 }),
+          getSucursales({ estado: 'true' })
         ]);
         setSociosList(resSocios?.socios || []);
         setSucursales(resSuc || []);
@@ -179,7 +179,13 @@ export default function Asistencias() {
 
   // Cargar tabla de asistencias según filtros y página
   const loadAsistencias = useCallback(async () => {
-    if (!gimnasioActivoId) return;
+    if (!gimnasioActivoId) {
+      setAsistencias([]);
+      setTotalAsistencias(0);
+      setTotalPages(1);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const data = await fetchAsistencias({
@@ -634,11 +640,11 @@ export default function Asistencias() {
                           <span
                             className="asist-badge-status"
                             style={{
-                              backgroundColor: socio.estado === 'activo' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
-                              color: socio.estado === 'activo' ? '#4ade80' : '#f87171'
+                              backgroundColor: (socio.estado === true || socio.estado === 'activo') ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                              color: (socio.estado === true || socio.estado === 'activo') ? '#4ade80' : '#f87171'
                             }}
                           >
-                            {socio.estado || 'Activo'}
+                            {typeof socio.estado === 'boolean' ? (socio.estado ? 'Activo' : 'Inactivo') : (socio.estado || 'Activo')}
                           </span>
                         </div>
                       ))}
@@ -660,8 +666,8 @@ export default function Asistencias() {
                         </h4>
                         <p>
                           DNI: {formatDni(selectedSocio.dni)} • Estado:{' '}
-                          <b style={{ color: selectedSocio.estado === 'activo' ? '#a3e635' : '#f87171' }}>
-                            {selectedSocio.estado || 'Activo'}
+                          <b style={{ color: (selectedSocio.estado === true || selectedSocio.estado === 'activo') ? '#a3e635' : '#f87171' }}>
+                            {typeof selectedSocio.estado === 'boolean' ? (selectedSocio.estado ? 'Activo' : 'Inactivo') : (selectedSocio.estado || 'Activo')}
                           </b>
                         </p>
                       </div>

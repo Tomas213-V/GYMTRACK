@@ -169,8 +169,8 @@ export default function SocioRutinas() {
     try {
       setLoading(true);
       const [resumen, misEj] = await Promise.all([
-        fetchRutinasResumen().catch(() => ({ rutinas_personales: [], rutinas_asignadas: [] })),
-        getEjerciciosSocio({ origen: 'propio' }).catch(() => [])
+        fetchRutinasResumen(),
+        getEjerciciosSocio({ origen: 'propio' })
       ]);
 
       const personales = Array.isArray(resumen?.rutinas_personales) ? resumen.rutinas_personales : [];
@@ -200,6 +200,7 @@ export default function SocioRutinas() {
       });
     } catch (err) {
       console.error('Error cargando rutinas del socio:', err);
+      showToast(err.message || 'No se pudieron cargar tus rutinas. Reintentá en un momento.');
     } finally {
       setLoading(false);
     }

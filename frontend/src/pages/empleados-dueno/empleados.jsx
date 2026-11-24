@@ -93,13 +93,14 @@ export default function EmpleadosDueno() {
           getEmpleados({ estado: filtroEstado, search, id_sucursal: filtroSucursal, signal }),
           getSucursales({ estado: 'todos', signal })
         ]);
+        if (signal?.aborted) return;
         setEmpleados(empsData || []);
         setSucursales(sucsData || []);
       } catch (err) {
-        if (err.name === 'AbortError') return;
+        if (err.name === 'AbortError' || signal?.aborted) return;
         setErrorMsg(err.message || 'Error al cargar empleados y sucursales.');
       } finally {
-        setLoading(false);
+        if (!signal?.aborted) setLoading(false);
       }
     },
     [gimnasioActivoId, filtroEstado, search, filtroSucursal]

@@ -60,13 +60,14 @@ export default function SucursalesDueno() {
       setLoading(true);
       setErrorMsg('');
       const data = await getSucursales({ estado: filtroEstado, signal });
+      if (signal?.aborted) return;
       setSucursales(data || []);
     } catch (err) {
-      if (err.name === 'AbortError') return;
+      if (err.name === 'AbortError' || signal?.aborted) return;
       setErrorMsg(err.message || 'Error al cargar las sucursales.');
       setSucursales([]);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [gimnasioActivoId, filtroEstado]);
 
@@ -107,7 +108,10 @@ export default function SucursalesDueno() {
         await updateSucursal(editando.id_sucursal, formData);
         mostrarExito('Sucursal actualizada correctamente.');
       } else {
-        await createSucursal(formData);
+        await createSucursal({
+          ...formData,
+          ...(gimnasioActivoId ? { id_gimnasio: Number(gimnasioActivoId) } : {})
+        });
         mostrarExito('Sucursal creada exitosamente.');
       }
       setModalAbierto(false);
@@ -266,6 +270,12 @@ export default function SucursalesDueno() {
               <button type="button" onClick={() => setModalAbierto(false)}><FaTimes /></button>
             </div>
             <form onSubmit={handleGuardar} className="suc-form">
+              {errorMsg && (
+                <div className="suc-alert suc-alert-error" style={{ marginBottom: '12px' }}>
+                  <span>{errorMsg}</span>
+                  <button type="button" onClick={() => setErrorMsg('')}><FaTimes /></button>
+                </div>
+              )}
               <label>
                 Dirección *
                 <input

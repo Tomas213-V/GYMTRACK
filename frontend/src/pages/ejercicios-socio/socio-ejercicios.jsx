@@ -58,12 +58,13 @@ export default function SocioEjercicios() {
         search: searchTerm,
         signal
       });
+      if (signal?.aborted) return;
       setEjercicios(data || []);
     } catch (err) {
-      if (err.name === 'AbortError') return;
+      if (err.name === 'AbortError' || signal?.aborted) return;
       setErrorMsg(err.message || 'Error al cargar los ejercicios.');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [filtroOrigen, filtroGrupo, searchTerm, gimnasioActivoId, contextVersion]);
 

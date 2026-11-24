@@ -62,13 +62,14 @@ export default function AdministradoresDueno() {
         setLoading(true);
         setErrorMsg('');
         const data = await getAdministradores({ id_gimnasio: gimnasioActivoId, signal });
+        if (signal?.aborted) return;
         setAsignaciones(Array.isArray(data?.asignaciones) ? data.asignaciones : []);
       } catch (err) {
-        if (err.name === 'AbortError') return;
+        if (err.name === 'AbortError' || signal?.aborted) return;
         setErrorMsg(err.message || 'Error al cargar los administradores organizacionales.');
         setAsignaciones([]);
       } finally {
-        setLoading(false);
+        if (!signal?.aborted) setLoading(false);
       }
     },
     [gimnasioActivoId]
