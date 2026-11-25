@@ -1,6 +1,6 @@
 
 /**
- * Logotipos oficiales vectoriales de Mercado Pago y Ualá con alta fidelidad
+ * Logotipo oficial vectorial de Mercado Pago con alta fidelidad
  */
 
 export function MercadoPagoLogo({ className = '', height = 24 }) {
@@ -34,32 +34,6 @@ export function MercadoPagoLogo({ className = '', height = 24 }) {
   );
 }
 
-export function UalaLogo({ className = '', height = 24 }) {
-  return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }} className={className}>
-      <svg height={height} viewBox="0 0 110 38" fill="none" xmlns="http://www.w3.org/2000/svg">
-        {/* Ícono de 'u' entrelazada de Ualá */}
-        <path
-          d="M8 12C8 17.5 12.5 22 18 22C23.5 22 28 17.5 28 12"
-          stroke="#FF3366"
-          strokeWidth="4"
-          strokeLinecap="round"
-        />
-        <path
-          d="M15 12C15 19 19.5 24.5 26 24.5C31 24.5 35 20.5 35 15"
-          stroke="#3874FF"
-          strokeWidth="4"
-          strokeLinecap="round"
-        />
-        {/* Texto 'ualá' */}
-        <text x="42" y="24" fill="#FFFFFF" fontFamily="Inter, sans-serif" fontSize="20" fontWeight="800" letterSpacing="-0.5px">
-          ualá
-        </text>
-      </svg>
-    </div>
-  );
-}
-
 export function PaymentBadgesRow() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
@@ -75,20 +49,6 @@ export function PaymentBadgesRow() {
         }}
       >
         <MercadoPagoLogo height={22} />
-      </div>
-
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          background: 'rgba(255, 51, 102, 0.12)',
-          border: '1px solid rgba(255, 51, 102, 0.3)',
-          borderRadius: '8px',
-          padding: '6px 14px',
-          transition: 'transform 0.2s ease, border-color 0.2s ease'
-        }}
-      >
-        <UalaLogo height={22} />
       </div>
     </div>
   );

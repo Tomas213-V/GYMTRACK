@@ -93,17 +93,16 @@ export async function solicitarMembresiaPendiente({ id_membresia_gimnasio, fecha
 }
 
 /**
- * Prepara orden de pago digital en Mercado Pago o Ualá (POST /api/socio/pagos/iniciar).
+ * Prepara orden de pago digital en Mercado Pago (POST /api/socio/pagos/iniciar).
  * Respeta IniciarPagoSocio (extra="forbid"): { id_membresia_gimnasio, proveedor }.
  * Devuelve { orden, plan, socio }. El cliente nunca confirma la acreditación.
  */
-export async function iniciarPagoMembresia({ id_membresia_gimnasio, proveedor = 'mercadopago' }) {
-  const prov = proveedor === 'uala' ? 'uala' : 'mercadopago';
+export async function iniciarPagoMembresia({ id_membresia_gimnasio }) {
   return apiRequest('/socio/pagos/iniciar', {
     method: 'POST',
     body: {
       id_membresia_gimnasio: Number(id_membresia_gimnasio),
-      proveedor: prov
+      proveedor: 'mercadopago'
     }
   });
 }
