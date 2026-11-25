@@ -228,12 +228,28 @@ const registrarAsistencia = async (req, res) => {
 
     // 3. Validar dinámicamente que el socio tenga membresía activa y vigente en el gimnasio de la sucursal
     const hoyISO = getTodayISODate();
+    const { data: assocRow, error: assocErr } = await db
+      .from('socio_gimnasio')
+      .select('id_socio_gimnasio, estado')
+      .eq('id_socio', targetSocioId)
+      .eq('id_gimnasio', sucCheck.id_gimnasio)
+      .maybeSingle();
+
+    if (assocErr) {
+      return res.status(500).json({ error: 'Error al validar asociación del socio: ' + assocErr.message });
+    }
+    if (!assocRow || assocRow.estado !== true) {
+      return res.status(403).json({
+        error: 'El socio no posee una asociación activa en el gimnasio de esta sucursal.'
+      });
+    }
+
     const { data: membresiaVigente, error: membErr } = await db
       .from('membresia_socio')
       .select('id_membresia_socio, estado, fecha_inicio, fecha_vencimiento')
-      .eq('id_socio', targetSocioId)
+      .eq('id_socio_gimnasio', assocRow.id_socio_gimnasio)
       .eq('id_gimnasio', sucCheck.id_gimnasio)
-      .eq('estado', 'activa')
+      .in('estado', ['activa', 'programada'])
       .lte('fecha_inicio', hoyISO)
       .gte('fecha_vencimiento', hoyISO)
       .order('fecha_vencimiento', { ascending: false })

@@ -1407,17 +1407,50 @@ create trigger trg_validar_asistencia_socio_gimnasio
 before insert or update of id_socio, id_sucursal, hora_ingreso, hora_salida, estado on public.asistencia_socio
 for each row execute function public.trg_fn_validar_asistencia_socio_gimnasio();
 
-create or replace function public.trg_fn_proteger_propietario_ejercicio_sep()
+create or replace function public.trg_fn_proteger_ejercicio_socio()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, public
 as $$
 begin
+  if new.id_ejercicio_socio is distinct from old.id_ejercicio_socio
+     or new.id_socio is distinct from old.id_socio then
+    raise exception 'No está permitido transferir un ejercicio_socio.';
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.trg_fn_proteger_ejercicio_gimnasio()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public
+as $$
+begin
+  if new.id_ejercicio_gimnasio is distinct from old.id_ejercicio_gimnasio
+     or new.id_gimnasio is distinct from old.id_gimnasio then
+    raise exception 'No está permitido transferir un ejercicio_gimnasio.';
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.trg_fn_proteger_propietario_ejercicio_sep()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public
+as $$
+declare
+  v_new jsonb := to_jsonb(new);
+  v_old jsonb := to_jsonb(old);
+begin
   if tg_table_name = 'ejercicio_socio'
-     and (new.id_ejercicio_socio is distinct from old.id_ejercicio_socio or new.id_socio is distinct from old.id_socio) then
+     and ((v_new->>'id_ejercicio_socio') is distinct from (v_old->>'id_ejercicio_socio')
+       or (v_new->>'id_socio') is distinct from (v_old->>'id_socio')) then
     raise exception 'No está permitido transferir un ejercicio_socio.';
   elsif tg_table_name = 'ejercicio_gimnasio'
-     and (new.id_ejercicio_gimnasio is distinct from old.id_ejercicio_gimnasio or new.id_gimnasio is distinct from old.id_gimnasio) then
+     and ((v_new->>'id_ejercicio_gimnasio') is distinct from (v_old->>'id_ejercicio_gimnasio')
+       or (v_new->>'id_gimnasio') is distinct from (v_old->>'id_gimnasio')) then
     raise exception 'No está permitido transferir un ejercicio_gimnasio.';
   end if;
   return new;
@@ -1426,23 +1459,56 @@ $$;
 
 create trigger trg_proteger_ejercicio_socio
 before update on public.ejercicio_socio
-for each row execute function public.trg_fn_proteger_propietario_ejercicio_sep();
+for each row execute function public.trg_fn_proteger_ejercicio_socio();
 
 create trigger trg_proteger_ejercicio_gimnasio
 before update on public.ejercicio_gimnasio
-for each row execute function public.trg_fn_proteger_propietario_ejercicio_sep();
+for each row execute function public.trg_fn_proteger_ejercicio_gimnasio();
+
+create or replace function public.trg_fn_proteger_rutina_socio()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public
+as $$
+begin
+  if new.id_rutina_socio is distinct from old.id_rutina_socio
+     or new.id_socio is distinct from old.id_socio then
+    raise exception 'No está permitido transferir una rutina_socio.';
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.trg_fn_proteger_rutina_gimnasio()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public
+as $$
+begin
+  if new.id_rutina_gimnasio is distinct from old.id_rutina_gimnasio
+     or new.id_gimnasio is distinct from old.id_gimnasio then
+    raise exception 'No está permitido transferir una rutina_gimnasio.';
+  end if;
+  return new;
+end;
+$$;
 
 create or replace function public.trg_fn_proteger_propietario_rutina_sep()
 returns trigger
 language plpgsql
 set search_path = pg_catalog, public
 as $$
+declare
+  v_new jsonb := to_jsonb(new);
+  v_old jsonb := to_jsonb(old);
 begin
   if tg_table_name = 'rutina_socio'
-     and (new.id_rutina_socio is distinct from old.id_rutina_socio or new.id_socio is distinct from old.id_socio) then
+     and ((v_new->>'id_rutina_socio') is distinct from (v_old->>'id_rutina_socio')
+       or (v_new->>'id_socio') is distinct from (v_old->>'id_socio')) then
     raise exception 'No está permitido transferir una rutina_socio.';
   elsif tg_table_name = 'rutina_gimnasio'
-     and (new.id_rutina_gimnasio is distinct from old.id_rutina_gimnasio or new.id_gimnasio is distinct from old.id_gimnasio) then
+     and ((v_new->>'id_rutina_gimnasio') is distinct from (v_old->>'id_rutina_gimnasio')
+       or (v_new->>'id_gimnasio') is distinct from (v_old->>'id_gimnasio')) then
     raise exception 'No está permitido transferir una rutina_gimnasio.';
   end if;
   return new;
@@ -1451,11 +1517,11 @@ $$;
 
 create trigger trg_proteger_rutina_socio
 before update on public.rutina_socio
-for each row execute function public.trg_fn_proteger_propietario_rutina_sep();
+for each row execute function public.trg_fn_proteger_rutina_socio();
 
 create trigger trg_proteger_rutina_gimnasio
 before update on public.rutina_gimnasio
-for each row execute function public.trg_fn_proteger_propietario_rutina_sep();
+for each row execute function public.trg_fn_proteger_rutina_gimnasio();
 
 create or replace function public.trg_fn_validar_rutina_asignada()
 returns trigger
