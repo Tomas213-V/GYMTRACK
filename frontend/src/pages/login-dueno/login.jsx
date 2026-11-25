@@ -251,12 +251,7 @@ function Login() {
               ¿Eres socio?
             </Link>
 
-            <a
-              href="#recuperar"
-              onClick={handleRecuperar}
-            >
-              ¿Olvidaste tu contraseña?
-            </a>
+  
 
           </div>
 

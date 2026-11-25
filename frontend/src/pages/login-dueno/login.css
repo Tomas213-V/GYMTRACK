@@ -196,6 +196,10 @@
 
   margin-top: -8px;
 }
+.login-links a {
+  text-decoration: none;
+  color: #ff0000;
+}
 
 .login-links a:nth-child(1) {
   color: #02bfee;

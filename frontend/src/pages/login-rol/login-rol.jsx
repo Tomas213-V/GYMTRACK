@@ -153,9 +153,7 @@ export default function LoginRol({ rolFormulario = 'administrador' }) {
             {rolFormulario !== 'administrador' && <Link to="/login-administrador">Administrador</Link>}
             {rolFormulario !== 'empleado' && <Link to="/login-empleado">Empleado</Link>}
             <Link to="/login-socio">Socio</Link>
-            <a href="#recuperar" onClick={handleRecuperar}>
-              ¿Olvidaste tu contraseña?
-            </a>
+           
           </div>
 
           {recoveryMsg && (

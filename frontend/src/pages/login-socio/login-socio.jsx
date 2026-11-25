@@ -205,9 +205,7 @@ function LoginSocio() {
             <Link to="/login-administrador">Administrador</Link>
             <Link to="/login-empleado">Empleado</Link>
 
-            <a href="#recuperar" onClick={handleRecuperar}>
-              ¿Olvidaste tu contraseña?
-            </a>
+           
           </div>
 
           {recoveryMsg && (
@@ -243,12 +241,7 @@ function LoginSocio() {
           </button>
 
           {/* BOTÓN ACTIVAR CUENTA / CREAR CONTRASEÑA DE SOCIO */}
-          <Link
-            to="/register-socio"
-            className="register-button-login"
-          >
-            ¿Primera vez? Activar cuenta / Crear contraseña
-          </Link>
+          
         </form>
       </div>
     </main>
