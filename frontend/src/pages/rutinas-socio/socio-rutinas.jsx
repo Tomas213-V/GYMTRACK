@@ -5,7 +5,8 @@
  * PROYECTO: GYMTRACK - Frontend
  * DESCRIPCIÓN: Módulo interactivo de Rutinas del Socio:
  *   - Pestaña 1: Mis Rutinas Personales (`rutina_socio`, usando exclusivamente `ejercicio_socio`)
- *   - Pestaña 2: Rutinas Asignadas por el Gimnasio (`rutinas_asignadas_socio_gimnasio`, solo lectura)
+ *   - Pestaña 2: Rutinas del Gimnasio activo (`rutina_gimnasio` activas del gimnasio seleccionado, solo lectura)
+ *   - Pestaña 3: Rutinas Asignadas por el Gimnasio (`rutinas_asignadas_socio_gimnasio`, solo lectura)
  *   - Modo Entrenamiento Interactivo con cronómetro de sesión y descanso.
  * =========================================================================================
  */
@@ -16,6 +17,7 @@ import SidebarSocio from '../../components/sidebar-socio/sidebar-socio';
 import { useGymContext } from '../../context/GymContext';
 import {
   fetchRutinasResumen,
+  fetchRutinasGimnasio,
   fetchRutinaPersonalById,
   createRutinaPersonal,
   updateRutinaPersonal,
@@ -86,22 +88,38 @@ function parseDescripcion(desc) {
   return defaults;
 }
 
-export default function SocioRutinas() {
-  const { usuario, gimnasioActivo, gimnasioActivoId, contextVersion } = useGymContext();
-  const socioIdActual = usuario?.id_socio || null;
+const GRUPOS_MUSCULARES_BASE = [
+  'Pecho',
+  'Espalda',
+  'Piernas',
+  'Hombros',
+  'Brazos',
+  'Abdomen',
+  'Cardio',
+  'Cuerpo Completo',
+  'General'
+];
 
-  // Pestaña activa: 'personales' | 'asignadas'
+export default function SocioRutinas() {
+  const { token, gimnasioActivo, gimnasioActivoId, contextVersion } = useGymContext();
+
+  // Pestaña activa: 'personales' | 'gimnasio' | 'asignadas'
   const [tabActiva, setTabActiva] = useState('personales');
 
   // Datos
   const [rutinasPersonales, setRutinasPersonales] = useState([]);
+  const [rutinasGimnasio, setRutinasGimnasio] = useState([]);
   const [rutinasAsignadas, setRutinasAsignadas] = useState([]);
   const [ejerciciosPropios, setEjerciciosPropios] = useState([]);
+  const [ejerciciosGimnasio, setEjerciciosGimnasio] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [cargandoEjerciciosModal, setCargandoEjerciciosModal] = useState(false);
+  const [copiandoEjercicioId, setCopiandoEjercicioId] = useState(null);
   const [notificacion, setNotificacion] = useState('');
 
   // Selección
   const [selectedPersonal, setSelectedPersonal] = useState(null);
+  const [selectedGymRutina, setSelectedGymRutina] = useState(null);
   const [selectedAsignada, setSelectedAsignada] = useState(null);
 
   // Filtros
@@ -123,6 +141,7 @@ export default function SocioRutinas() {
   const [modalEjerciciosSeleccionados, setModalEjerciciosSeleccionados] = useState([]);
   const [modalSearchEj, setModalSearchEj] = useState('');
   const [modalFiltroGrupo, setModalFiltroGrupo] = useState('todos');
+  const [modalOrigenEj, setModalOrigenEj] = useState('propio'); // 'propio' | 'gimnasio'
   const [guardandoRutina, setGuardandoRutina] = useState(false);
 
   // Modal 2: Agregar / Editar Ejercicio Personal en Rutina Personal
@@ -161,24 +180,66 @@ export default function SocioRutinas() {
     setTimeout(() => setNotificacion(''), 5000);
   };
 
+  const cargarEjerciciosDisponibles = useCallback(async () => {
+    if (!token) return [];
+    setCargandoEjerciciosModal(true);
+    try {
+      const todos = await getEjerciciosSocio({
+        origen: 'todos',
+        id_gimnasio: gimnasioActivoId || null
+      });
+      const lista = Array.isArray(todos) ? todos : [];
+      const propios = lista.filter((e) => e.es_propio || e.id_ejercicio_socio != null);
+      const delGym = lista.filter((e) => e.es_gimnasio || (!e.es_propio && e.id_ejercicio_gimnasio != null));
+      setEjerciciosPropios(propios);
+      setEjerciciosGimnasio(delGym);
+      return propios;
+    } catch (err) {
+      console.error('Error cargando ejercicios del socio:', err);
+      return [];
+    } finally {
+      setCargandoEjerciciosModal(false);
+    }
+  }, [token, gimnasioActivoId]);
+
   const cargarTodo = useCallback(async (preservarPersonalId = null) => {
-    if (!socioIdActual) {
+    if (!token) {
       setLoading(false);
       return;
     }
     try {
       setLoading(true);
-      const [resumen, misEj] = await Promise.all([
-        fetchRutinasResumen(),
-        getEjerciciosSocio({ origen: 'propio' })
+      const [resumenRes, ejRes] = await Promise.allSettled([
+        fetchRutinasResumen({ id_gimnasio: gimnasioActivoId || null }),
+        getEjerciciosSocio({ origen: 'todos', id_gimnasio: gimnasioActivoId || null })
       ]);
 
-      const personales = Array.isArray(resumen?.rutinas_personales) ? resumen.rutinas_personales : [];
-      const asignadas = Array.isArray(resumen?.rutinas_asignadas) ? resumen.rutinas_asignadas : [];
+      if (ejRes.status === 'fulfilled') {
+        const listaEj = Array.isArray(ejRes.value) ? ejRes.value : [];
+        setEjerciciosPropios(listaEj.filter((e) => e.es_propio || e.id_ejercicio_socio != null));
+        setEjerciciosGimnasio(listaEj.filter((e) => e.es_gimnasio || (!e.es_propio && e.id_ejercicio_gimnasio != null)));
+      }
+
+      if (resumenRes.status === 'rejected') {
+        throw resumenRes.reason;
+      }
+
+      const resumen = resumenRes.value || {};
+      const personales = Array.isArray(resumen.rutinas_personales) ? resumen.rutinas_personales : [];
+      const asignadas = Array.isArray(resumen.rutinas_asignadas) ? resumen.rutinas_asignadas : [];
+      let delGimnasio = Array.isArray(resumen.rutinas_gimnasio) ? resumen.rutinas_gimnasio : null;
+
+      if (delGimnasio === null && gimnasioActivoId) {
+        delGimnasio = await fetchRutinasGimnasio({
+          id_gimnasio: gimnasioActivoId,
+          solo_activas: true
+        }).catch(() => []);
+      }
+      const listaGym = Array.isArray(delGimnasio) ? delGimnasio : [];
 
       setRutinasPersonales(personales);
+      setRutinasGimnasio(listaGym);
       setRutinasAsignadas(asignadas);
-      setEjerciciosPropios(Array.isArray(misEj) ? misEj : []);
 
       setSelectedPersonal((prev) => {
         if (personales.length === 0) return null;
@@ -189,6 +250,14 @@ export default function SocioRutinas() {
           return personales.find((r) => r.id_rutina_socio === prev.id_rutina_socio) || personales[0];
         }
         return personales.find((r) => r.estado === true) || personales[0];
+      });
+
+      setSelectedGymRutina((prev) => {
+        if (listaGym.length === 0) return null;
+        if (prev) {
+          return listaGym.find((r) => r.id_rutina_gimnasio === prev.id_rutina_gimnasio) || listaGym[0];
+        }
+        return listaGym[0];
       });
 
       setSelectedAsignada((prev) => {
@@ -204,11 +273,11 @@ export default function SocioRutinas() {
     } finally {
       setLoading(false);
     }
-  }, [socioIdActual]);
+  }, [token, gimnasioActivoId]);
 
   useEffect(() => {
     cargarTodo();
-  }, [cargarTodo, gimnasioActivoId, contextVersion]);
+  }, [cargarTodo, contextVersion]);
 
   // Cronómetro de sesión
   useEffect(() => {
@@ -275,6 +344,35 @@ export default function SocioRutinas() {
     [rutinasAsignadas]
   );
 
+  const idsRutinasAsignadasActivas = useMemo(
+    () =>
+      new Set(
+        rutinasAsignadas
+          .filter((a) => a.estado === true && a.id_rutina_gimnasio != null)
+          .map((a) => Number(a.id_rutina_gimnasio))
+      ),
+    [rutinasAsignadas]
+  );
+
+  const gymRutinasFiltradas = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    return rutinasGimnasio.filter((r) => {
+      if (!q) return true;
+      const nom = (r.nombre || '').toLowerCase();
+      const nivel = (r.nivel || '').toLowerCase();
+      const desc = (r.descripcion || '').toLowerCase();
+      return nom.includes(q) || nivel.includes(q) || desc.includes(q);
+    });
+  }, [rutinasGimnasio, searchText]);
+
+  const gruposMuscularesModal = useMemo(() => {
+    const setGrupos = new Set(GRUPOS_MUSCULARES_BASE);
+    [...ejerciciosPropios, ...ejerciciosGimnasio].forEach((ej) => {
+      if (ej?.grupo_muscular) setGrupos.add(ej.grupo_muscular);
+    });
+    return Array.from(setGrupos);
+  }, [ejerciciosPropios, ejerciciosGimnasio]);
+
   // --------------------------------------------------------------------------
   // Acciones sobre Rutinas Personales (`rutina_socio`)
   // --------------------------------------------------------------------------
@@ -303,7 +401,10 @@ export default function SocioRutinas() {
     setModalEjerciciosSeleccionados([]);
     setModalSearchEj('');
     setModalFiltroGrupo('todos');
+    setModalOrigenEj('propio');
     setShowRutinaModal(true);
+    // Siempre refrescar ejercicios disponibles al abrir el modal para asegurar que se vean los más recientes
+    cargarEjerciciosDisponibles();
   };
 
   const handleOpenEditarRutina = (rutina) => {
@@ -431,6 +532,9 @@ export default function SocioRutinas() {
       orden: items.length + 1
     });
     setShowAddEjModal(true);
+    if (ejerciciosPropios.length === 0) {
+      cargarEjerciciosDisponibles();
+    }
   };
 
   const handleOpenEditEjercicio = (item) => {
@@ -539,8 +643,10 @@ export default function SocioRutinas() {
       setShowCustomEjModal(false);
       setCustomEjFormData({ nombre: '', grupo_muscular: 'Pecho', dificultad: 'Intermedia', descripcion: '' });
 
-      const misEj = await getEjerciciosSocio({ origen: 'propio' }).catch(() => []);
-      setEjerciciosPropios(Array.isArray(misEj) ? misEj : []);
+      const misEj = await cargarEjerciciosDisponibles();
+      if (misEj.length > 0 && showAddEjModal && !nuevo?.id_ejercicio_socio) {
+        setEjercicioFormData((prev) => ({ ...prev, id_ejercicio_socio: misEj[0].id_ejercicio_socio }));
+      }
 
       if (showRutinaModal && nuevo?.id_ejercicio_socio) {
         setModalEjerciciosSeleccionados((prev) => [
@@ -569,7 +675,73 @@ export default function SocioRutinas() {
     }
   };
 
-  // Iniciar Modo Entrenamiento (soporta rutina personal o asignada)
+  // Copiar un ejercicio del catálogo del gimnasio a los ejercicios personales del socio y seleccionarlo
+  const handleCopiarEjercicioGymAPropio = async (ejGym) => {
+    const yaExiste = ejerciciosPropios.find(
+      (e) => (e.nombre || '').trim().toLowerCase() === (ejGym.nombre || '').trim().toLowerCase()
+    );
+    if (yaExiste) {
+      const yaSeleccionado = modalEjerciciosSeleccionados.some(
+        (it) => it.id_ejercicio_socio === yaExiste.id_ejercicio_socio
+      );
+      if (!yaSeleccionado) {
+        handleToggleEjercicioModal(yaExiste);
+      }
+      setModalOrigenEj('propio');
+      showToast(`"${yaExiste.nombre}" ya estaba en tus ejercicios y quedó seleccionado.`);
+      return;
+    }
+
+    setCopiandoEjercicioId(ejGym.id_ejercicio_gimnasio);
+    try {
+      const nuevo = await crearEjercicioSocio({
+        nombre: ejGym.nombre,
+        grupo_muscular: ejGym.grupo_muscular || 'General',
+        dificultad: ejGym.dificultad || 'Intermedia',
+        descripcion: ejGym.descripcion || null
+      });
+      await cargarEjerciciosDisponibles();
+      if (nuevo?.id_ejercicio_socio) {
+        setModalEjerciciosSeleccionados((prev) => [
+          ...prev,
+          {
+            id_ejercicio_socio: nuevo.id_ejercicio_socio,
+            nombre: nuevo.nombre,
+            grupo_muscular: nuevo.grupo_muscular || 'General',
+            series: 4,
+            repeticiones: 10,
+            peso: 0,
+            descanso: 60
+          }
+        ]);
+      }
+      showToast(`"${ejGym.nombre}" copiado a tus ejercicios y agregado a la rutina.`);
+    } catch (err) {
+      alert(err.message || 'No se pudo copiar el ejercicio del gimnasio.');
+    } finally {
+      setCopiandoEjercicioId(null);
+    }
+  };
+
+  // Iniciar Modo Entrenamiento (soporta rutina personal, de gimnasio o asignada)
+  const handleIniciarEntrenamientoGimnasio = (rutinaGym) => {
+    const items = (rutinaGym?.rutina_ejercicio_gimnasio || []).map((it, idx) => ({
+      key: it.id_rutina_ejercicio_gimnasio || idx,
+      nombre: it.ejercicio_gimnasio?.nombre || 'Ejercicio',
+      grupo: it.ejercicio_gimnasio?.grupo_muscular || 'General',
+      series: it.series || 4,
+      repeticiones: it.repeticiones || 10,
+      peso: it.peso || 0,
+      descanso: it.descanso || 60
+    }));
+    setWorkoutPayload({ nombre: rutinaGym?.nombre || 'Rutina del Gimnasio', items });
+    setEjerciciosCompletados({});
+    setWorkoutTimerSeconds(0);
+    setRestTimerSeconds(null);
+    setTimerActivo(false);
+    setWorkoutModalOpen(true);
+  };
+
   const handleIniciarEntrenamientoPersonal = (rutina) => {
     const items = (rutina.rutina_ejercicio_socio || []).map((it, idx) => ({
       key: it.id_rutina_ejercicio_socio || idx,
@@ -626,7 +798,19 @@ export default function SocioRutinas() {
   };
 
   const catalogoPropioFiltrado = ejerciciosPropios.filter((ej) => {
-    if (modalFiltroGrupo !== 'todos' && ej.grupo_muscular !== modalFiltroGrupo) return false;
+    if (modalFiltroGrupo !== 'todos' && (ej.grupo_muscular || 'General') !== modalFiltroGrupo) return false;
+    if (modalSearchEj.trim()) {
+      const q = modalSearchEj.toLowerCase();
+      return (
+        (ej.nombre || '').toLowerCase().includes(q) ||
+        (ej.grupo_muscular || '').toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
+  const catalogoGymFiltrado = ejerciciosGimnasio.filter((ej) => {
+    if (modalFiltroGrupo !== 'todos' && (ej.grupo_muscular || 'General') !== modalFiltroGrupo) return false;
     if (modalSearchEj.trim()) {
       const q = modalSearchEj.toLowerCase();
       return (
@@ -639,6 +823,9 @@ export default function SocioRutinas() {
 
   const selectedPersonalMeta = selectedPersonal ? parseDescripcion(selectedPersonal.descripcion) : null;
   const ejerciciosDePersonal = selectedPersonal?.rutina_ejercicio_socio || [];
+
+  const selectedGymMeta = selectedGymRutina ? parseDescripcion(selectedGymRutina.descripcion) : null;
+  const ejerciciosDeGymRutina = selectedGymRutina?.rutina_ejercicio_gimnasio || [];
 
   const selectedAsignadaRut = selectedAsignada?.rutina_gimnasio || null;
   const selectedAsignadaMeta = selectedAsignadaRut ? parseDescripcion(selectedAsignadaRut.descripcion) : null;
@@ -674,7 +861,7 @@ export default function SocioRutinas() {
                 <div>
                   <h1>Mis Rutinas de Entrenamiento</h1>
                   <p>
-                    Gestioná tus rutinas personales (con tus propios ejercicios) y consultá las rutinas asignadas por {gimnasioActivo?.nombre || 'tus gimnasios'}.
+                    Gestioná tus rutinas personales, explorá las rutinas de {gimnasioActivo?.nombre || 'tu gimnasio activo'} y consultá las que te asignaron.
                   </p>
                 </div>
               </div>
@@ -711,11 +898,21 @@ export default function SocioRutinas() {
 
               <div className="sr-metric-card">
                 <div className="sr-metric-icon-wrap" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>
+                  <FaBuilding />
+                </div>
+                <div className="sr-metric-data">
+                  <h3>{rutinasGimnasio.length}</h3>
+                  <p>Rutinas de {gimnasioActivo?.nombre || 'Mi Gimnasio'}</p>
+                </div>
+              </div>
+
+              <div className="sr-metric-card">
+                <div className="sr-metric-icon-wrap" style={{ background: 'rgba(250, 204, 21, 0.15)', color: '#facc15' }}>
                   <FaCrown />
                 </div>
                 <div className="sr-metric-data">
                   <h3>{asignadasActivasCount}</h3>
-                  <p>Asignadas Activas por Gimnasio</p>
+                  <p>Asignadas Activas</p>
                 </div>
               </div>
 
@@ -743,10 +940,17 @@ export default function SocioRutinas() {
               </button>
               <button
                 type="button"
+                className={tabActiva === 'gimnasio' ? 'sr-btn-primary' : 'sr-btn-secondary'}
+                onClick={() => setTabActiva('gimnasio')}
+              >
+                <FaBuilding /> Rutinas de {gimnasioActivo?.nombre || 'Mi Gimnasio'} ({rutinasGimnasio.length})
+              </button>
+              <button
+                type="button"
                 className={tabActiva === 'asignadas' ? 'sr-btn-primary' : 'sr-btn-secondary'}
                 onClick={() => setTabActiva('asignadas')}
               >
-                <FaBuilding /> Asignadas por Gimnasio ({rutinasAsignadas.length})
+                <FaCrown /> Asignadas a mí ({rutinasAsignadas.length})
               </button>
             </div>
 
@@ -761,18 +965,20 @@ export default function SocioRutinas() {
                 />
               </div>
 
-              <div className="sr-filter-select-wrap">
-                <span style={{ fontSize: '12px', color: '#94a3b8' }}>Estado:</span>
-                <select
-                  value={filtroEstado}
-                  onChange={(e) => setFiltroEstado(e.target.value)}
-                  className="sr-select-filter"
-                >
-                  <option value="todos">Todas</option>
-                  <option value="activa">Solo activas</option>
-                  <option value="inactiva">{tabActiva === 'personales' ? 'Pausadas' : 'Finalizadas'}</option>
-                </select>
-              </div>
+              {tabActiva !== 'gimnasio' && (
+                <div className="sr-filter-select-wrap">
+                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>Estado:</span>
+                  <select
+                    value={filtroEstado}
+                    onChange={(e) => setFiltroEstado(e.target.value)}
+                    className="sr-select-filter"
+                  >
+                    <option value="todos">Todas</option>
+                    <option value="activa">Solo activas</option>
+                    <option value="inactiva">{tabActiva === 'personales' ? 'Pausadas' : 'Finalizadas'}</option>
+                  </select>
+                </div>
+              )}
 
               <button
                 type="button"
@@ -1033,8 +1239,196 @@ export default function SocioRutinas() {
                   )}
                 </div>
               </div>
+            ) : tabActiva === 'gimnasio' ? (
+              /* PESTAÑA 2: CATÁLOGO DE RUTINAS DEL GIMNASIO ACTIVO (SOLO LECTURA + WORKOUT MODE) */
+              <div className="sr-master-detail-grid">
+                <div className="sr-left-panel">
+                  <div className="sr-panel-header">
+                    <h2>Rutinas de {gimnasioActivo?.nombre || 'tu Gimnasio'}</h2>
+                    <span className="sr-count-pill">{gymRutinasFiltradas.length}</span>
+                  </div>
+
+                  {loading ? (
+                    <div style={{ textAlign: 'center', padding: '50px 0', color: '#94a3b8' }}>Cargando rutinas del gimnasio...</div>
+                  ) : gymRutinasFiltradas.length === 0 ? (
+                    <div className="sr-empty-card">
+                      <FaBuilding style={{ fontSize: '42px', opacity: 0.3, marginBottom: '12px' }} />
+                      <h3>Sin rutinas disponibles</h3>
+                      <p>
+                        {gimnasioActivo?.nombre
+                          ? `${gimnasioActivo.nombre} todavía no publicó rutinas activas para sus socios.`
+                          : 'Seleccioná un gimnasio activo para explorar sus rutinas disponibles.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="sr-cards-stack">
+                      {gymRutinasFiltradas.map((rg) => {
+                        const isSelected = selectedGymRutina?.id_rutina_gimnasio === rg.id_rutina_gimnasio;
+                        const cantEj = rg.rutina_ejercicio_gimnasio?.length || 0;
+                        const meta = parseDescripcion(rg.descripcion);
+                        const yaAsignada = idsRutinasAsignadasActivas.has(Number(rg.id_rutina_gimnasio));
+
+                        return (
+                          <div
+                            key={rg.id_rutina_gimnasio}
+                            className={`sr-routine-card ${isSelected ? 'selected' : ''} is-active-card`}
+                            onClick={() => setSelectedGymRutina(rg)}
+                          >
+                            <div className="sr-routine-card-top">
+                              <div className="sr-routine-card-icon"><FaBuilding /></div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                  <h4 className="sr-routine-card-title">{rg.nombre}</h4>
+                                  {yaAsignada ? (
+                                    <span className="sr-badge-activa"><FaCrown style={{ fontSize: '10px' }} /> ASIGNADA</span>
+                                  ) : (
+                                    <span className="sr-badge-gym-rutina">GIMNASIO</span>
+                                  )}
+                                </div>
+                                <p className="sr-routine-card-type">
+                                  Nivel: {rg.nivel || meta.dificultad || 'General'} • {cantEj} ejercicios
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="sr-routine-card-details">
+                              <div className="sr-detail-item">
+                                <FaBuilding style={{ color: '#38bdf8' }} />
+                                <span>{gimnasioActivo?.nombre || 'Gimnasio activo'}</span>
+                              </div>
+                              <div className="sr-detail-item">
+                                <FaListUl style={{ color: '#c084fc' }} />
+                                <span>{cantEj} ejercicios</span>
+                              </div>
+                            </div>
+
+                            <div className="sr-routine-card-actions">
+                              <button
+                                type="button"
+                                className="sr-btn-card-action train"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleIniciarEntrenamientoGimnasio(rg);
+                                }}
+                              >
+                                <FaPlay style={{ fontSize: '10px' }} /> Entrenar
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* DETALLE RUTINA DEL GIMNASIO */}
+                <div className="sr-right-panel">
+                  {selectedGymRutina ? (
+                    <div>
+                      <div className="sr-detail-header-card">
+                        <div className="sr-detail-header-top">
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                              <h2>{selectedGymRutina.nombre}</h2>
+                              <span className="sr-badge-gym-rutina">
+                                <FaBuilding style={{ fontSize: '10px' }} /> {gimnasioActivo?.nombre || 'GIMNASIO'}
+                              </span>
+                              {idsRutinasAsignadasActivas.has(Number(selectedGymRutina.id_rutina_gimnasio)) && (
+                                <span className="sr-badge-activa">
+                                  <FaCrown style={{ fontSize: '10px' }} /> ASIGNADA A VOS
+                                </span>
+                              )}
+                            </div>
+                            <p style={{ color: '#94a3b8', fontSize: '13.5px', margin: '6px 0 0 0' }}>
+                              {selectedGymMeta?.objetivo && selectedGymMeta.objetivo !== 'Entrenamiento general'
+                                ? selectedGymMeta.objetivo
+                                : `Rutina oficial disponible en ${gimnasioActivo?.nombre || 'tu gimnasio activo'} (solo lectura)`}
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            className="sr-btn-primary"
+                            onClick={() => handleIniciarEntrenamientoGimnasio(selectedGymRutina)}
+                          >
+                            <FaPlay /> Iniciar Entrenamiento
+                          </button>
+                        </div>
+
+                        <div className="sr-detail-pills-row">
+                          <span className="sr-meta-pill"><strong>Nivel:</strong> {selectedGymRutina.nivel || selectedGymMeta?.dificultad || 'General'}</span>
+                          <span className="sr-meta-pill"><strong>Ejercicios:</strong> {ejerciciosDeGymRutina.length}</span>
+                          {selectedGymMeta?.duracion && (
+                            <span className="sr-meta-pill"><strong>Duración:</strong> {selectedGymMeta.duracion}</span>
+                          )}
+                        </div>
+
+                        {selectedGymMeta?.notas && (
+                          <div className="sr-detail-notes-box">
+                            <FaInfoCircle style={{ color: '#38bdf8', marginTop: '3px', flexShrink: 0 }} />
+                            <span>{selectedGymMeta.notas}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="sr-exercises-section">
+                        <div className="sr-section-title-row">
+                          <h3>Ejercicios de la Rutina ({ejerciciosDeGymRutina.length})</h3>
+                        </div>
+
+                        {ejerciciosDeGymRutina.length === 0 ? (
+                          <div className="sr-empty-exercises">
+                            <FaDumbbell style={{ fontSize: '30px', opacity: 0.3 }} />
+                            <p>Esta rutina del gimnasio aún no tiene ejercicios cargados.</p>
+                          </div>
+                        ) : (
+                          <div className="sr-exercise-items-list">
+                            {ejerciciosDeGymRutina.map((item, idx) => {
+                              const ej = item.ejercicio_gimnasio || {};
+                              return (
+                                <div key={item.id_rutina_ejercicio_gimnasio || idx} className="sr-exercise-item-card">
+                                  <div className="sr-exercise-order-badge">{item.orden || idx + 1}</div>
+                                  <div className="sr-exercise-item-info">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <h4>{ej.nombre || 'Ejercicio del gimnasio'}</h4>
+                                      <span className="sr-tag-origen gimnasio">Gym oficial</span>
+                                    </div>
+                                    <p className="sr-exercise-item-muscle">
+                                      {ej.grupo_muscular || 'General'} • {ej.dificultad || 'Intermedia'}
+                                    </p>
+                                  </div>
+                                  <div className="sr-exercise-stats-box">
+                                    <div className="sr-stat-col">
+                                      <span className="label">Series × Reps</span>
+                                      <span className="value">{item.series || 4} × {item.repeticiones || 10}</span>
+                                    </div>
+                                    <div className="sr-stat-col">
+                                      <span className="label">Carga</span>
+                                      <span className="value">{item.peso && item.peso > 0 ? `${item.peso} kg` : 'Corporal'}</span>
+                                    </div>
+                                    <div className="sr-stat-col">
+                                      <span className="label">Descanso</span>
+                                      <span className="value">{item.descanso ?? 60}s</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="sr-no-selection">
+                      <FaBuilding style={{ fontSize: '48px', opacity: 0.3, marginBottom: '14px' }} />
+                      <h3>Seleccioná una rutina del gimnasio</h3>
+                      <p>Hacé clic en cualquiera de las rutinas publicadas por {gimnasioActivo?.nombre || 'tu gimnasio'} para ver sus ejercicios y entrenar.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             ) : (
-              /* PESTAÑA 2: RUTINAS ASIGNADAS POR EL GIMNASIO (SOLO LECTURA + WORKOUT MODE) */
+              /* PESTAÑA 3: RUTINAS ASIGNADAS POR EL GIMNASIO (SOLO LECTURA + WORKOUT MODE) */
               <div className="sr-master-detail-grid">
                 <div className="sr-left-panel">
                   <div className="sr-panel-header">
@@ -1330,9 +1724,9 @@ export default function SocioRutinas() {
                   <div className="sr-modal-exercises-selector">
                     <div className="sr-selector-header">
                       <div>
-                        <h4>Seleccioná tus ejercicios personales</h4>
+                        <h4>Seleccioná ejercicios para tu rutina</h4>
                         <p style={{ margin: 0, fontSize: '12.5px', color: '#94a3b8' }}>
-                          Las rutinas personales utilizan tus ejercicios propios ({modalEjerciciosSeleccionados.length} seleccionados)
+                          Elegí tus ejercicios personales o copiá ejercicios de {gimnasioActivo?.nombre || 'tu gimnasio'} ({modalEjerciciosSeleccionados.length} seleccionados)
                         </p>
                       </div>
                       <button
@@ -1344,12 +1738,46 @@ export default function SocioRutinas() {
                       </button>
                     </div>
 
+                    <div className="sr-selector-tabs">
+                      <button
+                        type="button"
+                        className={`sr-selector-tab-btn ${modalOrigenEj === 'propio' ? 'active' : ''}`}
+                        onClick={() => setModalOrigenEj('propio')}
+                      >
+                        <FaStar style={{ fontSize: '11px' }} /> Mis ejercicios ({ejerciciosPropios.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={`sr-selector-tab-btn gym ${modalOrigenEj === 'gimnasio' ? 'active' : ''}`}
+                        onClick={() => setModalOrigenEj('gimnasio')}
+                      >
+                        <FaBuilding style={{ fontSize: '11px' }} /> Del gimnasio ({ejerciciosGimnasio.length})
+                      </button>
+                    </div>
+
+                    {modalEjerciciosSeleccionados.length > 0 && (
+                      <div className="sr-selected-chips">
+                        {modalEjerciciosSeleccionados.map((sel) => (
+                          <span key={sel.id_ejercicio_socio} className="sr-selected-chip">
+                            {sel.nombre}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleEjercicioModal(sel)}
+                              title="Quitar de la rutina"
+                            >
+                              <FaTimes />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
                     <div className="sr-selector-filter-row">
                       <div className="sr-search-box-sm">
                         <FaSearch style={{ color: '#64748b' }} />
                         <input
                           type="text"
-                          placeholder="Buscar entre mis ejercicios..."
+                          placeholder={modalOrigenEj === 'propio' ? 'Buscar entre mis ejercicios...' : 'Buscar ejercicios del gimnasio...'}
                           value={modalSearchEj}
                           onChange={(e) => setModalSearchEj(e.target.value)}
                         />
@@ -1360,39 +1788,88 @@ export default function SocioRutinas() {
                         onChange={(e) => setModalFiltroGrupo(e.target.value)}
                       >
                         <option value="todos">Todos los músculos</option>
-                        <option value="Pecho">Pecho</option>
-                        <option value="Espalda">Espalda</option>
-                        <option value="Piernas">Piernas</option>
-                        <option value="Hombros">Hombros</option>
-                        <option value="Brazos">Brazos</option>
-                        <option value="Abdomen">Abdomen</option>
+                        {gruposMuscularesModal.map((grupo) => (
+                          <option key={grupo} value={grupo}>{grupo}</option>
+                        ))}
                       </select>
                     </div>
 
                     <div className="sr-selector-list">
-                      {catalogoPropioFiltrado.length === 0 ? (
-                        <p style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>
-                          Todavía no tenés ejercicios propios cargados. Creá uno desde "+ Crear mi ejercicio".
+                      {cargandoEjerciciosModal ? (
+                        <p style={{ textAlign: 'center', padding: '20px', color: '#94a3b8', margin: 0 }}>
+                          Cargando ejercicios disponibles...
+                        </p>
+                      ) : modalOrigenEj === 'propio' ? (
+                        catalogoPropioFiltrado.length === 0 ? (
+                          <p style={{ textAlign: 'center', padding: '20px', color: '#64748b', margin: 0 }}>
+                            {ejerciciosPropios.length === 0
+                              ? 'Todavía no tenés ejercicios propios cargados. Creá uno desde "+ Crear mi ejercicio" o copiá alguno desde la pestaña "Del gimnasio".'
+                              : 'No se encontraron ejercicios propios con ese filtro.'}
+                          </p>
+                        ) : (
+                          catalogoPropioFiltrado.map((ej) => {
+                            const isSelected = modalEjerciciosSeleccionados.some(
+                              (it) => it.id_ejercicio_socio === ej.id_ejercicio_socio
+                            );
+                            return (
+                              <div
+                                key={ej.id_ejercicio_socio}
+                                className={`sr-selector-item ${isSelected ? 'selected' : ''}`}
+                                onClick={() => handleToggleEjercicioModal(ej)}
+                              >
+                                <div className="sr-selector-checkbox">{isSelected ? <FaCheck /> : null}</div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span className="sr-item-name">{ej.nombre}</span>
+                                    <span className="sr-tag-origen-sm propio">Mi ejercicio</span>
+                                  </div>
+                                  <span className="sr-item-muscle">{ej.grupo_muscular || 'General'} • {ej.dificultad || 'Intermedia'}</span>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )
+                      ) : catalogoGymFiltrado.length === 0 ? (
+                        <p style={{ textAlign: 'center', padding: '20px', color: '#64748b', margin: 0 }}>
+                          No se encontraron ejercicios del gimnasio con ese filtro.
                         </p>
                       ) : (
-                        catalogoPropioFiltrado.map((ej) => {
-                          const isSelected = modalEjerciciosSeleccionados.some(
-                            (it) => it.id_ejercicio_socio === ej.id_ejercicio_socio
+                        catalogoGymFiltrado.map((ej) => {
+                          const yaCopiado = ejerciciosPropios.find(
+                            (p) => (p.nombre || '').trim().toLowerCase() === (ej.nombre || '').trim().toLowerCase()
                           );
+                          const yaSeleccionado = yaCopiado
+                            ? modalEjerciciosSeleccionados.some((it) => it.id_ejercicio_socio === yaCopiado.id_ejercicio_socio)
+                            : false;
+                          const estaCopiando = copiandoEjercicioId === ej.id_ejercicio_gimnasio;
                           return (
                             <div
-                              key={ej.id_ejercicio_socio}
-                              className={`sr-selector-item ${isSelected ? 'selected' : ''}`}
-                              onClick={() => handleToggleEjercicioModal(ej)}
+                              key={ej.id_ejercicio_gimnasio}
+                              className={`sr-selector-item ${yaSeleccionado ? 'selected' : ''}`}
+                              onClick={() => handleCopiarEjercicioGymAPropio(ej)}
                             >
-                              <div className="sr-selector-checkbox">{isSelected ? <FaCheck /> : null}</div>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                   <span className="sr-item-name">{ej.nombre}</span>
-                                  <span className="sr-tag-origen-sm propio">Propio</span>
+                                  <span className="sr-tag-origen-sm gym">Gimnasio</span>
                                 </div>
-                                <span className="sr-item-muscle">{ej.grupo_muscular} • {ej.dificultad}</span>
+                                <span className="sr-item-muscle">{ej.grupo_muscular || 'General'} • {ej.dificultad || 'Intermedia'}</span>
                               </div>
+                              <button
+                                type="button"
+                                className="sr-btn-copy-ej"
+                                disabled={estaCopiando}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopiarEjercicioGymAPropio(ej);
+                                }}
+                              >
+                                {estaCopiando
+                                  ? 'Agregando...'
+                                  : yaSeleccionado
+                                    ? <><FaCheck /> Agregado</>
+                                    : <><FaPlus /> Usar en rutina</>}
+                              </button>
                             </div>
                           );
                         })

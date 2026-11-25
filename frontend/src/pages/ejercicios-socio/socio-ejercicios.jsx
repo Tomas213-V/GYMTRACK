@@ -54,6 +54,7 @@ export default function SocioEjercicios() {
     try {
       const data = await getEjerciciosSocio({
         origen: filtroOrigen,
+        id_gimnasio: filtroOrigen !== 'propio' ? (gimnasioActivoId || null) : null,
         grupo_muscular: filtroGrupo,
         search: searchTerm,
         signal

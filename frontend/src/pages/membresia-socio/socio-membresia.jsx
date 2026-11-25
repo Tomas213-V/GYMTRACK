@@ -81,6 +81,7 @@ export default function SocioMembresia() {
   const [socio, setSocio] = useState(null);
   const [gimnasio, setGimnasio] = useState(gimnasioActivo || null);
   const [membresia, setMembresia] = useState(null);
+  const [membresiaProgramada, setMembresiaProgramada] = useState(null);
   const [historialPagos, setHistorialPagos] = useState([]);
 
   // Catálogo multigimnasio y planes disponibles
@@ -119,6 +120,7 @@ export default function SocioMembresia() {
       } else {
         setMembresia(null);
       }
+      setMembresiaProgramada(data.membresia_programada || null);
       setHistorialPagos(Array.isArray(data.historial_pagos) ? data.historial_pagos : []);
     } catch (err) {
       console.warn('Error al cargar membresía del socio:', err.message);
@@ -407,7 +409,11 @@ export default function SocioMembresia() {
                         <p>
                           {membresia.estado === 'activa'
                             ? 'Membresía activa'
-                            : (membresia.estado === 'vencida' ? 'Membresía vencida' : 'Membresía')}
+                            : membresia.estado === 'programada'
+                              ? 'Membresía programada (próximo inicio)'
+                              : membresia.estado === 'pendiente'
+                                ? 'Pendiente de acreditación de pago'
+                                : (membresia.estado === 'vencida' ? 'Membresía vencida' : 'Membresía')}
                         </p>
                       </div>
                     </div>
@@ -465,6 +471,29 @@ export default function SocioMembresia() {
                       />
                     </div>
                   </div>
+
+                  {membresiaProgramada && (
+                    <div
+                      style={{
+                        marginTop: '14px',
+                        padding: '10px 14px',
+                        borderRadius: '10px',
+                        background: 'rgba(56, 189, 248, 0.1)',
+                        border: '1px solid rgba(56, 189, 248, 0.3)',
+                        color: '#bae6fd',
+                        fontSize: '12.5px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      <FaCalendarAlt style={{ color: '#38bdf8', flexShrink: 0 }} />
+                      <span>
+                        <strong>Próxima renovación programada:</strong> {membresiaProgramada.nombre_plan} del{' '}
+                        {membresiaProgramada.fecha_inicio_formateada} al {membresiaProgramada.fecha_vencimiento_formateada}.
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="membresia-sin-activo-wrapper">

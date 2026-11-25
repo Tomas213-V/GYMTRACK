@@ -181,35 +181,85 @@ export default function MembresiaAdmin() {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
+  const calcularDiasHastaInicio = (fechaIni) => {
+    if (!fechaIni) return null;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const ini = new Date(fechaIni.split('T')[0] + 'T00:00:00');
+    const diffTime = ini - hoy;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  const getSocioAsociacionKey = (memb) =>
+    memb?.id_socio_gimnasio ??
+    memb?.socio_gimnasio?.id_socio_gimnasio ??
+    getSocioIdFromMembresia(memb) ??
+    null;
+
   const obtenerEstadoMembresia = (memb) => {
-    const est = typeof memb?.estado === 'boolean'
-      ? (memb.estado ? 'activa' : 'cancelada')
-      : String(memb?.estado ?? '').toLowerCase().trim();
+    const estRaw = memb?.estado_efectivo ?? memb?.estado;
+    const est = typeof estRaw === 'boolean'
+      ? (estRaw ? 'activa' : 'cancelada')
+      : String(estRaw ?? '').toLowerCase().trim();
     if (est === 'cancelada' || est === 'cancelado') return 'cancelada';
     if (est === 'pendiente') return 'pendiente';
-    const dias = calcularDiasRestantes(memb?.fecha_vencimiento);
-    if (est === 'vencida' || est === 'vencido' || (dias !== null && dias < 0)) return 'vencida';
+    const diasVenc = calcularDiasRestantes(memb?.fecha_vencimiento);
+    if (est === 'vencida' || est === 'vencido' || (diasVenc !== null && diasVenc < 0)) return 'vencida';
+    const diasIni = calcularDiasHastaInicio(memb?.fecha_inicio);
+    if (est === 'programada' || est === 'programado' || (diasIni !== null && diasIni > 0)) return 'programada';
     if (est === 'activa' || est === 'activo' || !est) return 'activa';
     return est;
+  };
+
+  const obtenerUltimoVencimientoVigenteDeSocio = (socioId) => {
+    if (!socioId) return null;
+    const fechas = membresias
+      .filter((m) => {
+        if (String(getSocioIdFromMembresia(m)) !== String(socioId)) return false;
+        const est = obtenerEstadoMembresia(m);
+        return est === 'activa' || est === 'programada';
+      })
+      .map((m) => (m.fecha_vencimiento ? m.fecha_vencimiento.split('T')[0] : null))
+      .filter(Boolean)
+      .sort();
+    return fechas.length > 0 ? fechas[fechas.length - 1] : null;
+  };
+
+  const sumarDiasIso = (fechaIso, dias) => {
+    const base = new Date(`${fechaIso}T00:00:00`);
+    base.setDate(base.getDate() + dias);
+    const yyyy = base.getFullYear();
+    const mm = String(base.getMonth() + 1).padStart(2, '0');
+    const dd = String(base.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
   };
 
   const metricas = useMemo(() => {
     const planesActivos = planes.filter((p) => isPlanActivo(p)).length;
     const totalMembresias = membresias.length;
-    const membresiasActivas = membresias.filter((m) => obtenerEstadoMembresia(m) === 'activa').length;
+    const contratacionesActivas = membresias.filter((m) => obtenerEstadoMembresia(m) === 'activa');
+    const sociosConPlanActivoSet = new Set(
+      contratacionesActivas.map((m) => getSocioAsociacionKey(m)).filter((k) => k !== null && k !== '')
+    );
+    const sociosConPlanActivo = sociosConPlanActivoSet.size;
+    const membresiasActivas = contratacionesActivas.length;
+    const membresiasProgramadas = membresias.filter((m) => obtenerEstadoMembresia(m) === 'programada').length;
     const membresiasPendientes = membresias.filter((m) => obtenerEstadoMembresia(m) === 'pendiente').length;
     const membresiasVencidas = membresias.filter((m) => obtenerEstadoMembresia(m) === 'vencida').length;
     const membresiasCanceladas = membresias.filter((m) => obtenerEstadoMembresia(m) === 'cancelada').length;
 
-    const estimadoActivo = membresias
-      .filter((m) => obtenerEstadoMembresia(m) === 'activa')
-      .reduce((acc, curr) => acc + (parseFloat(curr.precio_contratado ?? curr.precio) || 0), 0);
+    const estimadoActivo = contratacionesActivas.reduce(
+      (acc, curr) => acc + (parseFloat(curr.precio_contratado ?? curr.precio) || 0),
+      0
+    );
 
     return {
       planesActivos,
       totalPlanes: planes.length,
       totalMembresias,
+      sociosConPlanActivo,
       membresiasActivas,
+      membresiasProgramadas,
       membresiasPendientes,
       membresiasVencidas,
       membresiasCanceladas,
@@ -365,17 +415,19 @@ export default function MembresiaAdmin() {
   // --------------------------------------------------------------------------
   const abrirModalNuevaMembresia = () => {
     setMembresiaEditando(null);
+    const primerSocioId = sociosLista[0]?.id_socio || '';
     const primerPlan = planesActivosSelector[0] || null;
-    const fInicio = new Date().toISOString().split('T')[0];
     const duracion = primerPlan ? primerPlan.duracion_dias : 30;
-    const fVenc = new Date();
-    fVenc.setDate(fVenc.getDate() + duracion);
+    const hoyIso = new Date().toISOString().split('T')[0];
+    const ultimoVenc = obtenerUltimoVencimientoVigenteDeSocio(primerSocioId);
+    const fInicio = ultimoVenc && ultimoVenc >= hoyIso ? sumarDiasIso(ultimoVenc, 1) : hoyIso;
+    const fVenc = sumarDiasIso(fInicio, duracion);
 
     setFormMembresia({
-      id_socio: sociosLista[0]?.id_socio || '',
+      id_socio: primerSocioId,
       id_plan_membresia: primerPlan ? getPlanId(primerPlan) : '',
       fecha_inicio: fInicio,
-      fecha_vencimiento: fVenc.toISOString().split('T')[0],
+      fecha_vencimiento: fVenc,
       dias_adicionales: 0,
       precio: primerPlan ? primerPlan.precio : '',
       estado: 'activa'
@@ -383,12 +435,30 @@ export default function MembresiaAdmin() {
     setModalMembresiaAbierto(true);
   };
 
+  const handleCambioSocioEnForm = (nuevoSocioId) => {
+    const planSel = planesActivosSelector.find(
+      (p) => String(getPlanId(p)) === String(formMembresia.id_plan_membresia)
+    );
+    const duracion = planSel ? (planSel.duracion_dias || 30) : 30;
+    const hoyIso = new Date().toISOString().split('T')[0];
+    const ultimoVenc = obtenerUltimoVencimientoVigenteDeSocio(nuevoSocioId);
+    const fInicio = ultimoVenc && ultimoVenc >= hoyIso ? sumarDiasIso(ultimoVenc, 1) : hoyIso;
+    const fVenc = sumarDiasIso(fInicio, duracion);
+
+    setFormMembresia((prev) => ({
+      ...prev,
+      id_socio: nuevoSocioId,
+      fecha_inicio: fInicio,
+      fecha_vencimiento: fVenc
+    }));
+  };
+
   const abrirModalEditarMembresia = (memb) => {
     setMembresiaEditando(memb);
-    const estActual = typeof memb?.estado === 'boolean'
-      ? (memb.estado ? 'activa' : 'cancelada')
-      : String(memb?.estado ?? 'activa').trim().toLowerCase();
-    const estValido = ['pendiente', 'activa', 'vencida', 'cancelada'].includes(estActual) ? estActual : 'activa';
+    const estActual = obtenerEstadoMembresia(memb);
+    const estValido = ['pendiente', 'programada', 'activa', 'vencida', 'cancelada'].includes(estActual)
+      ? estActual
+      : 'activa';
     const planOriginalId =
       memb.id_membresia_gimnasio ||
       memb.id_plan_membresia ||
@@ -485,11 +555,10 @@ export default function MembresiaAdmin() {
           await renovarMembresiaSocio({
             id_socio: Number(socioIdEfectivo),
             id_membresia_gimnasio: Number(formMembresia.id_plan_membresia),
-            fecha_inicio: formMembresia.fecha_inicio || undefined,
             estado: formMembresia.estado === 'pendiente' ? 'pendiente' : 'activa',
             registrar_pago: formMembresia.estado !== 'pendiente'
           });
-          mostrarNotificacion('Plan cambiado / renovación registrada exitosamente');
+          mostrarNotificacion('Renovación / cambio de plan encadenado registrado conservando el historial');
         } else {
           await updateMembresiaSocio(getMembId(membresiaEditando), {
             fecha_vencimiento: formMembresia.fecha_vencimiento,
@@ -498,11 +567,11 @@ export default function MembresiaAdmin() {
           mostrarNotificacion('Membresía del socio actualizada exitosamente');
         }
       } else {
-        const yaTieneActiva = membresias.some(
-          (m) =>
-            String(getSocioIdFromMembresia(m)) === String(socioIdEfectivo) &&
-            String(m.estado ?? '').toLowerCase() === 'activa'
-        );
+        const yaTieneVigenteOProgramada = membresias.some((m) => {
+          if (String(getSocioIdFromMembresia(m)) !== String(socioIdEfectivo)) return false;
+          const est = obtenerEstadoMembresia(m);
+          return est === 'activa' || est === 'programada';
+        });
         const payload = {
           id_socio: Number(socioIdEfectivo),
           id_membresia_gimnasio: Number(formMembresia.id_plan_membresia),
@@ -510,9 +579,9 @@ export default function MembresiaAdmin() {
           estado: formMembresia.estado === 'pendiente' ? 'pendiente' : 'activa',
           registrar_pago: formMembresia.estado !== 'pendiente'
         };
-        if (yaTieneActiva) {
+        if (yaTieneVigenteOProgramada) {
           await renovarMembresiaSocio(payload);
-          mostrarNotificacion('Renovación encadenada registrada exitosamente');
+          mostrarNotificacion('Renovación programada encadenada conservando los días restantes del plan vigente');
         } else {
           await createMembresiaSocio(payload);
           mostrarNotificacion('Membresía contratada y asignada al socio exitosamente');
@@ -676,7 +745,7 @@ export default function MembresiaAdmin() {
               </div>
               <div className="metrica-info">
                 <span className="metrica-label">Socios con Plan Activo</span>
-                <span className="metrica-valor">{metricas.membresiasActivas}</span>
+                <span className="metrica-valor">{metricas.sociosConPlanActivo}</span>
               </div>
             </div>
 
@@ -771,9 +840,16 @@ export default function MembresiaAdmin() {
                   {planesFiltrados.map((plan) => {
                     const planId = getPlanId(plan);
                     const activo = isPlanActivo(plan);
-                    const sociosConEstePlan = membresias.filter(
-                      (m) => String(m.id_membresia_gimnasio || m.id_plan_membresia) === String(planId) && m.estado === 'activa'
-                    ).length;
+                    const sociosConEstePlan = new Set(
+                      membresias
+                        .filter(
+                          (m) =>
+                            String(m.id_membresia_gimnasio || m.id_plan_membresia) === String(planId) &&
+                            obtenerEstadoMembresia(m) === 'activa'
+                        )
+                        .map((m) => getSocioAsociacionKey(m))
+                        .filter((k) => k !== null && k !== '')
+                    ).size;
 
                     return (
                       <div
@@ -911,6 +987,12 @@ export default function MembresiaAdmin() {
                       Activas ({metricas.membresiasActivas})
                     </button>
                     <button
+                      className={`pill-btn ${filtroEstadoMembresia === 'programada' ? 'pill-activo' : ''}`}
+                      onClick={() => setFiltroEstadoMembresia('programada')}
+                    >
+                      Programadas ({metricas.membresiasProgramadas})
+                    </button>
+                    <button
                       className={`pill-btn ${filtroEstadoMembresia === 'pendiente' ? 'pill-activo' : ''}`}
                       onClick={() => setFiltroEstadoMembresia('pendiente')}
                     >
@@ -961,6 +1043,7 @@ export default function MembresiaAdmin() {
                       <tbody>
                         {membresiasFiltradas.map((memb) => {
                           const diasRestantes = calcularDiasRestantes(memb.fecha_vencimiento);
+                          const diasHastaInicio = calcularDiasHastaInicio(memb.fecha_inicio);
                           const esVencida = diasRestantes !== null && diasRestantes < 0;
                           const esPorVencer = diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 5;
 
@@ -1021,6 +1104,14 @@ export default function MembresiaAdmin() {
                               <td>
                                 {estadoCalculado === 'cancelada' ? (
                                   <span className="dias-badge dias-cancelado">Cancelada</span>
+                                ) : estadoCalculado === 'programada' ? (
+                                  <span className="dias-badge dias-programada">
+                                    {diasHastaInicio === 1
+                                      ? 'Inicia mañana'
+                                      : diasHastaInicio
+                                        ? `Inicia en ${diasHastaInicio}d`
+                                        : 'Programada'}
+                                  </span>
                                 ) : diasRestantes === null ? (
                                   <span className="dias-badge">-</span>
                                 ) : esVencida ? (
@@ -1036,21 +1127,18 @@ export default function MembresiaAdmin() {
 
                               {/* Estado Badge */}
                               <td>
-                                {(() => {
-                                  const estadoCalculado = obtenerEstadoMembresia(memb);
-                                  return (
-                                      <span className={`estado-badge estado-${estadoCalculado}`}>
-                                        {estadoCalculado === 'activa'
-                                          ? 'Activa'
-                                          : estadoCalculado === 'pendiente'
-                                          ? 'Pendiente'
-                                          : estadoCalculado === 'vencida'
-                                          ? 'Vencida'
-                                          : 'Cancelada'}
-                                      </span>
-                                    );
-                                  })()}
-                                </td>
+                                <span className={`estado-badge estado-${estadoCalculado}`}>
+                                  {estadoCalculado === 'activa'
+                                    ? 'Activa'
+                                    : estadoCalculado === 'programada'
+                                    ? 'Programada'
+                                    : estadoCalculado === 'pendiente'
+                                    ? 'Pendiente'
+                                    : estadoCalculado === 'vencida'
+                                    ? 'Vencida'
+                                    : 'Cancelada'}
+                                </span>
+                              </td>
 
                                 {/* Acciones */}
                                 <td>
@@ -1306,7 +1394,7 @@ export default function MembresiaAdmin() {
                   <select
                     required
                     value={formMembresia.id_socio}
-                    onChange={(e) => setFormMembresia({ ...formMembresia, id_socio: e.target.value })}
+                    onChange={(e) => handleCambioSocioEnForm(e.target.value)}
                   >
                     <option value="">-- Seleccionar Socio --</option>
                     {sociosLista.map((s) => (
@@ -1317,6 +1405,24 @@ export default function MembresiaAdmin() {
                   </select>
                 )}
               </div>
+
+              {!membresiaEditando && (() => {
+                const ultimoVenc = obtenerUltimoVencimientoVigenteDeSocio(formMembresia.id_socio);
+                const hoyIso = new Date().toISOString().split('T')[0];
+                if (!ultimoVenc || ultimoVenc < hoyIso) return null;
+                const proxInicio = sumarDiasIso(ultimoVenc, 1);
+                return (
+                  <div className="renovacion-encadenada-aviso">
+                    <FaRegClock style={{ marginTop: '2px', flexShrink: 0 }} />
+                    <span>
+                      Este socio ya tiene una contratación vigente o programada hasta el{' '}
+                      <strong>{formatearFecha(ultimoVenc)}</strong>. La nueva renovación comenzará el{' '}
+                      <strong>{formatearFecha(proxInicio)}</strong> en estado <strong>Programada</strong>,
+                      conservando los días restantes sin superponer períodos.
+                    </span>
+                  </div>
+                );
+              })()}
 
               {/* Plan de membresía (solo planes activos) */}
               <div className="form-group">
@@ -1414,10 +1520,17 @@ export default function MembresiaAdmin() {
                     value={formMembresia.estado}
                     onChange={(e) => setFormMembresia({ ...formMembresia, estado: e.target.value })}
                   >
-                    <option value="activa">Activa (Habilitada para entrenar)</option>
+                    <option value="activa">
+                      {!membresiaEditando
+                        ? 'Acreditada (Activa hoy / Programada si inicia a futuro)'
+                        : 'Activa (Habilitada para entrenar)'}
+                    </option>
+                    {membresiaEditando && (
+                      <option value="programada">Programada (Inicia en fecha futura)</option>
+                    )}
                     <option value="pendiente">Pendiente (Pendiente de acreditación)</option>
-                    <option value="vencida">Vencida</option>
-                    <option value="cancelada">Cancelada</option>
+                    {membresiaEditando && <option value="vencida">Vencida</option>}
+                    {membresiaEditando && <option value="cancelada">Cancelada</option>}
                   </select>
                 </div>
               </div>
