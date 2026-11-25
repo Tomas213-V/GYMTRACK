@@ -34,6 +34,11 @@ import {
   deleteMembresiaSocio,
   getSociosDropdown
 } from '../../services/membresiaAdminService';
+import {
+  getPagos,
+  registrarPago,
+  actualizarEstadoPago
+} from '../../services/pagoService';
 
 import {
   FaCreditCard,
@@ -53,7 +58,8 @@ import {
   FaExclamationTriangle,
   FaSyncAlt,
   FaFilter,
-  FaUserPlus
+  FaUserPlus,
+  FaMoneyBillWave
 } from 'react-icons/fa';
 
 import './membresia-admin.css';
@@ -114,8 +120,20 @@ export default function MembresiaAdmin() {
     fecha_vencimiento: '',
     dias_adicionales: 0,
     precio: '',
-    estado: 'activa'
+    estado: 'activa',
+    metodo_pago: 'efectivo'
   });
+
+  // Modal rápido: Marcar como pago (desde filas Pendientes)
+  const [modalPagoAbierto, setModalPagoAbierto] = useState(false);
+  const [membresiaAPagar, setMembresiaAPagar] = useState(null);
+  const [formPagoRapido, setFormPagoRapido] = useState({
+    monto: '',
+    metodo_pago: 'efectivo',
+    fecha_pago: new Date().toISOString().split('T')[0],
+    comprobante: ''
+  });
+  const [guardandoPago, setGuardandoPago] = useState(false);
 
   const [modalConfirmacion, setModalConfirmacion] = useState({
     abierto: false,
@@ -475,9 +493,109 @@ export default function MembresiaAdmin() {
       fecha_vencimiento: memb.fecha_vencimiento ? memb.fecha_vencimiento.split('T')[0] : '',
       dias_adicionales: 0,
       precio: memb.precio_contratado ?? memb.precio ?? memb.membresia_gimnasio?.precio ?? memb.plan_membresia?.precio ?? '',
-      estado: estValido
+      estado: estValido,
+      metodo_pago: 'efectivo'
     });
     setModalMembresiaAbierto(true);
+  };
+
+  // Abrir modal rápido "Marcar como pago" precompletado con el socio, membresía e importe
+  const abrirModalMarcarPago = (memb) => {
+    const planObj = memb.membresia_gimnasio || memb.plan_membresia || null;
+    const precioAcordado = memb.precio_contratado ?? memb.precio ?? planObj?.precio ?? 0;
+    setMembresiaAPagar(memb);
+    setFormPagoRapido({
+      monto: String(precioAcordado),
+      metodo_pago: 'efectivo',
+      fecha_pago: new Date().toISOString().split('T')[0],
+      comprobante: ''
+    });
+    setModalPagoAbierto(true);
+  };
+
+  const confirmarMarcarComoPago = async (e) => {
+    e.preventDefault();
+    if (!membresiaAPagar) return;
+
+    const membId = getMembId(membresiaAPagar);
+    const socioId = getSocioIdFromMembresia(membresiaAPagar);
+    const precioAcordado = Number(
+      membresiaAPagar.precio_contratado ??
+        membresiaAPagar.precio ??
+        membresiaAPagar.membresia_gimnasio?.precio ??
+        membresiaAPagar.plan_membresia?.precio ??
+        0
+    );
+
+    try {
+      setGuardandoPago(true);
+
+      // 1. Cancelar cualquier membresía activa previa del mismo socio (conservando historial)
+      const activasPrevias = membresias.filter((m) => {
+        if (String(getMembId(m)) === String(membId)) return false;
+        if (String(getSocioIdFromMembresia(m)) !== String(socioId)) return false;
+        return obtenerEstadoMembresia(m) === 'activa';
+      });
+      for (const prev of activasPrevias) {
+        await cancelarMembresiaSocio(getMembId(prev));
+      }
+
+      // 2. Verificar pagos existentes de esta membresía para aprobar pendientes o registrar el saldo
+      const resPagos = await getPagos({
+        id_membresia_socio: membId,
+        id_gimnasio: gimnasioActivoId,
+        limit: 50
+      }).catch(() => ({ pagos: [] }));
+      const pagosExistentes = Array.isArray(resPagos?.pagos) ? resPagos.pagos : [];
+
+      let totalAprobado = pagosExistentes
+        .filter((p) => String(p.estado || '').toLowerCase() === 'aprobado')
+        .reduce((acc, p) => acc + (Number(p.monto) || 0), 0);
+
+      for (const p of pagosExistentes) {
+        if (String(p.estado || '').toLowerCase() !== 'pendiente') continue;
+        const montoP = Number(p.monto) || 0;
+        if (montoP > 0 && totalAprobado + montoP <= precioAcordado) {
+          await actualizarEstadoPago(p.id_pago, 'aprobado');
+          totalAprobado += montoP;
+        }
+      }
+
+      const saldoPendiente = Math.max(0, Number((precioAcordado - totalAprobado).toFixed(2)));
+      const montoIngresado = Number(formPagoRapido.monto);
+      const montoARegistrar =
+        !isNaN(montoIngresado) && montoIngresado > 0 && montoIngresado <= saldoPendiente
+          ? montoIngresado
+          : saldoPendiente;
+
+      if (montoARegistrar > 0) {
+        await registrarPago({
+          id_membresia_socio: membId,
+          monto: montoARegistrar,
+          metodo_pago: formPagoRapido.metodo_pago || 'efectivo',
+          estado: 'aprobado',
+          fecha_pago: formPagoRapido.fecha_pago || undefined,
+          comprobante: formPagoRapido.comprobante?.trim() || undefined,
+          id_gimnasio: gimnasioActivoId
+        });
+      } else {
+        await updateMembresiaSocio(membId, {
+          estado: 'activa',
+          cancelar_activas_previas: true,
+          registrar_pago_si_falta: true,
+          metodo_pago: formPagoRapido.metodo_pago || 'efectivo'
+        });
+      }
+
+      mostrarNotificacion('¡Pago aprobado y membresía activada exitosamente!');
+      setModalPagoAbierto(false);
+      setMembresiaAPagar(null);
+      await cargarDatos();
+    } catch (err) {
+      mostrarNotificacion(err.message || 'Error al registrar el pago de la membresía', 'error');
+    } finally {
+      setGuardandoPago(false);
+    }
   };
 
   const handleCambioPlanEnForm = (planId) => {
@@ -552,21 +670,41 @@ export default function MembresiaAdmin() {
             mostrarNotificacion('No se pudo identificar el socio de esta membresía', 'error');
             return;
           }
+          const activarNuevoPlan = formMembresia.estado !== 'pendiente';
           await renovarMembresiaSocio({
             id_socio: Number(socioIdEfectivo),
             id_membresia_gimnasio: Number(formMembresia.id_plan_membresia),
-            estado: formMembresia.estado === 'pendiente' ? 'pendiente' : 'activa',
-            registrar_pago: formMembresia.estado !== 'pendiente'
+            fecha_inicio: formMembresia.fecha_inicio || undefined,
+            estado: activarNuevoPlan ? 'activa' : 'pendiente',
+            registrar_pago: activarNuevoPlan,
+            metodo_pago: formMembresia.metodo_pago || 'efectivo',
+            cancelar_activas_previas: activarNuevoPlan
           });
-          mostrarNotificacion('Renovación / cambio de plan encadenado registrado conservando el historial');
+          mostrarNotificacion(
+            activarNuevoPlan
+              ? 'Nuevo plan activado y membresía activa previa cancelada conservando el historial'
+              : 'Cambio de plan registrado en estado pendiente'
+          );
         } else {
+          const estadoPrevio = obtenerEstadoMembresia(membresiaEditando);
+          const quiereActivar = formMembresia.estado === 'activa' || formMembresia.estado === 'programada';
+          const activaDesdePendiente = estadoPrevio === 'pendiente' && quiereActivar;
+
           await updateMembresiaSocio(getMembId(membresiaEditando), {
             fecha_vencimiento: formMembresia.fecha_vencimiento,
-            estado: formMembresia.estado
+            estado: formMembresia.estado,
+            registrar_pago_si_falta: activaDesdePendiente,
+            cancelar_activas_previas: quiereActivar,
+            metodo_pago: formMembresia.metodo_pago || 'efectivo'
           });
-          mostrarNotificacion('Membresía del socio actualizada exitosamente');
+          mostrarNotificacion(
+            activaDesdePendiente
+              ? 'Pago aprobado y membresía activada exitosamente'
+              : 'Membresía del socio actualizada exitosamente'
+          );
         }
       } else {
+        const activarAhora = formMembresia.estado !== 'pendiente';
         const yaTieneVigenteOProgramada = membresias.some((m) => {
           if (String(getSocioIdFromMembresia(m)) !== String(socioIdEfectivo)) return false;
           const est = obtenerEstadoMembresia(m);
@@ -576,12 +714,18 @@ export default function MembresiaAdmin() {
           id_socio: Number(socioIdEfectivo),
           id_membresia_gimnasio: Number(formMembresia.id_plan_membresia),
           fecha_inicio: formMembresia.fecha_inicio || undefined,
-          estado: formMembresia.estado === 'pendiente' ? 'pendiente' : 'activa',
-          registrar_pago: formMembresia.estado !== 'pendiente'
+          estado: activarAhora ? 'activa' : 'pendiente',
+          registrar_pago: activarAhora,
+          metodo_pago: formMembresia.metodo_pago || 'efectivo',
+          cancelar_activas_previas: activarAhora
         };
         if (yaTieneVigenteOProgramada) {
           await renovarMembresiaSocio(payload);
-          mostrarNotificacion('Renovación programada encadenada conservando los días restantes del plan vigente');
+          mostrarNotificacion(
+            activarAhora
+              ? 'Nueva membresía activada y plan activo previo cancelado conservando el historial'
+              : 'Renovación pendiente registrada exitosamente'
+          );
         } else {
           await createMembresiaSocio(payload);
           mostrarNotificacion('Membresía contratada y asignada al socio exitosamente');
@@ -1143,6 +1287,18 @@ export default function MembresiaAdmin() {
                                 {/* Acciones */}
                                 <td>
                                   <div className="acciones-row">
+                                    {estadoCalculado === 'pendiente' && (
+                                      <button
+                                        type="button"
+                                        className="btn-tabla-action btn-tabla-marcar-pago"
+                                        onClick={() => abrirModalMarcarPago(memb)}
+                                        title="Registrar pago y activar membresía"
+                                      >
+                                        <FaMoneyBillWave />
+                                        <span>Marcar como pago</span>
+                                      </button>
+                                    )}
+
                                     <button
                                       className="btn-tabla-action btn-tabla-editar"
                                       onClick={() => abrirModalEditarMembresia(memb)}
@@ -1535,6 +1691,38 @@ export default function MembresiaAdmin() {
                 </div>
               </div>
 
+              {((membresiaEditando &&
+                obtenerEstadoMembresia(membresiaEditando) === 'pendiente' &&
+                (formMembresia.estado === 'activa' || formMembresia.estado === 'programada')) ||
+                (!membresiaEditando && formMembresia.estado !== 'pendiente')) && (
+                <>
+                  <div className="aviso-pago-activacion">
+                    <FaMoneyBillWave style={{ marginTop: '2px', flexShrink: 0 }} />
+                    <span>
+                      Al guardar en estado <strong>Activa</strong> se registrará/aprobará automáticamente el pago
+                      por <strong>{formatearMoneda(formMembresia.precio)}</strong> y, si el socio tenía otra
+                      membresía activa previa, pasará a <strong>Cancelada</strong> conservando su historial.
+                    </span>
+                  </div>
+                  <div className="form-group">
+                    <label>Método de Pago</label>
+                    <select
+                      value={formMembresia.metodo_pago || 'efectivo'}
+                      onChange={(e) => setFormMembresia({ ...formMembresia, metodo_pago: e.target.value })}
+                    >
+                      <option value="efectivo">Efectivo</option>
+                      <option value="transferencia">Transferencia Bancaria</option>
+                      <option value="debito">Tarjeta de Débito</option>
+                      <option value="credito">Tarjeta de Crédito</option>
+                      <option value="tarjeta">Tarjeta</option>
+                      <option value="mercadopago">Mercado Pago</option>
+                      <option value="uala">Ualá</option>
+                      <option value="otro">Otro</option>
+                    </select>
+                  </div>
+                </>
+              )}
+
               <div className="modal-footer">
                 <button
                   type="button"
@@ -1557,7 +1745,143 @@ export default function MembresiaAdmin() {
       )}
 
       {/* ====================================================================
-          MODAL 3: CONFIRMACIÓN GENÉRICA (ELIMINAR / CANCELAR)
+          MODAL 3: MARCAR COMO PAGO (REGISTRAR PAGO Y ACTIVAR MEMBRESÍA PENDIENTE)
+          ==================================================================== */}
+      {modalPagoAbierto && membresiaAPagar && (() => {
+        const socioPago = getSocioFromMembresia(membresiaAPagar);
+        const planPago = membresiaAPagar.membresia_gimnasio || membresiaAPagar.plan_membresia || null;
+        const nombreSocioPago = `${socioPago?.nombre || ''} ${socioPago?.apellido || ''}`.trim() || 'Socio';
+        const dniSocioPago = socioPago?.dni || 'S/D';
+        return (
+          <div className="modal-overlay" onClick={() => !guardandoPago && setModalPagoAbierto(false)}>
+            <div className="modal-container modal-md" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <div className="modal-header-icon">
+                  <FaMoneyBillWave />
+                </div>
+                <div>
+                  <h2>Registrar Pago y Activar Membresía</h2>
+                  <p>Aprobá el cobro de esta membresía pendiente para activarla automáticamente.</p>
+                </div>
+                <button
+                  className="modal-btn-close"
+                  onClick={() => !guardandoPago && setModalPagoAbierto(false)}
+                >
+                  <FaTimes />
+                </button>
+              </div>
+
+              <form onSubmit={confirmarMarcarComoPago} className="modal-form">
+                <div className="form-group">
+                  <label>Socio</label>
+                  <input
+                    type="text"
+                    disabled
+                    value={`${nombreSocioPago} (DNI: ${dniSocioPago})`}
+                    className="input-disabled"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Plan y Vigencia</label>
+                  <input
+                    type="text"
+                    disabled
+                    value={`${planPago?.nombre || 'Plan'} (${formatearFecha(membresiaAPagar.fecha_inicio)} al ${formatearFecha(membresiaAPagar.fecha_vencimiento)})`}
+                    className="input-disabled"
+                  />
+                </div>
+
+                <div className="form-row-2">
+                  <div className="form-group">
+                    <label>Importe a Cobrar (ARS) *</label>
+                    <div className="input-with-prefix">
+                      <span className="input-prefix">$</span>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        step="any"
+                        value={formPagoRapido.monto}
+                        onChange={(e) => setFormPagoRapido({ ...formPagoRapido, monto: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Método de Pago *</label>
+                    <select
+                      value={formPagoRapido.metodo_pago}
+                      onChange={(e) => setFormPagoRapido({ ...formPagoRapido, metodo_pago: e.target.value })}
+                    >
+                      <option value="efectivo">Efectivo</option>
+                      <option value="transferencia">Transferencia Bancaria</option>
+                      <option value="debito">Tarjeta de Débito</option>
+                      <option value="credito">Tarjeta de Crédito</option>
+                      <option value="tarjeta">Tarjeta</option>
+                      <option value="mercadopago">Mercado Pago</option>
+                      <option value="uala">Ualá</option>
+                      <option value="otro">Otro</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-row-2">
+                  <div className="form-group">
+                    <label>Fecha de Pago *</label>
+                    <input
+                      type="date"
+                      required
+                      value={formPagoRapido.fecha_pago}
+                      onChange={(e) => setFormPagoRapido({ ...formPagoRapido, fecha_pago: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Comprobante / Referencia (opcional)</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: MP-123456 o Recibo #45"
+                      value={formPagoRapido.comprobante}
+                      onChange={(e) => setFormPagoRapido({ ...formPagoRapido, comprobante: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="aviso-pago-activacion">
+                  <FaCheck style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <span>
+                    Al confirmar, el pago quedará <strong>Aprobado</strong>, esta membresía pasará a{' '}
+                    <strong>Activa</strong> y cualquier membresía activa anterior del socio pasará automáticamente a{' '}
+                    <strong>Cancelada</strong> (conservando su historial).
+                  </span>
+                </div>
+
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn-secundario"
+                    disabled={guardandoPago}
+                    onClick={() => setModalPagoAbierto(false)}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={guardandoPago}
+                    className="btn-primario"
+                  >
+                    {guardandoPago ? 'Procesando cobro...' : 'Confirmar Pago y Activar'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ====================================================================
+          MODAL 4: CONFIRMACIÓN GENÉRICA (ELIMINAR / CANCELAR)
           ==================================================================== */}
       {modalConfirmacion.abierto && (
         <div className="modal-overlay" onClick={() => setModalConfirmacion(prev => ({ ...prev, abierto: false }))}>

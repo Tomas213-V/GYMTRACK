@@ -129,7 +129,8 @@ export async function createMembresiaSocio(membData) {
     registrar_pago: Boolean(membData.registrar_pago),
     ...(membData.metodo_pago ? { metodo_pago: String(membData.metodo_pago).toLowerCase() } : {}),
     ...(membData.estado_pago ? { estado_pago: String(membData.estado_pago).toLowerCase() } : {}),
-    ...(membData.comprobante ? { comprobante: String(membData.comprobante).trim() } : {})
+    ...(membData.comprobante ? { comprobante: String(membData.comprobante).trim() } : {}),
+    ...(membData.cancelar_activas_previas ? { cancelar_activas_previas: true } : {})
   };
   return apiRequest('/membresias', {
     method: 'POST',
@@ -151,7 +152,8 @@ export async function renovarMembresiaSocio(membData) {
     registrar_pago: Boolean(membData.registrar_pago),
     ...(membData.metodo_pago ? { metodo_pago: String(membData.metodo_pago).toLowerCase() } : {}),
     ...(membData.estado_pago ? { estado_pago: String(membData.estado_pago).toLowerCase() } : {}),
-    ...(membData.comprobante ? { comprobante: String(membData.comprobante).trim() } : {})
+    ...(membData.comprobante ? { comprobante: String(membData.comprobante).trim() } : {}),
+    ...(membData.cancelar_activas_previas ? { cancelar_activas_previas: true } : {})
   };
   return apiRequest('/membresias/renovar', {
     method: 'POST',
@@ -160,15 +162,19 @@ export async function renovarMembresiaSocio(membData) {
 }
 
 /**
- * Actualiza únicamente campos mutables de membresia_socio (estado y/o fecha_vencimiento).
- * Respeta MembresiaUpdate (extra="forbid" e inmutabilidad de precio/plan/fecha_inicio).
+ * Actualiza campos mutables de membresia_socio (estado y/o fecha_vencimiento)
+ * y soporta sincronización automática de pago + cancelación de activas previas al activar.
  */
 export async function updateMembresiaSocio(id, updateData) {
   const payload = {
     ...(updateData.estado !== undefined ? { estado: String(updateData.estado).toLowerCase() } : {}),
     ...(updateData.fecha_vencimiento
       ? { fecha_vencimiento: String(updateData.fecha_vencimiento).split('T')[0] }
-      : {})
+      : {}),
+    ...(updateData.registrar_pago_si_falta ? { registrar_pago_si_falta: true } : {}),
+    ...(updateData.cancelar_activas_previas ? { cancelar_activas_previas: true } : {}),
+    ...(updateData.metodo_pago ? { metodo_pago: String(updateData.metodo_pago).toLowerCase() } : {}),
+    ...(updateData.comprobante ? { comprobante: String(updateData.comprobante).trim() } : {})
   };
   return apiRequest(`/membresias/${id}`, {
     method: 'PATCH',

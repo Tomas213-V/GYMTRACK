@@ -184,7 +184,7 @@ function Pagos() {
       if (
         formulario.cambioPlan &&
         formulario.id_membresia_socio_anterior &&
-        formulario.estado_membresia_anterior === "pendiente"
+        ["pendiente", "activa"].includes(String(formulario.estado_membresia_anterior || "").toLowerCase())
       ) {
         await deleteMembresiaSocio(Number(formulario.id_membresia_socio_anterior));
       }
