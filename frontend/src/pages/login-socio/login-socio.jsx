@@ -61,6 +61,10 @@ function LoginSocio() {
       newErrors.email = 'Ingresá un email válido.'
     }
 
+    if (!formData.dni.trim()) {
+      newErrors.dni = 'El DNI es obligatorio.'
+    }
+
     if (!formData.contrasena) {
       newErrors.contrasena = 'La contraseña es obligatoria.'
     }
@@ -83,7 +87,7 @@ function LoginSocio() {
     try {
       const data = await loginSocio({
         email: formData.email.trim(),
-        dni: formData.dni.trim() || undefined,
+        dni: formData.dni.trim(),
         contrasena: formData.contrasena,
       })
 
@@ -165,7 +169,7 @@ function LoginSocio() {
           {/* DNI */}
           <div className="login-form-group">
             <label htmlFor="dni">
-              DNI <span style={{ color: '#94a3b8', fontWeight: 400 }}>(opcional)</span>
+              DNI
             </label>
             <input
               id="dni"
@@ -175,6 +179,7 @@ function LoginSocio() {
               onChange={handleChange}
               placeholder="Ej: 39123456"
               autoComplete="off"
+              required
             />
             {errors.dni && (
               <span className="login-error">
@@ -243,15 +248,6 @@ function LoginSocio() {
             className="register-button-login"
           >
             ¿Primera vez? Activar cuenta / Crear contraseña
-          </Link>
-
-          {/* BOTÓN REGRESAR AL LOGIN DE DUEÑO */}
-          <Link
-            to="/login-dueño"
-            className="register-button-login"
-            style={{ marginTop: '8px', opacity: 0.85 }}
-          >
-            Acceso para Administradores
           </Link>
         </form>
       </div>

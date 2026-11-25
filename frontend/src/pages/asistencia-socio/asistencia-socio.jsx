@@ -145,17 +145,21 @@ export default function AsistenciaSocio() {
       }) || null;
       setAsistenciaAbierta(abierta);
 
-      // 2. Si hay gimnasio activo, cargar sucursales activas e info del dashboard
+      // 2. Si hay gimnasio activo, cargar sucursales activas del gimnasio actual e info del dashboard
       if (gimnasioActivoId) {
         const [sucList, dashData] = await Promise.all([
-          getSucursales({ estado: 'true' }),
+          getSucursales({ estado: 'true', id_gimnasio: gimnasioActivoId }),
           fetchDashboardSocio()
         ]);
 
-        setSucursales(sucList || []);
+        const sucursalesGymActual = (sucList || []).filter(
+          (s) => String(s.id_gimnasio) === String(gimnasioActivoId)
+        );
+
+        setSucursales(sucursalesGymActual);
         setSucursalSeleccionada((prev) => {
-          if (prev && sucList.some((s) => String(s.id_sucursal) === String(prev))) return prev;
-          return sucList?.[0]?.id_sucursal ? String(sucList[0].id_sucursal) : '';
+          if (prev && sucursalesGymActual.some((s) => String(s.id_sucursal) === String(prev))) return prev;
+          return sucursalesGymActual?.[0]?.id_sucursal ? String(sucursalesGymActual[0].id_sucursal) : '';
         });
 
         if (dashData?.gimnasio_activo) setGimnasio(dashData.gimnasio_activo);

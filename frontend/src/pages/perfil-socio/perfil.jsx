@@ -350,7 +350,7 @@ function Perfil() {
                 <h1>{socioIdParam ? 'Ficha de Socio' : (esSocio ? 'Mi Perfil' : 'Perfil del Socio')}</h1>
                 <p>
                   {esSocio
-                    ? 'Gestiona tus datos personales, contraseña y estado de membresía en tu gimnasio.'
+                    ? 'Gestiona tus datos personales y tu contraseña de acceso.'
                     : 'Administra la información de la cuenta, suscripción y credenciales de acceso.'}
                 </p>
               </div>
@@ -454,33 +454,35 @@ function Perfil() {
                   </div>
                 </div>
 
-                {/* Métricas rápidas */}
-                <div className="perfil-hero-quick-stats">
-                  <div className="perfil-quick-stat-box">
-                    <span className="perfil-quick-stat-val accent">
-                      {estadisticas.totalAsistencias ?? 0}
-                    </span>
-                    <span className="perfil-quick-stat-label">Asistencias</span>
-                  </div>
+                {/* Métricas rápidas (ocultas en la vista del socio) */}
+                {!esSocio && (
+                  <div className="perfil-hero-quick-stats">
+                    <div className="perfil-quick-stat-box">
+                      <span className="perfil-quick-stat-val accent">
+                        {estadisticas.totalAsistencias ?? 0}
+                      </span>
+                      <span className="perfil-quick-stat-label">Asistencias</span>
+                    </div>
 
-                  <div className="perfil-quick-stat-box">
-                    <span className="perfil-quick-stat-val">
-                      {estadisticas.diasRestantes != null
-                        ? estadisticas.diasRestantes > 0
-                          ? `${estadisticas.diasRestantes}d`
-                          : 'Venc.'
-                        : 'N/A'}
-                    </span>
-                    <span className="perfil-quick-stat-label">Días Membr.</span>
-                  </div>
+                    <div className="perfil-quick-stat-box">
+                      <span className="perfil-quick-stat-val">
+                        {estadisticas.diasRestantes != null
+                          ? estadisticas.diasRestantes > 0
+                            ? `${estadisticas.diasRestantes}d`
+                            : 'Venc.'
+                          : 'N/A'}
+                      </span>
+                      <span className="perfil-quick-stat-label">Días Membr.</span>
+                    </div>
 
-                  <div className="perfil-quick-stat-box">
-                    <span className="perfil-quick-stat-val">
-                      {ultimosPagos.length}
-                    </span>
-                    <span className="perfil-quick-stat-label">Pagos Reg.</span>
+                    <div className="perfil-quick-stat-box">
+                      <span className="perfil-quick-stat-val">
+                        {ultimosPagos.length}
+                      </span>
+                      <span className="perfil-quick-stat-label">Pagos Reg.</span>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Pestañas de Navegación del Perfil */}
@@ -491,24 +493,28 @@ function Perfil() {
                 >
                   <FaUser /> Datos Personales
                 </button>
-                <button
-                  className={`perfil-tab-btn ${pestañaActiva === 'membresia' ? 'activo' : ''}`}
-                  onClick={() => setPestañaActiva('membresia')}
-                >
-                  <FaDumbbell /> Membresía & Gimnasio
-                </button>
+                {!esSocio && (
+                  <button
+                    className={`perfil-tab-btn ${pestañaActiva === 'membresia' ? 'activo' : ''}`}
+                    onClick={() => setPestañaActiva('membresia')}
+                  >
+                    <FaDumbbell /> Membresía & Gimnasio
+                  </button>
+                )}
                 <button
                   className={`perfil-tab-btn ${pestañaActiva === 'seguridad' ? 'activo' : ''}`}
                   onClick={() => setPestañaActiva('seguridad')}
                 >
                   <FaShieldAlt /> Seguridad & Contraseña
                 </button>
-                <button
-                  className={`perfil-tab-btn ${pestañaActiva === 'historial' ? 'activo' : ''}`}
-                  onClick={() => setPestañaActiva('historial')}
-                >
-                  <FaReceipt /> Asistencias & Pagos
-                </button>
+                {!esSocio && (
+                  <button
+                    className={`perfil-tab-btn ${pestañaActiva === 'historial' ? 'activo' : ''}`}
+                    onClick={() => setPestañaActiva('historial')}
+                  >
+                    <FaReceipt /> Asistencias & Pagos
+                  </button>
+                )}
               </div>
 
               {/* Contenido de la pestaña 1: Datos Personales */}
@@ -745,7 +751,7 @@ function Perfil() {
               )}
 
               {/* Contenido de la pestaña 2: Membresía & Gimnasio */}
-              {pestañaActiva === 'membresia' && (
+              {!esSocio && pestañaActiva === 'membresia' && (
                 <div className="perfil-tab-content">
                   <div className="perfil-grid-2col">
                     {/* Tarjeta de Membresía Actual */}
@@ -1041,7 +1047,7 @@ function Perfil() {
               )}
 
               {/* Contenido de la pestaña 4: Asistencias & Pagos */}
-              {pestañaActiva === 'historial' && (
+              {!esSocio && pestañaActiva === 'historial' && (
                 <div className="perfil-tab-content">
                   <div className="perfil-grid-2col">
                     {/* Tabla de Asistencias Recientes */}
