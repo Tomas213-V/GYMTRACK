@@ -37,7 +37,6 @@ import {
 } from '../../services/socioMembresiaService';
 import {
   MercadoPagoLogo,
-  UalaLogo,
   PaymentBadgesRow
 } from '../../components/membresia-socio/PaymentLogos';
 
@@ -97,7 +96,6 @@ export default function SocioMembresia() {
 
   // Datos temporales para Checkout y Pago
   const [planParaPagar, setPlanParaPagar] = useState(null);
-  const [metodoPagoSeleccionado, setMetodoPagoSeleccionado] = useState('mercadopago');
   const [procesandoPago, setProcesandoPago] = useState(false);
   const [verificandoPago, setVerificandoPago] = useState(false);
   const [checkoutData, setCheckoutData] = useState(null);
@@ -216,37 +214,13 @@ export default function SocioMembresia() {
       setProcesandoPago(true);
       const res = await iniciarPagoMembresia({
         id_membresia_gimnasio: planId,
-        proveedor: metodoPagoSeleccionado === 'uala' ? 'uala' : 'mercadopago'
+        proveedor: 'mercadopago'
       });
       if (res?.orden) {
         setCheckoutData(res.orden);
       }
     } catch (err) {
       setErrorMsg(err.message || 'No se pudo iniciar la orden de pago.');
-    } finally {
-      setProcesandoPago(false);
-    }
-  };
-
-  const handleCambiarMetodo = async (nuevoMetodo) => {
-    const prov = nuevoMetodo === 'uala' ? 'uala' : 'mercadopago';
-    setMetodoPagoSeleccionado(prov);
-    if (!planParaPagar) return;
-    const planId = planParaPagar.id_membresia_gimnasio;
-
-    try {
-      setProcesandoPago(true);
-      setCheckoutData(null);
-      setErrorMsg('');
-      const res = await iniciarPagoMembresia({
-        id_membresia_gimnasio: planId,
-        proveedor: prov
-      });
-      if (res?.orden) {
-        setCheckoutData(res.orden);
-      }
-    } catch (err) {
-      setErrorMsg(err.message || 'No se pudo actualizar el proveedor de pago.');
     } finally {
       setProcesandoPago(false);
     }
@@ -554,7 +528,7 @@ export default function SocioMembresia() {
               <div className="upgrade-card-footer">
                 <p className="upgrade-footer-note">
                   <FaWallet className="upgrade-footer-note-icon" />
-                  <span>Podés pagar tu membresía con Mercado Pago o Ualá.</span>
+                  <span>Podés pagar tu membresía con Mercado Pago.</span>
                 </p>
 
                 {/* Logotipos oficiales vectoriales */}
@@ -748,7 +722,7 @@ export default function SocioMembresia() {
       )}
 
       {/* ====================================================================
-          MODAL 2: CHECKOUT CON MERCADO PAGO Y UALÁ
+          MODAL 2: CHECKOUT CON MERCADO PAGO
           ==================================================================== */}
       {modalCheckoutAbierto && planParaPagar && (
         <div className="modal-overlay" onClick={() => setModalCheckoutAbierto(false)}>
@@ -759,7 +733,7 @@ export default function SocioMembresia() {
             <div className="modal-header-row">
               <div>
                 <h2>Pagar Membresía</h2>
-                <p>Seleccioná tu medio de pago favorito para confirmar tu suscripción.</p>
+                <p>Confirmá tu suscripción pagando de forma segura con Mercado Pago o en recepción.</p>
               </div>
               <button
                 className="modal-close-btn"
@@ -769,25 +743,12 @@ export default function SocioMembresia() {
               </button>
             </div>
 
-            {/* Selector de Medios de Pago */}
+            {/* Medio de Pago Digital */}
             <div className="checkout-method-selector">
-              <div
-                className={`checkout-method-card ${metodoPagoSeleccionado === 'mercadopago' ? 'selected-mp' : ''}`}
-                onClick={() => handleCambiarMetodo('mercadopago')}
-              >
+              <div className="checkout-method-card selected-mp">
                 <MercadoPagoLogo height={26} />
                 <span style={{ fontSize: '12.5px', color: '#94a3b8' }}>
                   Dinero en cuenta o Tarjeta
-                </span>
-              </div>
-
-              <div
-                className={`checkout-method-card ${metodoPagoSeleccionado === 'uala' ? 'selected-uala' : ''}`}
-                onClick={() => handleCambiarMetodo('uala')}
-              >
-                <UalaLogo height={26} />
-                <span style={{ fontSize: '12.5px', color: '#94a3b8' }}>
-                  Ualá Bis / Débito prepago
                 </span>
               </div>
             </div>
@@ -835,39 +796,21 @@ export default function SocioMembresia() {
 
             {/* Acciones de Pago */}
             <div className="checkout-actions-col">
-              {metodoPagoSeleccionado === 'mercadopago' ? (
-                <button
-                  onClick={handlePagarConPasarela}
-                  disabled={procesandoPago || !getCheckoutUrl()}
-                  className="btn-checkout-mp"
-                >
-                  <MercadoPagoLogo height={20} />
-                  <span>
-                    {procesandoPago
-                      ? 'Generando orden...'
-                      : getCheckoutUrl()
-                      ? 'Ir a pagar en Mercado Pago'
-                      : 'Mercado Pago no configurado en servidor'}
-                  </span>
-                  <FaExternalLinkAlt style={{ fontSize: '12px' }} />
-                </button>
-              ) : (
-                <button
-                  onClick={handlePagarConPasarela}
-                  disabled={procesandoPago || !getCheckoutUrl()}
-                  className="btn-checkout-uala"
-                >
-                  <UalaLogo height={20} />
-                  <span>
-                    {procesandoPago
-                      ? 'Generando orden...'
-                      : getCheckoutUrl()
-                      ? 'Ir a pagar en Ualá Bis'
-                      : 'Ualá Bis no configurado en servidor'}
-                  </span>
-                  <FaExternalLinkAlt style={{ fontSize: '12px' }} />
-                </button>
-              )}
+              <button
+                onClick={handlePagarConPasarela}
+                disabled={procesandoPago || !getCheckoutUrl()}
+                className="btn-checkout-mp"
+              >
+                <MercadoPagoLogo height={20} />
+                <span>
+                  {procesandoPago
+                    ? 'Generando orden...'
+                    : getCheckoutUrl()
+                    ? 'Ir a pagar en Mercado Pago'
+                    : 'Mercado Pago no configurado en servidor'}
+                </span>
+                <FaExternalLinkAlt style={{ fontSize: '12px' }} />
+              </button>
 
               <button
                 onClick={handleSolicitarMembresiaPendiente}

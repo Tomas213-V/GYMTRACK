@@ -818,7 +818,7 @@
 /* Selector de Medios de Pago en Checkout */
 .checkout-method-selector {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 16px;
   margin: 20px 0;
 }

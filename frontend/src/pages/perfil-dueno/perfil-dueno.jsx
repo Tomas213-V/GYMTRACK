@@ -35,23 +35,47 @@ import {
   FaEyeSlash,
   FaDumbbell,
   FaUsers,
-  FaCheck
+  FaCheck,
+  FaCreditCard,
+  FaExternalLinkAlt,
+  FaUnlink,
+  FaSyncAlt
 } from 'react-icons/fa';
 import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar-dueno/sidebar';
 import Perfil from '../perfil-socio/perfil';
+import { MercadoPagoLogo } from '../../components/membresia-socio/PaymentLogos';
 import { useGymContext } from '../../context/GymContext';
 import { getPerfilOwner, updatePerfilOwner, cambiarContrasena } from '../../services/authService';
 import { actualizarMiGimnasio } from '../../services/gimnasioService';
+import {
+  getEstadoIntegracionMP,
+  iniciarConexionMP,
+  desconectarMP,
+  completarConexionSimuladaMP
+} from '../../services/integracionPagoService';
 import './perfil-dueno.css';
 
 function PerfilDueno() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { rol, gimnasioActivo, gimnasioActivoId, contextVersion, refreshProfile } = useGymContext();
+  const {
+    rol,
+    esDueno,
+    esAdministrador,
+    gimnasioActivo,
+    gimnasioActivoId,
+    contextVersion,
+    refreshProfile
+  } = useGymContext();
+
+  const puedeAdministrarIntegraciones = esDueno || esAdministrador;
 
   const queryParams = new URLSearchParams(location.search);
   const socioIdParam = queryParams.get('id');
+  const tabParam = queryParams.get('tab');
+  const mpStatusParam = queryParams.get('mp_status');
+  const mpReasonParam = queryParams.get('mp_reason');
 
   const [cargando, setCargando] = useState(true);
   const [guardandoOwner, setGuardandoOwner] = useState(false);
@@ -59,8 +83,18 @@ function PerfilDueno() {
   const [guardandoPassword, setGuardandoPassword] = useState(false);
   const [alerta, setAlerta] = useState(null);
 
-  const [pestanaActiva, setPestanaActiva] = useState('dueno');
+  const [pestanaActiva, setPestanaActiva] = useState(() =>
+    tabParam === 'integracion-pagos' ? 'integracion-pagos' : 'dueno'
+  );
   const [perfil, setPerfil] = useState(null);
+
+  // Estado de Integración de Pagos (Mercado Pago OAuth / Simulación de cuenta de prueba)
+  const [mpIntegracion, setMpIntegracion] = useState(null);
+  const [cargandoMp, setCargandoMp] = useState(false);
+  const [accionMpEnCurso, setAccionMpEnCurso] = useState(false);
+  const [confirmandoDesconexionMp, setConfirmandoDesconexionMp] = useState(false);
+  const [mpErrorCallback, setMpErrorCallback] = useState(false);
+  const [modalOAuthSimulado, setModalOAuthSimulado] = useState(null); // { state, cuenta_prueba }
 
   const [ownerForm, setOwnerForm] = useState({
     nombre: '',
@@ -137,6 +171,74 @@ function PerfilDueno() {
   useEffect(() => {
     cargarDatos();
   }, [cargarDatos, contextVersion]);
+
+  const cargarIntegracionMP = useCallback(
+    async (signal) => {
+      if (socioIdParam || !puedeAdministrarIntegraciones || !gimnasioActivoId) {
+        setMpIntegracion(null);
+        setCargandoMp(false);
+        return;
+      }
+      try {
+        setCargandoMp(true);
+        const data = await getEstadoIntegracionMP(gimnasioActivoId, { signal });
+        if (signal?.aborted) return;
+        setMpIntegracion(data || null);
+      } catch (err) {
+        if (err.name === 'AbortError' || signal?.aborted) return;
+        setMpIntegracion({
+          estado: 'error',
+          conectado: false,
+          oauth_configurado: false,
+          error_mensaje: err.message || 'No se pudo consultar el estado de Mercado Pago.'
+        });
+      } finally {
+        if (!signal?.aborted) setCargandoMp(false);
+      }
+    },
+    [socioIdParam, puedeAdministrarIntegraciones, gimnasioActivoId]
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    cargarIntegracionMP(controller.signal);
+    return () => controller.abort();
+  }, [cargarIntegracionMP, contextVersion]);
+
+  // Procesar resultado de retorno OAuth de Mercado Pago (?tab=integracion-pagos&mp_status=...)
+  useEffect(() => {
+    if (!mpStatusParam) return;
+    if (puedeAdministrarIntegraciones) {
+      setPestanaActiva('integracion-pagos');
+    }
+
+    if (mpStatusParam === 'connected') {
+      setMpErrorCallback(false);
+      setAlerta({
+        tipo: 'exito',
+        mensaje: 'Cuenta de Mercado Pago conectada correctamente a tu gimnasio.'
+      });
+      cargarIntegracionMP();
+    } else if (mpStatusParam === 'error') {
+      setMpErrorCallback(true);
+      const reasonMessages = {
+        access_denied: 'Cancelaste la autorización en Mercado Pago. Tu cuenta no fue vinculada.',
+        missing_code: 'Mercado Pago no envió el código de autorización. Intentá nuevamente.',
+        token_exchange_failed: 'No fue posible completar la autorización con Mercado Pago. Intentá nuevamente.',
+        already_connected: 'Este gimnasio ya tiene una cuenta de Mercado Pago conectada.',
+        storage_error: 'No se pudo guardar la vinculación en el servidor. Intentá nuevamente.'
+      };
+      setAlerta({
+        tipo: 'error',
+        mensaje:
+          reasonMessages[mpReasonParam] ||
+          'Ocurrió un error al vincular tu cuenta de Mercado Pago. Intentá nuevamente.'
+      });
+    }
+
+    navigate('/perfil-dueño', { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mpStatusParam, mpReasonParam]);
 
   if (socioIdParam) {
     return <Perfil />;
@@ -289,6 +391,101 @@ function PerfilDueno() {
       });
     } finally {
       setGuardandoPassword(false);
+    }
+  };
+
+  // Iniciar flujo OAuth oficial de Mercado Pago (o pantalla simulada en modo presentación)
+  const handleConectarMP = async (reconectar = false) => {
+    setAlerta(null);
+    setMpErrorCallback(false);
+    try {
+      setAccionMpEnCurso(true);
+      const res = await iniciarConexionMP({
+        id_gimnasio: gimnasioActivoId,
+        reconectar
+      });
+      if (res?.modo === 'simulacion_prueba' && res?.state) {
+        setModalOAuthSimulado({
+          state: res.state,
+          cuenta_prueba: res.cuenta_prueba || mpIntegracion?.cuenta_prueba || null
+        });
+        setAccionMpEnCurso(false);
+        return;
+      }
+      if (!res?.authorization_url) {
+        throw new Error('El servidor no devolvió una URL de autorización de Mercado Pago.');
+      }
+      window.location.assign(res.authorization_url);
+    } catch (err) {
+      setMpErrorCallback(true);
+      setAlerta({
+        tipo: 'error',
+        mensaje: err.message || 'No se pudo iniciar la conexión con Mercado Pago.'
+      });
+      setAccionMpEnCurso(false);
+    }
+  };
+
+  // Completar o cancelar la vinculación simulada con la cuenta de prueba de Mercado Pago
+  const handleConfirmarOAuthSimulado = async (autorizado) => {
+    if (!modalOAuthSimulado?.state) return;
+    setAlerta(null);
+    try {
+      setAccionMpEnCurso(true);
+      const res = await completarConexionSimuladaMP({
+        state: modalOAuthSimulado.state,
+        autorizado,
+        id_gimnasio: gimnasioActivoId
+      });
+      setModalOAuthSimulado(null);
+      setMpIntegracion(res);
+      if (autorizado && res?.conectado) {
+        setMpErrorCallback(false);
+        setAlerta({
+          tipo: 'exito',
+          mensaje: res.mensaje || 'Cuenta de prueba de Mercado Pago conectada correctamente.'
+        });
+      } else {
+        setMpErrorCallback(true);
+        setAlerta({
+          tipo: 'error',
+          mensaje: res?.mensaje || 'Cancelaste la autorización en Mercado Pago.'
+        });
+      }
+    } catch (err) {
+      setModalOAuthSimulado(null);
+      setMpErrorCallback(true);
+      setAlerta({
+        tipo: 'error',
+        mensaje: err.message || 'No fue posible completar la vinculación con Mercado Pago.'
+      });
+    } finally {
+      setAccionMpEnCurso(false);
+    }
+  };
+
+  // Desconectar cuenta de Mercado Pago (conservando el historial de pagos)
+  const handleDesconectarMP = async () => {
+    setAlerta(null);
+    try {
+      setAccionMpEnCurso(true);
+      const res = await desconectarMP(gimnasioActivoId);
+      setConfirmandoDesconexionMp(false);
+      setMpErrorCallback(false);
+      setMpIntegracion(res);
+      setAlerta({
+        tipo: 'exito',
+        mensaje:
+          res?.mensaje ||
+          'Cuenta de Mercado Pago desconectada correctamente. El historial de pagos se conserva intacto.'
+      });
+    } catch (err) {
+      setAlerta({
+        tipo: 'error',
+        mensaje: err.message || 'No se pudo desconectar la cuenta de Mercado Pago.'
+      });
+    } finally {
+      setAccionMpEnCurso(false);
     }
   };
 
@@ -458,6 +655,15 @@ function PerfilDueno() {
                 >
                   <FaBuilding /> Datos del Gimnasio
                 </button>
+
+                {puedeAdministrarIntegraciones && (
+                  <button
+                    className={`perfil-dueno-tab-btn ${pestanaActiva === 'integracion-pagos' ? 'activo' : ''}`}
+                    onClick={() => setPestanaActiva('integracion-pagos')}
+                  >
+                    <FaCreditCard /> Integración de pagos
+                  </button>
+                )}
 
                 <button
                   className={`perfil-dueno-tab-btn ${pestanaActiva === 'seguridad' ? 'activo' : ''}`}
@@ -760,6 +966,210 @@ function PerfilDueno() {
                 </div>
               )}
 
+              {/* CONTENIDO PESTAÑA: INTEGRACIÓN DE PAGOS (MERCADO PAGO OAUTH) */}
+              {pestanaActiva === 'integracion-pagos' && puedeAdministrarIntegraciones && (() => {
+                const estadoActual = mpIntegracion?.conectado
+                  ? 'conectado'
+                  : mpIntegracion?.estado === 'error' || mpErrorCallback
+                  ? 'error'
+                  : 'no_conectado';
+                const cuentaMp = mpIntegracion?.cuenta || null;
+                const esSimulacion = mpIntegracion?.modo === 'simulacion_prueba' || Boolean(mpIntegracion?.simulacion_disponible);
+                const oauthConfigurado = mpIntegracion?.oauth_configurado === true || esSimulacion;
+
+                return (
+                  <div className="perfil-dueno-tab-content">
+                    <div className="perfil-dueno-grid">
+                      <div className="perfil-dueno-card">
+                        <div className="perfil-dueno-card-header mp-integration-header">
+                          <div className="mp-brand-block">
+                            <MercadoPagoLogo height={30} />
+                            <div>
+                              <h3>Integración de pagos — Mercado Pago</h3>
+                              <p>
+                                Conectá tu cuenta de Mercado Pago para recibir los pagos de las membresías de tu gimnasio.
+                              </p>
+                            </div>
+                          </div>
+
+                          <span className={`mp-status-pill ${estadoActual}`}>
+                            {estadoActual === 'conectado'
+                              ? 'Conectado'
+                              : estadoActual === 'error'
+                              ? 'Error'
+                              : 'No conectado'}
+                          </span>
+                        </div>
+
+                        {cargandoMp ? (
+                          <div className="mp-loading-box">
+                            <div className="perfil-dueno-spinner" />
+                            <span>Consultando estado de conexión con Mercado Pago...</span>
+                          </div>
+                        ) : (
+                          <div className="mp-integration-body">
+                            {esSimulacion && (
+                              <div className="mp-info-demo-box">
+                                <FaCheckCircle />
+                                <span>
+                                  <strong>Modo presentación (cuenta de prueba):</strong> la vinculación simula el paso
+                                  de autorización OAuth y mantiene los cobros online dirigidos a tu cuenta de prueba de Mercado Pago.
+                                </span>
+                              </div>
+                            )}
+
+                            {!oauthConfigurado && (
+                              <div className="mp-warning-box">
+                                <FaExclamationCircle />
+                                <span>
+                                  El servidor todavía no tiene configuradas las credenciales OAuth privadas de Mercado Pago
+                                  (<code>MERCADOPAGO_CLIENT_ID</code>, <code>MERCADOPAGO_CLIENT_SECRET</code>,{' '}
+                                  <code>MERCADOPAGO_REDIRECT_URI</code> y <code>MERCADOPAGO_TOKEN_ENCRYPTION_KEY</code>).
+                                </span>
+                              </div>
+                            )}
+
+                            {mpIntegracion?.error_mensaje && (
+                              <div className="mp-warning-box error">
+                                <FaExclamationCircle />
+                                <span>{mpIntegracion.error_mensaje}</span>
+                              </div>
+                            )}
+
+                            {estadoActual === 'conectado' && cuentaMp ? (
+                              <>
+                                <div className="mp-account-details">
+                                  <div className="mp-detail-item">
+                                    <span className="mp-detail-label">Proveedor</span>
+                                    <span className="mp-detail-value">
+                                      {esSimulacion ? 'Mercado Pago (Cuenta de prueba)' : 'Mercado Pago (OAuth oficial)'}
+                                    </span>
+                                  </div>
+                                  <div className="mp-detail-item">
+                                    <span className="mp-detail-label">ID de cuenta vinculada</span>
+                                    <span className="mp-detail-value">
+                                      {cuentaMp.external_user_id || 'Vinculada'}
+                                      {cuentaMp.alias ? ` (${cuentaMp.alias})` : ''}
+                                    </span>
+                                  </div>
+                                  <div className="mp-detail-item">
+                                    <span className="mp-detail-label">Gimnasio vinculado</span>
+                                    <span className="mp-detail-value">
+                                      {gymForm.nombre || gimnasioActivo?.nombre || 'Gimnasio activo'}
+                                    </span>
+                                  </div>
+                                  <div className="mp-detail-item">
+                                    <span className="mp-detail-label">Fecha de conexión</span>
+                                    <span className="mp-detail-value">
+                                      {formatearFecha(cuentaMp.fecha_conexion)}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="mp-actions-row">
+                                  <button
+                                    type="button"
+                                    className="mp-btn-reconnect"
+                                    disabled={accionMpEnCurso || !oauthConfigurado}
+                                    onClick={() => handleConectarMP(true)}
+                                  >
+                                    <FaSyncAlt />
+                                    {accionMpEnCurso ? 'Redirigiendo...' : 'Volver a vincular'}
+                                  </button>
+
+                                  {!confirmandoDesconexionMp ? (
+                                    <button
+                                      type="button"
+                                      className="mp-btn-disconnect"
+                                      disabled={accionMpEnCurso}
+                                      onClick={() => setConfirmandoDesconexionMp(true)}
+                                    >
+                                      <FaUnlink /> Desconectar cuenta
+                                    </button>
+                                  ) : (
+                                    <div className="mp-confirm-disconnect">
+                                      <span>¿Confirmás desconectar? No se borrará tu historial de pagos.</span>
+                                      <button
+                                        type="button"
+                                        className="mp-btn-disconnect confirm"
+                                        disabled={accionMpEnCurso}
+                                        onClick={handleDesconectarMP}
+                                      >
+                                        {accionMpEnCurso ? 'Desconectando...' : 'Sí, desconectar'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="mp-btn-cancel"
+                                        disabled={accionMpEnCurso}
+                                        onClick={() => setConfirmandoDesconexionMp(false)}
+                                      >
+                                        Cancelar
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            ) : (
+                              <div className="mp-connect-cta-box">
+                                <p>
+                                  Al hacer clic en el botón serás redirigido al sitio oficial de Mercado Pago para
+                                  autorizar de forma segura tu cuenta comercial para{' '}
+                                  <strong>{gymForm.nombre || gimnasioActivo?.nombre || 'tu gimnasio'}</strong>.
+                                </p>
+
+                                <div className="mp-actions-row">
+                                  <button
+                                    type="button"
+                                    className="mp-btn-connect"
+                                    disabled={accionMpEnCurso || !gimnasioActivoId}
+                                    onClick={() => handleConectarMP(false)}
+                                  >
+                                    <FaCreditCard />
+                                    <span>
+                                      {accionMpEnCurso
+                                        ? 'Iniciando autorización...'
+                                        : 'Conectar cuenta de Mercado Pago'}
+                                    </span>
+                                    <FaExternalLinkAlt style={{ fontSize: '12px' }} />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Tarjeta lateral Seguridad OAuth */}
+                      <div className="perfil-dueno-side-card">
+                        <div className="perfil-dueno-side-card-badge">
+                          <FaShieldAlt /> Conexión OAuth Segura
+                        </div>
+                        <h4>Cómo funciona la vinculación</h4>
+                        <p>
+                          Cada gimnasio vincula su propia cuenta de Mercado Pago mediante autorización oficial OAuth.
+                          GymTrack nunca te pedirá tu contraseña de Mercado Pago.
+                        </p>
+
+                        <div className="perfil-dueno-checklist">
+                          <div className="perfil-dueno-checklist-item">
+                            <FaCheck className="chk-icon" />
+                            <span>Tokens cifrados en servidor y nunca expuestos al navegador</span>
+                          </div>
+                          <div className="perfil-dueno-checklist-item">
+                            <FaCheck className="chk-icon" />
+                            <span>Una cuenta de Mercado Pago vinculada por gimnasio</span>
+                          </div>
+                          <div className="perfil-dueno-checklist-item">
+                            <FaCheck className="chk-icon" />
+                            <span>Desconectar no elimina el historial de pagos registrados</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* CONTENIDO PESTAÑA 3: SEGURIDAD & CONTRASEÑA */}
               {pestanaActiva === 'seguridad' && (
                 <div className="perfil-dueno-tab-content">
@@ -898,6 +1308,66 @@ function PerfilDueno() {
           )}
         </main>
       </div>
+
+      {/* Modal de autorización OAuth simulada (para presentación con cuenta de prueba) */}
+      {modalOAuthSimulado && (
+        <div
+          className="mp-oauth-modal-overlay"
+          onClick={() => !accionMpEnCurso && handleConfirmarOAuthSimulado(false)}
+        >
+          <div className="mp-oauth-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="mp-oauth-modal-top">
+              <MercadoPagoLogo height={30} />
+              <span className="mp-oauth-demo-chip">Autorización OAuth — Cuenta de prueba</span>
+            </div>
+
+            <h3>¿Autorizás a GymTrack a vincular tu cuenta?</h3>
+            <p className="mp-oauth-modal-desc">
+              Se vinculará la cuenta de prueba de Mercado Pago a{' '}
+              <strong>{gymForm.nombre || gimnasioActivo?.nombre || 'tu gimnasio'}</strong> para recibir pagos de membresías.
+            </p>
+
+            <div className="mp-oauth-modal-info">
+              <div>
+                <span>Cuenta vendedor de prueba:</span>
+                <strong>{modalOAuthSimulado.cuenta_prueba?.alias || 'Cuenta de prueba Mercado Pago'}</strong>
+              </div>
+              <div>
+                <span>ID de cuenta:</span>
+                <strong>{modalOAuthSimulado.cuenta_prueba?.external_user_id || 'TEST-MP'}</strong>
+              </div>
+            </div>
+
+            <ul className="mp-oauth-modal-perms">
+              <li><FaCheck /> Recibir pagos de membresías contratadas por socios</li>
+              <li><FaCheck /> Consultar estado de acreditación en la cuenta de prueba</li>
+              <li><FaCheck /> Almacenar credenciales cifradas exclusivamente en el servidor</li>
+            </ul>
+
+            <div className="mp-oauth-modal-actions">
+              <button
+                type="button"
+                className="mp-btn-connect"
+                disabled={accionMpEnCurso}
+                onClick={() => handleConfirmarOAuthSimulado(true)}
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                <FaCheckCircle />
+                <span>{accionMpEnCurso ? 'Vinculando cuenta...' : 'Autorizar y conectar cuenta'}</span>
+              </button>
+              <button
+                type="button"
+                className="mp-btn-cancel"
+                disabled={accionMpEnCurso}
+                onClick={() => handleConfirmarOAuthSimulado(false)}
+                style={{ width: '100%' }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
