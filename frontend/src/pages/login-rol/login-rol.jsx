@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   loginAdministrador,
   loginEmpleado,
@@ -8,6 +8,7 @@ import {
 import { useGymContext } from '../../context/GymContext.jsx';
 import logoImg from '../../assets/logo_verde.jpg';
 import PasswordInput from '../../components/PasswordInput/PasswordInput';
+import LoginRoleTabs from '../../components/LoginRoleTabs/LoginRoleTabs';
 import '../login-dueno/login.css';
 
 const CONFIG_POR_ROL = {
@@ -115,69 +116,64 @@ export default function LoginRol({ rolFormulario = 'administrador' }) {
 
   return (
     <main className="login-page">
-      <div className="login-card">
-        <img src={logoImg} alt="GymTrack Logo" className="login-logo" />
+      <div className="login-shell">
+        <LoginRoleTabs activeRole={rolFormulario === 'empleado' ? 'empleado' : 'administrador'} />
+        <div className="login-card">
+          <img src={logoImg} alt="GymTrack Logo" className="login-logo" />
 
-        <h1>{cfg.titulo}</h1>
-        <p style={{ color: '#94a3b8', fontSize: '0.86rem', textAlign: 'center', margin: '-6px 0 14px' }}>
-          {cfg.subtitulo}
-        </p>
+          <h1>{cfg.titulo}</h1>
+          <p style={{ color: '#94a3b8', fontSize: '0.86rem', textAlign: 'center', margin: '-6px 0 14px' }}>
+            {cfg.subtitulo}
+          </p>
 
-        <form onSubmit={handleSubmit}>
-          <div className="login-form-group">
-            <label htmlFor="email">Correo electrónico</label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder={cfg.placeholderEmail}
-              autoComplete="email"
-            />
-            {errors.email && <span className="login-error">{errors.email}</span>}
-          </div>
-
-          <PasswordInput
-            id="contrasena"
-            name="contrasena"
-            value={formData.contrasena}
-            onChange={handleChange}
-            placeholder="************"
-            label="Contraseña"
-            error={errors.contrasena}
-          />
-
-          <div className="login-links" style={{ flexWrap: 'wrap', gap: '8px' }}>
-            <Link to="/login-dueño">Dueño</Link>
-            {rolFormulario !== 'administrador' && <Link to="/login-administrador">Administrador</Link>}
-            {rolFormulario !== 'empleado' && <Link to="/login-empleado">Empleado</Link>}
-            <Link to="/login-socio">Socio</Link>
-           
-          </div>
-
-          {recoveryMsg && (
-            <div
-              style={{
-                background: 'rgba(158, 240, 26, 0.1)',
-                border: '1px solid rgba(158, 240, 26, 0.35)',
-                color: '#d9f99d',
-                borderRadius: '8px',
-                padding: '10px 12px',
-                fontSize: '0.85rem',
-                marginBottom: '10px'
-              }}
-            >
-              {recoveryMsg}
+          <form onSubmit={handleSubmit}>
+            <div className="login-form-group">
+              <label htmlFor="email">Correo electrónico</label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder={cfg.placeholderEmail}
+                autoComplete="email"
+              />
+              {errors.email && <span className="login-error">{errors.email}</span>}
             </div>
-          )}
 
-          {backendError && <div className="login-backend-error">{backendError}</div>}
+            <PasswordInput
+              id="contrasena"
+              name="contrasena"
+              value={formData.contrasena}
+              onChange={handleChange}
+              placeholder="************"
+              label="Contraseña"
+              error={errors.contrasena}
+            />
 
-          <button type="submit" className="login-button" disabled={loading}>
-            {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
-          </button>
-        </form>
+            {recoveryMsg && (
+              <div
+                style={{
+                  background: 'rgba(158, 240, 26, 0.1)',
+                  border: '1px solid rgba(158, 240, 26, 0.35)',
+                  color: '#d9f99d',
+                  borderRadius: '8px',
+                  padding: '10px 12px',
+                  fontSize: '0.85rem',
+                  marginBottom: '10px'
+                }}
+              >
+                {recoveryMsg}
+              </div>
+            )}
+
+            {backendError && <div className="login-backend-error">{backendError}</div>}
+
+            <button type="submit" className="login-button" disabled={loading}>
+              {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+            </button>
+          </form>
+        </div>
       </div>
     </main>
   );

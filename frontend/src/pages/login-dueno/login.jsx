@@ -30,6 +30,7 @@ import { loginDueno, recuperarContrasena } from '../../services/authService.js'
 import { useGymContext } from '../../context/GymContext.jsx'
 import logoImg from '../../assets/logo_verde.jpg'
 import PasswordInput from '../../components/PasswordInput/PasswordInput'
+import LoginRoleTabs from '../../components/LoginRoleTabs/LoginRoleTabs'
 import './login.css'
 
 function Login() {
@@ -179,7 +180,11 @@ function Login() {
 
     <main className="login-page">
 
-      <div className="login-card">
+      <div className="login-shell">
+
+        <LoginRoleTabs activeRole="dueño" />
+
+        <div className="login-card">
 
         {/* LOGO */}
 
@@ -234,26 +239,6 @@ function Login() {
             label="Contraseña"
             error={errors.contrasena}
           />
-
-          {/* LINKS */}
-
-          <div className="login-links" style={{ flexWrap: 'wrap', gap: '8px' }}>
-
-            <Link to="/login-administrador">
-              Administrador
-            </Link>
-
-            <Link to="/login-empleado">
-              Empleado
-            </Link>
-
-            <Link to="/login-socio">
-              ¿Eres socio?
-            </Link>
-
-  
-
-          </div>
 
           {recoveryMsg && (
             <div
@@ -327,6 +312,8 @@ function Login() {
           </div> */}
 
         </form>
+
+      </div>
 
       </div>
 

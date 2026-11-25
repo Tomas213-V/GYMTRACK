@@ -18,11 +18,12 @@
  */
 
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { loginSocio, recuperarContrasena } from '../../services/authService.js'
 import { useGymContext } from '../../context/GymContext.jsx'
 import logoImg from '../../assets/logo_verde.jpg'
 import PasswordInput from '../../components/PasswordInput/PasswordInput'
+import LoginRoleTabs from '../../components/LoginRoleTabs/LoginRoleTabs'
 import '../login-dueno/login.css'
 
 function LoginSocio() {
@@ -132,117 +133,111 @@ function LoginSocio() {
 
   return (
     <main className="login-page">
-      <div className="login-card">
-        {/* LOGO */}
-        <img
-          src={logoImg}
-          alt="GymTrack Logo"
-          className="login-logo"
-        />
-
-        {/* TÍTULO */}
-        <h1>Portal del Socio</h1>
-
-        {/* FORMULARIO */}
-        <form onSubmit={handleSubmit}>
-          {/* EMAIL */}
-          <div className="login-form-group">
-            <label htmlFor="email">
-              Correo electrónico
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="socio@email.com"
-              autoComplete="email"
-            />
-            {errors.email && (
-              <span className="login-error">
-                {errors.email}
-              </span>
-            )}
-          </div>
-
-          {/* DNI */}
-          <div className="login-form-group">
-            <label htmlFor="dni">
-              DNI
-            </label>
-            <input
-              id="dni"
-              name="dni"
-              type="text"
-              value={formData.dni}
-              onChange={handleChange}
-              placeholder="Ej: 39123456"
-              autoComplete="off"
-              required
-            />
-            {errors.dni && (
-              <span className="login-error">
-                {errors.dni}
-              </span>
-            )}
-          </div>
-
-          {/* CONTRASEÑA */}
-          <PasswordInput
-            id="contrasena"
-            name="contrasena"
-            value={formData.contrasena}
-            onChange={handleChange}
-            placeholder="************"
-            label="Contraseña"
-            error={errors.contrasena}
+      <div className="login-shell">
+        <LoginRoleTabs activeRole="socio" />
+        <div className="login-card">
+          {/* LOGO */}
+          <img
+            src={logoImg}
+            alt="GymTrack Logo"
+            className="login-logo"
           />
 
-          {/* ENLACES */}
-          <div className="login-links" style={{ flexWrap: 'wrap', gap: '8px' }}>
-            <Link to="/login-dueño">Dueño</Link>
-            <Link to="/login-administrador">Administrador</Link>
-            <Link to="/login-empleado">Empleado</Link>
+          {/* TÍTULO */}
+          <h1>Portal del Socio</h1>
 
-           
-          </div>
+          {/* FORMULARIO */}
+          <form onSubmit={handleSubmit}>
+            {/* EMAIL */}
+            <div className="login-form-group">
+              <label htmlFor="email">
+                Correo electrónico
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="socio@email.com"
+                autoComplete="email"
+              />
+              {errors.email && (
+                <span className="login-error">
+                  {errors.email}
+                </span>
+              )}
+            </div>
 
-          {recoveryMsg && (
-            <div
-              style={{
-                background: 'rgba(158, 240, 26, 0.1)',
-                border: '1px solid rgba(158, 240, 26, 0.35)',
-                color: '#d9f99d',
-                borderRadius: '8px',
-                padding: '10px 12px',
-                fontSize: '0.85rem',
-                marginBottom: '10px'
-              }}
+            {/* DNI */}
+            <div className="login-form-group">
+              <label htmlFor="dni">
+                DNI
+              </label>
+              <input
+                id="dni"
+                name="dni"
+                type="text"
+                value={formData.dni}
+                onChange={handleChange}
+                placeholder="Ej: 39123456"
+                autoComplete="off"
+                required
+              />
+              {errors.dni && (
+                <span className="login-error">
+                  {errors.dni}
+                </span>
+              )}
+            </div>
+
+            {/* CONTRASEÑA */}
+            <PasswordInput
+              id="contrasena"
+              name="contrasena"
+              value={formData.contrasena}
+              onChange={handleChange}
+              placeholder="************"
+              label="Contraseña"
+              error={errors.contrasena}
+            />
+
+            {recoveryMsg && (
+              <div
+                style={{
+                  background: 'rgba(158, 240, 26, 0.1)',
+                  border: '1px solid rgba(158, 240, 26, 0.35)',
+                  color: '#d9f99d',
+                  borderRadius: '8px',
+                  padding: '10px 12px',
+                  fontSize: '0.85rem',
+                  marginBottom: '10px'
+                }}
+              >
+                {recoveryMsg}
+              </div>
+            )}
+
+            {/* ERROR DEL BACKEND */}
+            {backendError && (
+              <div className="login-backend-error">
+                {backendError}
+              </div>
+            )}
+
+            {/* BOTÓN INICIAR SESIÓN */}
+            <button
+              type="submit"
+              className="login-button"
+              disabled={loading}
             >
-              {recoveryMsg}
-            </div>
-          )}
+              {loading ? 'Ingresando...' : 'Ingresar como Socio'}
+            </button>
 
-          {/* ERROR DEL BACKEND */}
-          {backendError && (
-            <div className="login-backend-error">
-              {backendError}
-            </div>
-          )}
-
-          {/* BOTÓN INICIAR SESIÓN */}
-          <button
-            type="submit"
-            className="login-button"
-            disabled={loading}
-          >
-            {loading ? 'Ingresando...' : 'Ingresar como Socio'}
-          </button>
-
-          {/* BOTÓN ACTIVAR CUENTA / CREAR CONTRASEÑA DE SOCIO */}
-          
-        </form>
+            {/* BOTÓN ACTIVAR CUENTA / CREAR CONTRASEÑA DE SOCIO */}
+            
+          </form>
+        </div>
       </div>
     </main>
   )
