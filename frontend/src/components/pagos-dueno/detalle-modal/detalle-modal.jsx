@@ -89,7 +89,7 @@ function PagosDetalleModal({
   const telefonoSocio = socioData.telefono || "No especificado";
   const emailSocio = socioData.email || "No especificado";
   const metodoPago = detalle?.metodo_pago || pago.metodo_pago || "efectivo";
-  const estadoActual = (pago.estado || detalle?.estado || "aprobado").toLowerCase();
+  const estadoActual = String(pago.estado ?? detalle?.estado ?? "aprobado").toLowerCase();
   const fechaPago = pago.fecha || formatearFecha(detalle?.fecha_pago);
   const planNombre = membData.membresia_gimnasio?.nombre || pago.plan || "Plan General";
   const vencimientoMembresia = membData.fecha_vencimiento

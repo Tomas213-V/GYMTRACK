@@ -14,6 +14,16 @@ import {
 import { getSocioById, updateSocio, deleteSocio, changeEstadoSocio } from "../../../services/socioService";
 import "./detalle-modal.css";
 
+function normalizarEstadoSocio(valor) {
+  if (typeof valor === "boolean") {
+    return valor ? "activo" : "inactivo";
+  }
+  const texto = String(valor ?? "activo").trim().toLowerCase();
+  if (["true", "1", "activo", "activa"].includes(texto)) return "activo";
+  if (["false", "0", "inactivo", "inactiva"].includes(texto)) return "inactivo";
+  return texto || "activo";
+}
+
 function SocioDetalleModal({
   abierto,
   socio,
@@ -47,7 +57,7 @@ function SocioDetalleModal({
     if (abierto && socio?.id_socio) {
       setCargandoDetalle(true);
 
-      getSocioById(socio.id_socio)
+      getSocioById(socio.id_socio, { id_gimnasio: gymId })
         .catch(() => null)
         .then((socioData) => {
           if (!montado) return;
@@ -76,7 +86,7 @@ function SocioDetalleModal({
     return () => {
       montado = false;
     };
-  }, [abierto, socio]);
+  }, [abierto, socio, gymId]);
 
   if (!abierto || !socio) return null;
 
@@ -89,18 +99,33 @@ function SocioDetalleModal({
       ? `${usuarioData.nombre} ${usuarioData.apellido || ""}`.trim()
       : "Socio");
 
-  const membActiva = Array.isArray(s.membresia) && s.membresia.length > 0
-    ? (s.membresia.find(m => m.estado === 'activo') || s.membresia[0])
-    : (s.membresia && !Array.isArray(s.membresia) ? s.membresia : null);
+  const listaMembresias = Array.isArray(s.membresias)
+    ? s.membresias
+    : (Array.isArray(s.membresia)
+      ? s.membresia
+      : (s.membresia ? [s.membresia] : []));
 
-  const planNombre = membActiva?.membresia_gimnasio?.nombre || "Sin Plan";
+  const membActiva =
+    s.membresia_actual ||
+    listaMembresias.find((m) => ['activo', 'activa'].includes(String(m?.estado ?? '').trim().toLowerCase())) ||
+    listaMembresias.find((m) => String(m?.estado ?? '').trim().toLowerCase() === 'pendiente') ||
+    listaMembresias.find((m) => String(m?.estado ?? '').trim().toLowerCase() !== 'cancelada') ||
+    listaMembresias[0] ||
+    null;
+
+  const planNombreBase = membActiva?.membresia_gimnasio?.nombre || membActiva?.plan_membresia?.nombre || "Sin Plan";
+  const estadoMembresiaStr = membActiva?.estado ? String(membActiva.estado).trim().toLowerCase() : "";
+  const planNombre =
+    membActiva && estadoMembresiaStr && estadoMembresiaStr !== "activa" && estadoMembresiaStr !== "activo"
+      ? `${planNombreBase} (${estadoMembresiaStr.charAt(0).toUpperCase() + estadoMembresiaStr.slice(1)})`
+      : planNombreBase;
   const planPrecio = membActiva?.precio != null
     ? `$${Number(membActiva.precio).toLocaleString("es-AR")}`
     : (membActiva?.membresia_gimnasio?.precio != null ? `$${Number(membActiva.membresia_gimnasio.precio).toLocaleString("es-AR")}` : "No definido");
 
   const formatearFecha = (fechaStr) => {
     if (!fechaStr) return "Sin fecha";
-    const partes = fechaStr.split("T")[0].split("-");
+    const partes = String(fechaStr).split("T")[0].split("-");
     if (partes.length === 3) return `${partes[2]}/${partes[1]}/${partes[0]}`;
     return fechaStr;
   };
@@ -109,8 +134,8 @@ function SocioDetalleModal({
     ? formatearFecha(membActiva.fecha_vencimiento)
     : "Sin vencimiento fijo";
 
-  const fechaAlta = s.fecha_alta ? formatearFecha(s.fecha_alta) : "No registrada";
-  const estadoActual = (s.estado || "activo").toLowerCase();
+  const fechaAlta = (s.fecha_alta_gimnasio || s.fecha_alta) ? formatearFecha(s.fecha_alta_gimnasio || s.fecha_alta) : "No registrada";
+  const estadoActual = normalizarEstadoSocio(s.estado);
 
   // Cambiar estado rápido desde el selector
   const handleCambiarEstadoRapido = async (nuevoEstado) => {
@@ -247,7 +272,6 @@ function SocioDetalleModal({
                     onChange={(e) => handleCambiarEstadoRapido(e.target.value)}
                   >
                     <option value="activo">Activo</option>
-                    <option value="pendiente">Pendiente</option>
                     <option value="inactivo">Inactivo</option>
                   </select>
                 </div>

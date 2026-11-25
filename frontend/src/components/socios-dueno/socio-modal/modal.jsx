@@ -35,12 +35,15 @@ function SocioModal({ onClose, onSuccess, gymId }) {
     getPlanes({ id_gimnasio: gymId })
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
-          const activos = data.filter((p) => p.estado !== false)
-          const lista = activos.length > 0 ? activos : data
-          setPlanes(lista)
+          const activos = data.filter(
+            (p) =>
+              p?.estado === true ||
+              ['activo', 'activa', 'true'].includes(String(p?.estado ?? '').trim().toLowerCase())
+          )
+          setPlanes(activos)
           setFormData((prev) => ({
             ...prev,
-            id_membresia_gimnasio: getPlanId(lista[0])
+            id_membresia_gimnasio: activos.length > 0 ? getPlanId(activos[0]) : ''
           }))
         }
       })

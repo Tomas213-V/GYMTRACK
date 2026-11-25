@@ -9,7 +9,6 @@ function SocioSearch({
   const tabs = [
     { id: 'todos', label: 'Todos' },
     { id: 'activo', label: 'Activos' },
-    { id: 'pendiente', label: 'Pendientes' },
     { id: 'inactivo', label: 'Inactivos' },
   ]
 

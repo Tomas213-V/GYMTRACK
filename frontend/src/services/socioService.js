@@ -65,9 +65,25 @@ export async function listarMisGimnasiosSocio({ solo_activas = false, signal } =
   return apiRequest(`/socios/mis-gimnasios${qs}`, { signal });
 }
 
-export async function getSocioById(id, { signal } = {}) {
-  const data = await apiRequest(`/socios/${id}`, { signal });
-  return data.socio;
+export async function getSocioById(id, { id_gimnasio = null, signal } = {}) {
+  const qs = id_gimnasio ? `?id_gimnasio=${encodeURIComponent(id_gimnasio)}` : '';
+  const data = await apiRequest(`/socios/${id}${qs}`, {
+    signal,
+    ...(id_gimnasio ? { gimnasioId: id_gimnasio } : {})
+  });
+  if (!data?.socio) return null;
+  const membresias = Array.isArray(data.membresias)
+    ? data.membresias
+    : (Array.isArray(data.socio.membresias)
+        ? data.socio.membresias
+        : (Array.isArray(data.socio.membresia) ? data.socio.membresia : []));
+  const membresiaActual = data.membresia_actual || data.socio.membresia_actual || membresias[0] || null;
+  return {
+    ...data.socio,
+    membresia: membresias,
+    membresias,
+    membresia_actual: membresiaActual
+  };
 }
 
 /**

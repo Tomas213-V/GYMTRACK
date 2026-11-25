@@ -71,7 +71,7 @@ function PagosTabla({
               </tr>
             ) : pagos.length > 0 ? (
               pagos.map((item) => {
-                const estadoPago = (item.estado || "aprobado").toLowerCase();
+                const estadoPago = String(item.estado ?? "aprobado").toLowerCase();
                 const cuotaMeta = getEstadoCuotaMeta(item.estadoCuota);
                 return (
                 <tr key={item.id} className="Caja-pagos-fila">

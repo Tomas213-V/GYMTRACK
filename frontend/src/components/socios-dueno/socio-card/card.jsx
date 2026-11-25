@@ -7,14 +7,19 @@ function SocioCard({ socio, onClick }) {
         ? `${socio.usuario.nombre} ${socio.usuario.apellido || ''}`.trim()
         : 'Sin Nombre');
 
-  const memb = Array.isArray(socio.membresia)
-    ? (socio.membresia[0] || null)
-    : (socio.membresia || null);
+  const memb =
+    socio.membresia_actual ||
+    (Array.isArray(socio.membresias) ? socio.membresias[0] : null) ||
+    (Array.isArray(socio.membresia) ? socio.membresia[0] : socio.membresia) ||
+    null;
 
-  const planNombre = memb?.membresia_gimnasio?.nombre || memb?.tipo || 'Sin Plan';
-  const vencimiento = memb?.fecha_vencimiento
-    ? new Date(memb.fecha_vencimiento).toLocaleDateString('es-AR')
-    : 'N/A';
+  const planNombre = memb?.membresia_gimnasio?.nombre || memb?.plan_membresia?.nombre || memb?.tipo || 'Sin Plan';
+  const formatearFecha = (fechaStr) => {
+    if (!fechaStr) return 'N/A';
+    const partes = String(fechaStr).split('T')[0].split('-');
+    return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : fechaStr;
+  };
+  const vencimiento = memb?.fecha_vencimiento ? formatearFecha(memb.fecha_vencimiento) : 'N/A';
 
   const estadoLabel = typeof socio.estado === 'boolean'
     ? (socio.estado ? 'activo' : 'inactivo')
