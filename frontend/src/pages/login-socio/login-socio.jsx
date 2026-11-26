@@ -202,6 +202,17 @@ function LoginSocio() {
               error={errors.contrasena}
             />
 
+            <div className="login-recovery-row">
+              <button
+                type="button"
+                className="login-forgot-btn"
+                onClick={handleRecuperar}
+                disabled={loading}
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
+
             {recoveryMsg && (
               <div
                 style={{

@@ -30,7 +30,8 @@
  * y verifica si el dueño ya dio de alta su gimnasio antes de permitir el ingreso.
  */
 
-import { Route, Routes } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 
 // Páginas Públicas y de Presentación
 import Landing from './pages/landing/landing'
@@ -45,6 +46,7 @@ import LoginRol from './pages/login-rol/login-rol'
 import LoginSocio from './pages/login-socio/login-socio'
 import Register from './pages/register-dueno/register'
 import RegisterSocio from './pages/register-socio/register-socio'
+import RestablecerContrasena from './pages/restablecer-contrasena/restablecer'
 import SeleccionarGimnasio from './pages/seleccionar-gimnasio/seleccionar-gimnasio'
 
 // Páginas del Rol Dueño / Administrador
@@ -103,9 +105,48 @@ function RoleAwareRoute({
   )
 }
 
+function RecoveryRedirectGuard() {
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (
+      location.pathname === '/restablecer-contrasena' ||
+      location.pathname === '/recuperar-contrasena'
+    ) {
+      return
+    }
+    const hashParams = new URLSearchParams((location.hash || '').replace(/^#/, ''))
+    const searchParams = new URLSearchParams(location.search || '')
+    const type = (hashParams.get('type') || searchParams.get('type') || '').toLowerCase()
+    const hasAccessToken = Boolean(
+      hashParams.get('access_token') || searchParams.get('access_token')
+    )
+    const hasTokenHash = Boolean(
+      searchParams.get('token_hash') || hashParams.get('token_hash')
+    )
+    const hasRecoveryError = Boolean(
+      (hashParams.get('error') || searchParams.get('error')) &&
+      (type === 'recovery' || !type)
+    )
+
+    if (
+      (type === 'recovery' && (hasAccessToken || hasTokenHash || hasRecoveryError)) ||
+      (hasTokenHash && type === 'recovery')
+    ) {
+      navigate(`/restablecer-contrasena${location.search || ''}${location.hash || ''}`, {
+        replace: true
+      })
+    }
+  }, [location, navigate])
+
+  return null
+}
+
 function App() {
   return (
     <>
+      <RecoveryRedirectGuard />
       <Routes>
         {/* =========================================================
             SECCIÓN 1: RUTAS PÚBLICAS / LANDING PAGE
@@ -151,6 +192,8 @@ function App() {
         <Route path="/register-dueno" element={<Register />} />
         <Route path="/register-landing" element={<Register />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/restablecer-contrasena" element={<RestablecerContrasena />} />
+        <Route path="/recuperar-contrasena" element={<RestablecerContrasena />} />
 
         <Route
           path="/dashboard-dueño"

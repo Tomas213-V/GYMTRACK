@@ -57,6 +57,7 @@ function Login() {
 
   // Indicador de solicitud en curso para deshabilitar botones
   const [loading, setLoading] = useState(false)
+  const [recuperando, setRecuperando] = useState(false)
 
 
   // Actualiza los campos del formulario.
@@ -166,13 +167,17 @@ function Login() {
     setRecoveryMsg('')
     if (!formData.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
       setBackendError('Ingresá tu correo electrónico arriba para enviarte el enlace de recuperación.')
+      document.getElementById('email')?.focus()
       return
     }
     try {
+      setRecuperando(true)
       const res = await recuperarContrasena(formData.email.trim())
       setRecoveryMsg(res?.mensaje || 'Si la cuenta existe, enviamos un correo de recuperación.')
     } catch (err) {
       setBackendError(err.message || 'No se pudo solicitar la recuperación de contraseña.')
+    } finally {
+      setRecuperando(false)
     }
   }
 
@@ -239,6 +244,17 @@ function Login() {
             label="Contraseña"
             error={errors.contrasena}
           />
+
+          <div className="login-recovery-row">
+            <button
+              type="button"
+              className="login-forgot-btn"
+              onClick={handleRecuperar}
+              disabled={loading || recuperando}
+            >
+              {recuperando ? 'Enviando enlace...' : '¿Olvidaste tu contraseña?'}
+            </button>
+          </div>
 
           {recoveryMsg && (
             <div

@@ -104,6 +104,27 @@ export async function recuperarContrasena(email) {
   });
 }
 
+export async function restablecerContrasena({
+  access_token = null,
+  token_hash = null,
+  type = 'recovery',
+  nueva_contrasena,
+  confirmar_contrasena = null
+}) {
+  return apiRequest('/auth/restablecer-contrasena', {
+    method: 'POST',
+    body: {
+      ...(access_token ? { access_token } : {}),
+      ...(token_hash ? { token_hash } : {}),
+      type,
+      nueva_contrasena,
+      ...(confirmar_contrasena !== null ? { confirmar_contrasena } : {})
+    },
+    skipAuthRefresh: true,
+    skipAuthHeaders: true
+  });
+}
+
 export async function logoutBackend() {
   return apiRequest('/auth/logout', {
     method: 'POST',

@@ -318,6 +318,34 @@
   text-decoration: underline;
 }
 
+.login-recovery-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -14px;
+}
+
+.login-forgot-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: #91f000;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.login-forgot-btn:hover:not(:disabled) {
+  color: #b8ff4d;
+  text-decoration: underline;
+}
+
+.login-forgot-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 
 /* =========================================================
    ERROR BACKEND
