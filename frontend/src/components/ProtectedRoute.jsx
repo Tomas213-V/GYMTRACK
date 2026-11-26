@@ -2,8 +2,56 @@
 // COMPONENTE GUARDIÁN DE RUTAS — DUEÑO / ADMIN ORGANIZACIONAL / EMPLEADO / SOCIO
 // ==============================================================================
 
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useGymContext } from '../context/GymContext';
+
+const MVP_STAFF_PATHS = new Set([
+  '/sucursales-dueño',
+  '/sucursales-dueno',
+  '/sucursales',
+  '/socios-dueño',
+  '/socios-dueno',
+  '/socios',
+  '/empleado/socios',
+  '/membresia-dueño',
+  '/membresia-dueno',
+  '/membresias-dueño',
+  '/membresias-dueno',
+  '/membresia-admin',
+  '/membresias',
+  '/membresias-admin',
+  '/membresia',
+  '/asistencias-dueño',
+  '/asistencias-dueno',
+  '/empleado/asistencias',
+  '/asistencias',
+  '/pagos-dueño',
+  '/pagos-dueno',
+  '/pagos',
+  '/empleado/pagos',
+  '/perfil-dueño',
+  '/perfil-dueno',
+  '/empleado/perfil',
+  '/perfil',
+  '/crear-gimnasio-dueño',
+  '/crear-gimnasio-dueno',
+  '/crear-gimnasio',
+  '/seleccionar-gimnasio'
+]);
+
+const MVP_SOCIO_PATHS = new Set([
+  '/asistencia-socio',
+  '/asistencias-socio',
+  '/socio/asistencia',
+  '/asistencias',
+  '/membresia-socio',
+  '/socio/membresia',
+  '/mi-membresia',
+  '/membresia',
+  '/perfil-socio',
+  '/perfil',
+  '/seleccionar-gimnasio'
+]);
 
 /**
  * @param {Object} props
@@ -22,6 +70,7 @@ function ProtectedRoute({
   rolRequerido = null,
   permisoRequerido = null
 }) {
+  const location = useLocation();
   const {
     isAuthenticated,
     esSocio,
@@ -29,13 +78,20 @@ function ProtectedRoute({
     esAdministrador,
     esEmpleado,
     esStaff,
+    mvpMode,
     gimnasios,
     gimnasioActivo,
     requiereSeleccionContexto,
     hasPermission
   } = useGymContext();
 
-  const homeNoAutorizado = esSocio ? '/dashboard-socio' : esEmpleado ? '/socios-dueño' : '/dashboard-dueño';
+  const homeNoAutorizado = esSocio
+    ? mvpMode
+      ? '/asistencia-socio'
+      : '/dashboard-socio'
+    : esEmpleado || mvpMode
+      ? '/socios-dueño'
+      : '/dashboard-dueño';
 
   // 1. Verificar sesión autenticada
   if (!isAuthenticated) {
@@ -79,6 +135,21 @@ function ProtectedRoute({
   // 3. Control de permiso granular para administradores organizacionales y empleados
   if (permisoRequerido && !hasPermission(permisoRequerido)) {
     return <Navigate to={homeNoAutorizado} replace />;
+  }
+
+  // 3b. Restricción de rutas cuando el modo MVP está activo
+  if (mvpMode && !permitirSinGimnasio && !permitirSinContexto) {
+    let decodedPath;
+    try {
+      decodedPath = decodeURIComponent(location.pathname);
+    } catch {
+      decodedPath = location.pathname;
+    }
+    const normalizedPath = decodedPath.toLowerCase();
+    const allowedSet = esSocio ? MVP_SOCIO_PATHS : MVP_STAFF_PATHS;
+    if (!allowedSet.has(normalizedPath)) {
+      return <Navigate to={homeNoAutorizado} replace />;
+    }
   }
 
   // 4. Si es socio, permitir acceso incluso si aún no tiene membresías activas

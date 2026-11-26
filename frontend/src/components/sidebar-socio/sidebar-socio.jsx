@@ -20,7 +20,7 @@ import { useGymContext } from '../../context/GymContext';
 function SidebarSocio() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout } = useGymContext();
+  const { mvpMode, logout } = useGymContext();
   const [abiertoMovil, setAbiertoMovil] = useState(false);
 
   useEffect(() => {
@@ -33,19 +33,22 @@ function SidebarSocio() {
     setAbiertoMovil((prev) => (prev ? false : prev));
   }, [location.pathname]);
 
-  const opciones = [
-    { ruta: '/dashboard-socio', nombre: 'Inicio', icono: <FaHouse />, alias: ['/socio/dashboard'] },
-    { ruta: '/rutinas-socio', nombre: 'Rutinas', icono: <FaDumbbell />, alias: ['/socio/rutinas', '/rutinas'] },
-    { ruta: '/ejercicios-socio', nombre: 'Ejercicios', icono: <FaRunning />, alias: ['/socio/ejercicios', '/ejercicios'] },
-    { ruta: '/asistencia-socio', nombre: 'Asistencia', icono: <FaCalendarCheck />, alias: ['/asistencias', '/socio/asistencia', '/asistencias-socio'] },
+  const todasLasOpciones = [
+    { ruta: '/dashboard-socio', nombre: 'Inicio', icono: <FaHouse />, alias: ['/socio/dashboard'], mvp: false },
+    { ruta: '/rutinas-socio', nombre: 'Rutinas', icono: <FaDumbbell />, alias: ['/socio/rutinas', '/rutinas'], mvp: false },
+    { ruta: '/ejercicios-socio', nombre: 'Ejercicios', icono: <FaRunning />, alias: ['/socio/ejercicios', '/ejercicios'], mvp: false },
+    { ruta: '/asistencia-socio', nombre: 'Asistencia', icono: <FaCalendarCheck />, alias: ['/asistencias', '/socio/asistencia', '/asistencias-socio'], mvp: true },
     {
       ruta: '/membresia-socio',
       nombre: 'Membresía',
       icono: <FaCreditCard />,
-      alias: ['/socio/membresia', '/membresia', '/mi-membresia']
+      alias: ['/socio/membresia', '/membresia', '/mi-membresia'],
+      mvp: true
     },
-    { ruta: '/perfil-socio', nombre: 'Perfil', icono: <FaUser />, alias: ['/perfil'] }
+    { ruta: '/perfil-socio', nombre: 'Perfil', icono: <FaUser />, alias: ['/perfil'], mvp: true }
   ];
+
+  const opciones = mvpMode ? todasLasOpciones.filter((op) => op.mvp) : todasLasOpciones;
 
   const handleLogout = () => {
     logout();

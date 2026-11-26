@@ -30,6 +30,7 @@ import {
 } from '../services/authService';
 
 const GymContext = createContext(null);
+const MVP_MODE_STORAGE_KEY = 'gymtrack_mvp_mode';
 
 function leerObjetoLocal(key) {
   try {
@@ -82,6 +83,7 @@ export function GymProvider({ children }) {
   const [contextoConfirmado, setContextoConfirmado] = useState(() => getStoredContextConfirmed());
   const [loadingContext, setLoadingContext] = useState(false);
   const [contextVersion, setContextVersion] = useState(0);
+  const [mvpMode, setMvpModeState] = useState(() => localStorage.getItem(MVP_MODE_STORAGE_KEY) === 'true');
   const activeAbortRef = useRef(null);
   const rolRef = useRef(rol);
   const gymIdRef = useRef(gimnasioActivo?.id_gimnasio ?? null);
@@ -499,6 +501,20 @@ export function GymProvider({ children }) {
     return pool.find((s) => Number(s.id_sucursal) === Number(sucursalActivaId)) || null;
   }, [sucursalActivaId, sucursalesAsignadas, sucursales]);
 
+  const setMvpMode = useCallback((nextValue) => {
+    const enabled = Boolean(nextValue);
+    localStorage.setItem(MVP_MODE_STORAGE_KEY, enabled ? 'true' : 'false');
+    setMvpModeState(enabled);
+  }, []);
+
+  const toggleMvpMode = useCallback(() => {
+    setMvpModeState((prev) => {
+      const next = !prev;
+      localStorage.setItem(MVP_MODE_STORAGE_KEY, next ? 'true' : 'false');
+      return next;
+    });
+  }, []);
+
   const value = useMemo(
     () => ({
       token,
@@ -510,6 +526,9 @@ export function GymProvider({ children }) {
       esAdminSucursal,
       esStaff,
       esSocio,
+      mvpMode,
+      setMvpMode,
+      toggleMvpMode,
       perfilesDisponibles: Array.isArray(usuario?.perfiles_disponibles)
         ? usuario.perfiles_disponibles
         : rol
@@ -546,6 +565,9 @@ export function GymProvider({ children }) {
       esAdminSucursal,
       esStaff,
       esSocio,
+      mvpMode,
+      setMvpMode,
+      toggleMvpMode,
       usuario,
       gimnasios,
       gimnasioActivo,

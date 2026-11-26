@@ -3,7 +3,7 @@
 // ==============================================================================
 
 import { Link, useNavigate } from 'react-router-dom';
-import { FaBars, FaBell, FaChevronDown, FaBuilding, FaPlus } from 'react-icons/fa';
+import { FaBars, FaChevronDown, FaBuilding, FaPlus } from 'react-icons/fa';
 import { useGymContext } from '../../context/GymContext';
 import './nav-global.css';
 
@@ -36,6 +36,8 @@ function NavGlobal() {
     esDueno,
     esAdministrador,
     esEmpleado,
+    mvpMode,
+    toggleMvpMode,
     gimnasios,
     gimnasioActivoId,
     seleccionarGimnasio
@@ -76,7 +78,15 @@ function NavGlobal() {
         </button>
 
         <Link
-          to={esSocio ? '/dashboard-socio' : esEmpleado ? '/socios-dueño' : '/dashboard-dueño'}
+          to={
+            esSocio
+              ? mvpMode
+                ? '/asistencia-socio'
+                : '/dashboard-socio'
+              : esEmpleado || mvpMode
+                ? '/socios-dueño'
+                : '/dashboard-dueño'
+          }
           className="Caja-nav-global-marca"
         >
           <b>
@@ -126,9 +136,19 @@ function NavGlobal() {
           </span>
         )}
 
-        <button className="Caja-nav-global-notificacion-btn" aria-label="Notificaciones">
-          <FaBell />
-          <span className="Caja-nav-global-notificacion-punto"></span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={mvpMode}
+          aria-label="Alternar modo MVP"
+          title={mvpMode ? 'Modo MVP activo: mostrando solo módulos MVP' : 'Activar modo MVP'}
+          className={`Caja-nav-global-mvp-switch ${mvpMode ? 'activo' : ''}`}
+          onClick={toggleMvpMode}
+        >
+          <span className="Caja-nav-global-mvp-label">MVP</span>
+          <span className="Caja-nav-global-mvp-track">
+            <span className="Caja-nav-global-mvp-thumb" />
+          </span>
         </button>
 
         <Link

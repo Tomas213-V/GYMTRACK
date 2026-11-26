@@ -26,7 +26,7 @@ import { useGymContext } from '../../context/GymContext';
 function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { esDueno, esAdministrador, esEmpleado, hasPermission, logout } = useGymContext();
+  const { esDueno, esAdministrador, esEmpleado, mvpMode, hasPermission, logout } = useGymContext();
   const [abiertoMovil, setAbiertoMovil] = useState(false);
 
   useEffect(() => {
@@ -45,42 +45,48 @@ function Sidebar() {
       nombre: 'Socios',
       icono: <FaUsers />,
       alias: ['/socios', '/socios-dueno', '/empleado/socios'],
-      visible: true
+      visible: true,
+      mvp: true
     },
     {
       ruta: '/rutinas-dueño',
       nombre: 'Rutinas',
       icono: <FaDumbbell />,
       alias: ['/rutinas', '/rutinas-dueno', '/empleado/rutinas'],
-      visible: true
+      visible: true,
+      mvp: false
     },
     {
       ruta: '/ejercicios-dueño',
       nombre: 'Ejercicios',
       icono: <FaRunning />,
       alias: ['/ejercicios-dueno', '/ejercicios', '/empleado/ejercicios'],
-      visible: true
+      visible: true,
+      mvp: false
     },
     {
       ruta: '/pagos-dueño',
       nombre: 'Pagos',
       icono: <FaMoneyBill />,
       alias: ['/pagos', '/pagos-dueno', '/empleado/pagos'],
-      visible: true
+      visible: true,
+      mvp: true
     },
     {
       ruta: '/asistencias-dueño',
       nombre: 'Asistencia',
       icono: <FaCalendarCheck />,
       alias: ['/asistencias', '/asistencias-dueno', '/empleado/asistencias'],
-      visible: true
+      visible: true,
+      mvp: true
     },
     {
       ruta: '/perfil-dueño',
       nombre: 'Perfil',
       icono: <FaUser />,
       alias: ['/perfil', '/perfil-dueno', '/empleado/perfil'],
-      visible: true
+      visible: true,
+      mvp: true
     }
   ];
 
@@ -90,90 +96,104 @@ function Sidebar() {
       nombre: 'Inicio',
       icono: <FaHouse />,
       alias: ['/dashboard', '/dashboard-dueno'],
-      visible: true
+      visible: true,
+      mvp: false
     },
     {
       ruta: '/sucursales-dueño',
       nombre: 'Sucursales',
       icono: <FaMapMarkerAlt />,
       alias: ['/sucursales', '/sucursales-dueno'],
-      visible: esDueno || hasPermission('ver_sucursales')
+      visible: esDueno || hasPermission('ver_sucursales'),
+      mvp: true
     },
     {
       ruta: '/administradores-dueño',
       nombre: 'Administradores',
       icono: <FaUserShield />,
       alias: ['/administradores', '/administradores-dueno'],
-      visible: esDueno
+      visible: esDueno,
+      mvp: false
     },
     {
       ruta: '/empleados-dueño',
       nombre: 'Empleados',
       icono: <FaUserTie />,
       alias: ['/empleados', '/empleados-dueno'],
-      visible: esDueno || hasPermission('ver_empleados')
+      visible: esDueno || hasPermission('ver_empleados'),
+      mvp: false
     },
     {
       ruta: '/socios-dueño',
       nombre: 'Socios',
       icono: <FaUsers />,
       alias: ['/socios', '/socios-dueno', '/empleado/socios'],
-      visible: esDueno || hasPermission('gestionar_socios') || hasPermission('ver_socios')
+      visible: esDueno || hasPermission('gestionar_socios') || hasPermission('ver_socios'),
+      mvp: true
     },
     {
       ruta: '/membresia-dueño',
       nombre: 'Membresías',
       icono: <FaCreditCard />,
       alias: ['/membresias-dueño', '/membresia-admin', '/membresias', '/membresias-admin', '/membresia-dueno', '/membresias-dueno'],
-      visible: esDueno || hasPermission('gestionar_membresias')
+      visible: esDueno || hasPermission('gestionar_membresias'),
+      mvp: true
     },
     {
       ruta: '/asistencias-dueño',
       nombre: 'Asistencias',
       icono: <FaCalendarCheck />,
       alias: ['/asistencias', '/asistencias-dueno', '/empleado/asistencias'],
-      visible: esDueno || hasPermission('gestionar_asistencias') || hasPermission('ver_asistencias')
+      visible: esDueno || hasPermission('gestionar_asistencias') || hasPermission('ver_asistencias'),
+      mvp: true
     },
     {
       ruta: '/ejercicios-dueño',
       nombre: 'Ejercicios',
       icono: <FaRunning />,
       alias: ['/ejercicios-dueno', '/ejercicios', '/empleado/ejercicios'],
-      visible: esDueno || hasPermission('gestionar_ejercicios')
+      visible: esDueno || hasPermission('gestionar_ejercicios'),
+      mvp: false
     },
     {
       ruta: '/rutinas-dueño',
       nombre: 'Rutinas',
       icono: <FaDumbbell />,
       alias: ['/rutinas', '/rutinas-dueno', '/empleado/rutinas'],
-      visible: esDueno || hasPermission('gestionar_rutinas')
+      visible: esDueno || hasPermission('gestionar_rutinas'),
+      mvp: false
     },
     {
       ruta: '/pagos-dueño',
       nombre: 'Pagos',
       icono: <FaMoneyBill />,
       alias: ['/pagos', '/pagos-dueno', '/empleado/pagos'],
-      visible: esDueno || hasPermission('gestionar_pagos')
+      visible: esDueno || hasPermission('gestionar_pagos'),
+      mvp: true
     },
     {
       ruta: '/perfil-dueño',
       nombre: 'Mi Perfil',
       icono: <FaUser />,
       alias: ['/perfil', '/perfil-dueno', '/empleado/perfil'],
-      visible: true
+      visible: true,
+      mvp: true
     },
     {
       ruta: '/support-dueño',
       nombre: 'Soporte',
       icono: <FaHeadset />,
       alias: ['/support', '/support-dueno', '/soporte-dueño', '/soporte-dueno'],
-      visible: true
+      visible: true,
+      mvp: false
     }
   ];
 
-  const opciones = esEmpleado
+  const opcionesBase = esEmpleado
     ? opcionesEmpleado
     : todasLasOpciones.filter((op) => op.visible);
+
+  const opciones = mvpMode ? opcionesBase.filter((op) => op.mvp) : opcionesBase;
 
   const handleLogout = () => {
     const destino = esAdministrador
