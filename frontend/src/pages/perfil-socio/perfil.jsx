@@ -46,8 +46,8 @@ import {
 import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar-dueno/sidebar';
 import { useGymContext } from '../../context/GymContext';
-import { getPerfilSocio, updatePerfilSocio } from '../../services/socioService';
-import { cambiarContrasena } from '../../services/authService';
+import { getPerfilSocio, updatePerfilSocio, updateSocio } from '../../services/socioService';
+import { cambiarContrasena, recuperarContrasena } from '../../services/authService';
 import { formatFechaArgentina } from '../../utils/dateUtils';
 import './perfil.css';
 
@@ -72,6 +72,7 @@ function Perfil() {
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [guardandoPassword, setGuardandoPassword] = useState(false);
+  const [enviandoRecuperacion, setEnviandoRecuperacion] = useState(false);
   const [alerta, setAlerta] = useState(null);
 
   const [pestañaActiva, setPestañaActiva] = useState('info');
@@ -181,7 +182,9 @@ function Perfil() {
         dni: formData.dni
       };
 
-      const res = await updatePerfilSocio(payload);
+      const res = !esSocio && socioIdParam
+        ? await updateSocio(socioIdParam, payload, gimnasioActivoId)
+        : await updatePerfilSocio(payload);
 
       if (esSocio && res.socio) {
         await refreshProfile();
@@ -189,7 +192,9 @@ function Perfil() {
 
       setAlerta({
         tipo: 'exito',
-        mensaje: 'Tus datos de perfil fueron actualizados exitosamente.'
+        mensaje: !esSocio && socioIdParam
+          ? 'Los datos del socio fueron actualizados exitosamente.'
+          : 'Tus datos de perfil fueron actualizados exitosamente.'
       });
       await cargarPerfil();
     } catch (err) {
@@ -202,17 +207,26 @@ function Perfil() {
     }
   };
 
-  // Actualizar contraseña
+  // Actualizar contraseña (solo el propio usuario autenticado en su portal)
   const handleCambiarPassword = async (e) => {
     e.preventDefault();
     setAlerta(null);
 
-    if (esSocio && !passwordData.contrasena_actual) {
+    if (!esSocio) {
+      setAlerta({
+        tipo: 'error',
+        mensaje: 'Por seguridad, el dueño no puede sobrescribir la contraseña personal del socio. Podés enviarle un enlace de restablecimiento a su correo.'
+      });
+      return;
+    }
+
+    if (!passwordData.contrasena_actual) {
       setAlerta({ tipo: 'error', mensaje: 'Ingresa tu contraseña actual.' });
       return;
     }
 
-    if (!passwordData.nueva_contrasena || passwordData.nueva_contrasena.length < 6) {
+    const nuevaPassLimpia = passwordData.nueva_contrasena.trim();
+    if (!nuevaPassLimpia || nuevaPassLimpia.length < 6) {
       setAlerta({
         tipo: 'error',
         mensaje: 'La nueva contraseña debe contener al menos 6 caracteres.'
@@ -220,7 +234,15 @@ function Perfil() {
       return;
     }
 
-    if (passwordData.nueva_contrasena !== passwordData.confirmar_contrasena) {
+    if (nuevaPassLimpia === passwordData.contrasena_actual) {
+      setAlerta({
+        tipo: 'error',
+        mensaje: 'La nueva contraseña debe ser diferente a la actual.'
+      });
+      return;
+    }
+
+    if (nuevaPassLimpia !== passwordData.confirmar_contrasena.trim()) {
       setAlerta({
         tipo: 'error',
         mensaje: 'La confirmación de la contraseña no coincide con la nueva contraseña.'
@@ -260,6 +282,37 @@ function Perfil() {
       });
     } finally {
       setGuardandoPassword(false);
+    }
+  };
+
+  // Enviar enlace de recuperación por Supabase Auth desde la Ficha del Socio
+  const handleEnviarRecuperacionPassword = async () => {
+    setAlerta(null);
+    const emailTarget = String(socio?.email || formData.email || '').trim().toLowerCase();
+    if (!emailTarget || emailTarget.includes('@gymtrack.local')) {
+      setAlerta({
+        tipo: 'error',
+        mensaje: 'El socio necesita tener un correo electrónico real configurado en "Datos Personales" para recibir el enlace de restablecimiento.'
+      });
+      return;
+    }
+
+    try {
+      setEnviandoRecuperacion(true);
+      const res = await recuperarContrasena(emailTarget);
+      setAlerta({
+        tipo: 'exito',
+        mensaje:
+          res?.mensaje ||
+          `Se envió un enlace de restablecimiento de contraseña a ${emailTarget}.`
+      });
+    } catch (err) {
+      setAlerta({
+        tipo: 'error',
+        mensaje: err.message || 'No se pudo enviar el enlace de recuperación.'
+      });
+    } finally {
+      setEnviandoRecuperacion(false);
     }
   };
 
@@ -690,25 +743,21 @@ function Perfil() {
               {pestañaActiva === 'seguridad' && (
                 <div className="perfil-tab-content">
                   <div className="perfil-grid-2col">
-                    <div className="perfil-card">
-                      <div className="perfil-card-header">
-                        <div className="perfil-card-header-titles">
-                          <div className="perfil-card-header-icon">
-                            <FaLock />
-                          </div>
-                          <div>
-                            <h3>Cambiar Contraseña</h3>
-                            <p>
-                              {esSocio
-                                ? 'Ingresa tu contraseña actual y define una nueva clave'
-                                : 'Establece una nueva contraseña de acceso para este socio'}
-                            </p>
+                    {esSocio ? (
+                      <div className="perfil-card">
+                        <div className="perfil-card-header">
+                          <div className="perfil-card-header-titles">
+                            <div className="perfil-card-header-icon">
+                              <FaLock />
+                            </div>
+                            <div>
+                              <h3>Cambiar Contraseña</h3>
+                              <p>Ingresa tu contraseña actual y define una nueva clave para tu cuenta</p>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <form onSubmit={handleCambiarPassword} className="perfil-form">
-                        {esSocio && (
+                        <form onSubmit={handleCambiarPassword} className="perfil-form">
                           <div className="perfil-form-group">
                             <label htmlFor="contrasena_actual">Contraseña Actual</label>
                             <div className="perfil-input-wrapper">
@@ -732,70 +781,153 @@ function Perfil() {
                               </button>
                             </div>
                           </div>
-                        )}
 
-                        <div className="perfil-form-group">
-                          <label htmlFor="nueva_contrasena">Nueva Contraseña</label>
-                          <div className="perfil-input-wrapper">
-                            <FaLock className="perfil-input-icon" />
-                            <input
-                              id="nueva_contrasena"
-                              name="nueva_contrasena"
-                              type={mostrarPassNueva ? 'text' : 'password'}
-                              className="perfil-input"
-                              value={passwordData.nueva_contrasena}
-                              onChange={handlePasswordChange}
-                              placeholder="Mínimo 6 caracteres"
-                              required
-                            />
+                          <div className="perfil-form-group">
+                            <label htmlFor="nueva_contrasena">Nueva Contraseña</label>
+                            <div className="perfil-input-wrapper">
+                              <FaLock className="perfil-input-icon" />
+                              <input
+                                id="nueva_contrasena"
+                                name="nueva_contrasena"
+                                type={mostrarPassNueva ? 'text' : 'password'}
+                                className="perfil-input"
+                                value={passwordData.nueva_contrasena}
+                                onChange={handlePasswordChange}
+                                placeholder="Mínimo 6 caracteres"
+                                required
+                              />
+                              <button
+                                type="button"
+                                className="perfil-input-toggle-pass"
+                                onClick={() => setMostrarPassNueva(!mostrarPassNueva)}
+                              >
+                                {mostrarPassNueva ? <FaEyeSlash /> : <FaEye />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="perfil-form-group">
+                            <label htmlFor="confirmar_contrasena">Confirmar Nueva Contraseña</label>
+                            <div className="perfil-input-wrapper">
+                              <FaLock className="perfil-input-icon" />
+                              <input
+                                id="confirmar_contrasena"
+                                name="confirmar_contrasena"
+                                type={mostrarPassConfirm ? 'text' : 'password'}
+                                className="perfil-input"
+                                value={passwordData.confirmar_contrasena}
+                                onChange={handlePasswordChange}
+                                placeholder="Repite la nueva contraseña"
+                                required
+                              />
+                              <button
+                                type="button"
+                                className="perfil-input-toggle-pass"
+                                onClick={() => setMostrarPassConfirm(!mostrarPassConfirm)}
+                              >
+                                {mostrarPassConfirm ? <FaEyeSlash /> : <FaEye />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="perfil-form-actions">
                             <button
-                              type="button"
-                              className="perfil-input-toggle-pass"
-                              onClick={() => setMostrarPassNueva(!mostrarPassNueva)}
+                              type="submit"
+                              className="perfil-btn-primary"
+                              disabled={guardandoPassword}
                             >
-                              {mostrarPassNueva ? <FaEyeSlash /> : <FaEye />}
+                              <FaShieldAlt />
+                              {guardandoPassword
+                                ? 'Actualizando...'
+                                : 'Actualizar Contraseña'}
                             </button>
+                          </div>
+                        </form>
+                      </div>
+                    ) : (
+                      <div className="perfil-card">
+                        <div className="perfil-card-header">
+                          <div className="perfil-card-header-titles">
+                            <div className="perfil-card-header-icon">
+                              <FaLock />
+                            </div>
+                            <div>
+                              <h3>Acceso al Portal y Contraseña</h3>
+                              <p>Gestión segura de credenciales mediante Supabase Auth</p>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="perfil-form-group">
-                          <label htmlFor="confirmar_contrasena">Confirmar Nueva Contraseña</label>
-                          <div className="perfil-input-wrapper">
-                            <FaLock className="perfil-input-icon" />
-                            <input
-                              id="confirmar_contrasena"
-                              name="confirmar_contrasena"
-                              type={mostrarPassConfirm ? 'text' : 'password'}
-                              className="perfil-input"
-                              value={passwordData.confirmar_contrasena}
-                              onChange={handlePasswordChange}
-                              placeholder="Repite la nueva contraseña"
-                              required
-                            />
-                            <button
-                              type="button"
-                              className="perfil-input-toggle-pass"
-                              onClick={() => setMostrarPassConfirm(!mostrarPassConfirm)}
-                            >
-                              {mostrarPassConfirm ? <FaEyeSlash /> : <FaEye />}
-                            </button>
+                        <div
+                          style={{
+                            background: 'rgba(56, 189, 248, 0.08)',
+                            border: '1px solid rgba(56, 189, 248, 0.25)',
+                            borderRadius: '10px',
+                            padding: '14px 16px',
+                            marginBottom: '18px',
+                            fontSize: '13.5px',
+                            lineHeight: 1.5,
+                            color: '#cbd5e1'
+                          }}
+                        >
+                          <strong style={{ color: '#38bdf8', display: 'block', marginBottom: '6px' }}>
+                            El dueño no puede cambiar directamente la contraseña del socio
+                          </strong>
+                          <span>
+                            La cuenta del socio es única y personal en todo GymTrack. Por seguridad, solo el propio socio
+                            puede modificar su contraseña desde su portal o restablecerla por correo electrónico.
+                          </span>
+                        </div>
+
+                        <div className="perfil-gym-info-list" style={{ marginBottom: '18px' }}>
+                          <div className="perfil-gym-info-item">
+                            <div className="perfil-gym-info-icon">
+                              <FaShieldAlt />
+                            </div>
+                            <div className="perfil-gym-info-text">
+                              <span>Estado de Credenciales</span>
+                              <strong style={{ color: (socio?.auth_user_id || socio?.tiene_contrasena) ? '#9EF01A' : '#f59e0b' }}>
+                                {(socio?.auth_user_id || socio?.tiene_contrasena)
+                                  ? 'Cuenta de portal configurada'
+                                  : 'Sin contraseña de portal asignada'}
+                              </strong>
+                            </div>
+                          </div>
+
+                          <div className="perfil-gym-info-item">
+                            <div className="perfil-gym-info-icon">
+                              <FaEnvelope />
+                            </div>
+                            <div className="perfil-gym-info-text">
+                              <span>Correo de Acceso y Recuperación</span>
+                              <strong>
+                                {formData.email && !formData.email.includes('@gymtrack.local')
+                                  ? formData.email
+                                  : 'Sin correo electrónico válido'}
+                              </strong>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="perfil-form-actions">
+                        <div className="perfil-form-actions" style={{ justifyContent: 'flex-start' }}>
                           <button
-                            type="submit"
+                            type="button"
                             className="perfil-btn-primary"
-                            disabled={guardandoPassword}
+                            onClick={handleEnviarRecuperacionPassword}
+                            disabled={
+                              enviandoRecuperacion ||
+                              !formData.email ||
+                              formData.email.includes('@gymtrack.local')
+                            }
                           >
-                            <FaShieldAlt />
-                            {guardandoPassword
-                              ? 'Actualizando...'
-                              : 'Actualizar Contraseña'}
+                            <FaEnvelope />
+                            {enviandoRecuperacion
+                              ? 'Enviando enlace...'
+                              : 'Enviar enlace para restablecer contraseña'}
                           </button>
                         </div>
-                      </form>
-                    </div>
+                      </div>
+                    )}
 
                     {/* Recomendaciones de Seguridad */}
                     <div className="perfil-card">
@@ -805,42 +937,82 @@ function Perfil() {
                             <FaShieldAlt />
                           </div>
                           <div>
-                            <h3>Recomendaciones de Seguridad</h3>
-                            <p>Protege el acceso a tu cuenta en GymTrack</p>
+                            <h3>{esSocio ? 'Recomendaciones de Seguridad' : 'Política de Seguridad de Cuentas'}</h3>
+                            <p>
+                              {esSocio
+                                ? 'Protege el acceso a tu cuenta en GymTrack'
+                                : 'Cómo administra GymTrack las credenciales de los socios'}
+                            </p>
                           </div>
                         </div>
                       </div>
 
                       <div className="perfil-gym-info-list">
-                        <div className="perfil-gym-info-item">
-                          <div className="perfil-gym-info-icon">
-                            <FaCheckCircle />
-                          </div>
-                          <div className="perfil-gym-info-text">
-                            <span>Longitud Recomendada</span>
-                            <strong>Utiliza al menos 8 caracteres combinando números y letras.</strong>
-                          </div>
-                        </div>
+                        {esSocio ? (
+                          <>
+                            <div className="perfil-gym-info-item">
+                              <div className="perfil-gym-info-icon">
+                                <FaCheckCircle />
+                              </div>
+                              <div className="perfil-gym-info-text">
+                                <span>Longitud Recomendada</span>
+                                <strong>Utiliza al menos 8 caracteres combinando números y letras.</strong>
+                              </div>
+                            </div>
 
-                        <div className="perfil-gym-info-item">
-                          <div className="perfil-gym-info-icon">
-                            <FaCheckCircle />
-                          </div>
-                          <div className="perfil-gym-info-text">
-                            <span>Confidencialidad</span>
-                            <strong>No compartas tu contraseña ni tu DNI con terceros.</strong>
-                          </div>
-                        </div>
+                            <div className="perfil-gym-info-item">
+                              <div className="perfil-gym-info-icon">
+                                <FaCheckCircle />
+                              </div>
+                              <div className="perfil-gym-info-text">
+                                <span>Confidencialidad</span>
+                                <strong>No compartas tu contraseña ni tu DNI con terceros.</strong>
+                              </div>
+                            </div>
 
-                        <div className="perfil-gym-info-item">
-                          <div className="perfil-gym-info-icon">
-                            <FaCheckCircle />
-                          </div>
-                          <div className="perfil-gym-info-text">
-                            <span>Acceso a Gimnasio</span>
-                            <strong>Tu DNI registrado es la clave para marcar tus asistencias.</strong>
-                          </div>
-                        </div>
+                            <div className="perfil-gym-info-item">
+                              <div className="perfil-gym-info-icon">
+                                <FaCheckCircle />
+                              </div>
+                              <div className="perfil-gym-info-text">
+                                <span>Acceso a Gimnasio</span>
+                                <strong>Tu DNI registrado es la clave para marcar tus asistencias.</strong>
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="perfil-gym-info-item">
+                              <div className="perfil-gym-info-icon">
+                                <FaCheckCircle />
+                              </div>
+                              <div className="perfil-gym-info-text">
+                                <span>Identidad Única Multi-Gimnasio</span>
+                                <strong>El socio inicia sesión con la misma contraseña en todos sus gimnasios vinculados.</strong>
+                              </div>
+                            </div>
+
+                            <div className="perfil-gym-info-item">
+                              <div className="perfil-gym-info-icon">
+                                <FaCheckCircle />
+                              </div>
+                              <div className="perfil-gym-info-text">
+                                <span>Cambio Autogestionado</span>
+                                <strong>Si recuerda su clave actual, puede cambiarla desde Mi Perfil → Seguridad & Contraseña.</strong>
+                              </div>
+                            </div>
+
+                            <div className="perfil-gym-info-item">
+                              <div className="perfil-gym-info-icon">
+                                <FaCheckCircle />
+                              </div>
+                              <div className="perfil-gym-info-text">
+                                <span>Restablecimiento por Correo</span>
+                                <strong>Si la olvidó, usá el botón para enviarle el enlace oficial de recuperación por email.</strong>
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
