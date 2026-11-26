@@ -6,6 +6,9 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useGymContext } from '../context/GymContext';
 
 const MVP_STAFF_PATHS = new Set([
+  '/dashboard-dueño',
+  '/dashboard-dueno',
+  '/dashboard',
   '/sucursales-dueño',
   '/sucursales-dueno',
   '/sucursales',
@@ -40,6 +43,8 @@ const MVP_STAFF_PATHS = new Set([
 ]);
 
 const MVP_SOCIO_PATHS = new Set([
+  '/dashboard-socio',
+  '/socio/dashboard',
   '/asistencia-socio',
   '/asistencias-socio',
   '/socio/asistencia',
@@ -86,10 +91,8 @@ function ProtectedRoute({
   } = useGymContext();
 
   const homeNoAutorizado = esSocio
-    ? mvpMode
-      ? '/asistencia-socio'
-      : '/dashboard-socio'
-    : esEmpleado || mvpMode
+    ? '/dashboard-socio'
+    : esEmpleado
       ? '/socios-dueño'
       : '/dashboard-dueño';
 

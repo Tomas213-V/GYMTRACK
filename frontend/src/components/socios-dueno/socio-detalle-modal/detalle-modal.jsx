@@ -64,9 +64,12 @@ function SocioDetalleModal({
           const s = socioData || socio;
           setDetalle(s);
 
-          const estadoBool = typeof s.estado === 'boolean'
-            ? s.estado
-            : ['activo', 'activa', 'true'].includes(String(s.estado || 'activo').toLowerCase());
+          const estadoAsociacionRaw = s.estado_asociacion !== undefined && s.estado_asociacion !== null
+            ? s.estado_asociacion
+            : s.estado;
+          const estadoBool = typeof estadoAsociacionRaw === 'boolean'
+            ? estadoAsociacionRaw
+            : ['activo', 'activa', 'true'].includes(String(estadoAsociacionRaw ?? 'activo').toLowerCase());
 
           setFormData({
             nombre: s.nombre || "",
@@ -135,7 +138,12 @@ function SocioDetalleModal({
     : "Sin vencimiento fijo";
 
   const fechaAlta = (s.fecha_alta_gimnasio || s.fecha_alta) ? formatearFecha(s.fecha_alta_gimnasio || s.fecha_alta) : "No registrada";
-  const estadoActual = normalizarEstadoSocio(s.estado);
+  const estadoActual = normalizarEstadoSocio(
+    s.estado_asociacion !== undefined && s.estado_asociacion !== null ? s.estado_asociacion : s.estado
+  );
+  const tieneContrasena = Boolean(
+    s.tiene_contrasena || (s.auth_user_id && String(s.auth_user_id).trim() !== "") || s.contrasena
+  );
 
   // Cambiar estado rápido desde el selector
   const handleCambiarEstadoRapido = async (nuevoEstado) => {
@@ -143,7 +151,36 @@ function SocioDetalleModal({
     try {
       const estadoBool = nuevoEstado === "activo";
       await changeEstadoSocio(s.id_socio, estadoBool, gymId);
-      setDetalle((prev) => ({ ...(prev || s), estado: estadoBool }));
+      const refreshed = await getSocioById(s.id_socio, { id_gimnasio: gymId }).catch(() => null);
+      if (refreshed) {
+        setDetalle(refreshed);
+      } else {
+        const cancelarLista = (lista) =>
+          Array.isArray(lista)
+            ? lista.map((m) =>
+                ['activa', 'activo', 'programada', 'programado'].includes(String(m?.estado ?? '').trim().toLowerCase())
+                  ? { ...m, estado: 'cancelada' }
+                  : m
+              )
+            : lista;
+        setDetalle((prev) => {
+          const base = prev || s;
+          return {
+            ...base,
+            estado: estadoBool,
+            estado_asociacion: estadoBool,
+            ...(!estadoBool
+              ? {
+                  membresia: cancelarLista(base.membresia),
+                  membresias: cancelarLista(base.membresias),
+                  membresia_actual: base.membresia_actual
+                    ? cancelarLista([base.membresia_actual])[0]
+                    : null,
+                }
+              : {}),
+          };
+        });
+      }
       setFormData((prev) => ({ ...prev, estado: estadoBool ? "activo" : "inactivo" }));
       if (onActualizarSocio) onActualizarSocio();
     } catch (err) {
@@ -159,16 +196,32 @@ function SocioDetalleModal({
     setGuardando(true);
 
     try {
-      const payload = {
+      const personalPayload = {
         nombre: formData.nombre,
         apellido: formData.apellido,
         dni: formData.dni,
         telefono: formData.telefono,
-        email: formData.email,
-        estado: formData.estado === "activo"
+        email: formData.email
       };
 
-      await updateSocio(s.id_socio, payload, gymId);
+      await updateSocio(s.id_socio, personalPayload, gymId);
+
+      const estadoBool = formData.estado === "activo";
+      if (formData.estado !== estadoActual) {
+        await changeEstadoSocio(s.id_socio, estadoBool, gymId);
+      }
+
+      const refreshed = await getSocioById(s.id_socio, { id_gimnasio: gymId }).catch(() => null);
+      if (refreshed) {
+        setDetalle(refreshed);
+      } else {
+        setDetalle((prev) => ({
+          ...(prev || s),
+          ...personalPayload,
+          estado: estadoBool,
+          estado_asociacion: estadoBool,
+        }));
+      }
 
       setExitoMsg("¡Datos del socio actualizados exitosamente!");
       setTimeout(() => {
@@ -183,6 +236,15 @@ function SocioDetalleModal({
     }
   };
 
+  const handleCerrarModal = () => {
+    setConfirmandoEliminar(false);
+    setEliminando(false);
+    setModoEdicion(false);
+    setErrorMsg("");
+    setExitoMsg("");
+    if (onCerrar) onCerrar();
+  };
+
   // Confirmar y ejecutar baja del socio en el gimnasio
   const handleConfirmarEliminar = async () => {
     setEliminando(true);
@@ -190,7 +252,7 @@ function SocioDetalleModal({
     try {
       await deleteSocio(s.id_socio, gymId);
       if (onEliminarSocio) onEliminarSocio(s.id_socio);
-      onCerrar();
+      handleCerrarModal();
     } catch (err) {
       setErrorMsg(err.message || "Error al dar de baja al socio.");
       setEliminando(false);
@@ -198,7 +260,7 @@ function SocioDetalleModal({
   };
 
   return (
-    <div className="socio-detalle-overlay" onClick={onCerrar}>
+    <div className="socio-detalle-overlay" onClick={handleCerrarModal}>
       <div
         className="socio-detalle-contenedor"
         onClick={(e) => e.stopPropagation()}
@@ -214,7 +276,7 @@ function SocioDetalleModal({
               <p>{modoEdicion ? "Modifica los datos del socio y su membresía" : "Información completa y estado de membresía"}</p>
             </div>
           </div>
-          <button className="socio-detalle-btn-cerrar" onClick={onCerrar} title="Cerrar ventana">
+          <button className="socio-detalle-btn-cerrar" onClick={handleCerrarModal} title="Cerrar ventana">
             <FaTimes />
           </button>
         </div>
@@ -335,8 +397,8 @@ function SocioDetalleModal({
 
                   <div className="socio-detalle-item">
                     <span className="socio-detalle-item-label">Contraseña de Portal</span>
-                    <span className="socio-detalle-item-valor" style={{ color: s.contrasena ? '#8cff00' : '#ffa500' }}>
-                      {s.contrasena ? "✓ Configurada" : "⚠ Sin contraseña asignada"}
+                    <span className="socio-detalle-item-valor" style={{ color: tieneContrasena ? '#8cff00' : '#ffa500' }}>
+                      {tieneContrasena ? "✓ Configurada" : "⚠ Sin contraseña asignada"}
                     </span>
                   </div>
                 </div>
@@ -364,7 +426,19 @@ function SocioDetalleModal({
 
               {/* Zona de Baja Lógica */}
               <div className="socio-detalle-zona-eliminar">
-                {!confirmandoEliminar ? (
+                {estadoActual === "inactivo" ? (
+                  <div className="socio-detalle-eliminar-barra">
+                    <p>Este socio se encuentra dado de baja (inactivo) en este gimnasio.</p>
+                    <button
+                      type="button"
+                      className="socio-btn-editar"
+                      onClick={() => handleCambiarEstadoRapido("activo")}
+                    >
+                      <FaCheckCircle />
+                      <span>Reactivar Socio</span>
+                    </button>
+                  </div>
+                ) : !confirmandoEliminar ? (
                   <div className="socio-detalle-eliminar-barra">
                     <p>¿Necesitas dar de baja a este socio del gimnasio?</p>
                     <button
@@ -382,7 +456,7 @@ function SocioDetalleModal({
                       <FaExclamationTriangle className="socio-confirmar-icono" />
                       <div>
                         <strong>¿Estás seguro de dar de baja a {nombreCompleto}?</strong>
-                        <p>Se desactivará su asociación con este gimnasio conservando su historial de pagos y asistencias.</p>
+                        <p>Se desactivará su asociación con este gimnasio y cualquier membresía activa, conservando su historial de pagos y asistencias.</p>
                       </div>
                     </div>
                     <div className="socio-confirmar-botones">
@@ -499,7 +573,7 @@ function SocioDetalleModal({
         {/* Footer */}
         {!modoEdicion && (
           <div className="socio-detalle-footer">
-            <button type="button" className="socio-btn-cancelar" onClick={onCerrar}>
+            <button type="button" className="socio-btn-cancelar" onClick={handleCerrarModal}>
               Cerrar
             </button>
           </div>

@@ -111,9 +111,15 @@ function SociosContent() {
       <SocioResumen
         stats={{
           total: totalSocios,
-          activos: socios.filter((s) => s.estado === true || s.estado === 'activo').length,
+          activos: socios.filter((s) => {
+            const est = s.estado_asociacion !== undefined && s.estado_asociacion !== null ? s.estado_asociacion : s.estado;
+            return est === true || est === 'activo';
+          }).length,
           pendientes: socios.filter((s) => s.estado === 'pendiente').length,
-          inactivos: socios.filter((s) => s.estado === false || s.estado === 'inactivo').length,
+          inactivos: socios.filter((s) => {
+            const est = s.estado_asociacion !== undefined && s.estado_asociacion !== null ? s.estado_asociacion : s.estado;
+            return est === false || est === 'inactivo';
+          }).length,
         }}
       />
 

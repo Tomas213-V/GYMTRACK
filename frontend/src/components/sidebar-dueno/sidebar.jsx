@@ -97,7 +97,7 @@ function Sidebar() {
       icono: <FaHouse />,
       alias: ['/dashboard', '/dashboard-dueno'],
       visible: true,
-      mvp: false
+      mvp: true
     },
     {
       ruta: '/sucursales-dueño',

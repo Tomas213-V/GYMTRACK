@@ -583,7 +583,7 @@ export default function DashboardSocio() {
           </section>
 
           {/* 3. Sección Principal: Mi Rutina Activa */}
-          <div className="socio-pc-main-grid socio-pc-main-grid-single">
+        {/* <div className="socio-pc-main-grid socio-pc-main-grid-single">
             <div className="socio-pc-card">
               <div className="socio-pc-card-header">
                 <div className="socio-pc-card-title-group">
@@ -715,7 +715,7 @@ export default function DashboardSocio() {
                 </div>
               )}
             </div>
-          </div>
+          </div> */}
         </main>
       </div>
 

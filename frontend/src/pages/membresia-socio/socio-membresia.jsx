@@ -33,7 +33,8 @@ import {
   getMiMembresia,
   getPlanesDisponibles,
   solicitarMembresiaPendiente,
-  iniciarPagoMembresia
+  iniciarPagoMembresia,
+  simularPagoMercadoPago
 } from '../../services/socioMembresiaService';
 import {
   MercadoPagoLogo,
@@ -250,14 +251,50 @@ export default function SocioMembresia() {
     if (!urlCheckout) {
       setErrorMsg(
         checkoutData?.mensaje ||
-          'La pasarela de pago no está configurada o no devolvió una URL de checkout válida. Podés solicitar la membresía en estado pendiente para abonarla en recepción.'
+          'La pasarela de pago no está configurada o no devolvió una URL de checkout válida. Podés usar el botón de simular pago o solicitar la membresía en recepción.'
       );
       return;
     }
-    window.open(urlCheckout, '_blank', 'noopener,noreferrer');
-    setNotificacion(
-      'Se abrió la pasarela de pago. Tu membresía permanecerá en estado pendiente hasta que el backend confirme la acreditación.'
-    );
+    if (urlCheckout.startsWith(window.location.origin) && urlCheckout.includes('checkout=mercadopago')) {
+      setErrorMsg(
+        'Mercado Pago devolvió una URL de fallback local. Usá "Simular pago con Mercado Pago" para probar la acreditación.'
+      );
+      return;
+    }
+    window.location.assign(urlCheckout);
+  };
+
+  const handleSimularPagoMercadoPago = async () => {
+    if (!planParaPagar) return;
+    const planId = planParaPagar.id_membresia_gimnasio;
+    const targetGymId = planParaPagar.id_gimnasio || (gimnasioModalId ? Number(gimnasioModalId) : gimnasioActivoId);
+
+    try {
+      setProcesandoPago(true);
+      setErrorMsg('');
+      const res = await simularPagoMercadoPago({
+        id_membresia_gimnasio: planId
+      });
+
+      setNotificacion(
+        res?.mensaje ||
+          `¡Pago con Mercado Pago simulado y acreditado! Tu plan ${planParaPagar.nombre} ya está activo.`
+      );
+      setModalCheckoutAbierto(false);
+
+      await refreshProfile();
+      if (targetGymId && String(targetGymId) !== String(gimnasioActivoId)) {
+        seleccionarGimnasio(Number(targetGymId));
+      } else {
+        await cargarMembresia();
+      }
+
+      setTimeout(() => setNotificacion(''), 7000);
+    } catch (err) {
+      setErrorMsg(err.message || 'No se pudo simular el pago con Mercado Pago.');
+    } finally {
+      setProcesandoPago(false);
+    }
   };
 
   const handleActualizarEstadoPago = async () => {
@@ -835,18 +872,31 @@ export default function SocioMembresia() {
                   {procesandoPago
                     ? 'Generando orden...'
                     : getCheckoutUrl()
-                    ? 'Ir a pagar en Mercado Pago'
+                    ? 'Pagar con Mercado Pago'
                     : 'Mercado Pago no configurado en servidor'}
                 </span>
                 <FaExternalLinkAlt style={{ fontSize: '12px' }} />
               </button>
 
               <button
-                onClick={handleSolicitarMembresiaPendiente}
+                onClick={handleSimularPagoMercadoPago}
                 disabled={procesandoPago}
                 className="btn-simular-aprobado"
               >
                 <FaCheck />
+                <span>
+                  {procesandoPago
+                    ? 'Procesando simulación...'
+                    : 'Simular pago con Mercado Pago'}
+                </span>
+              </button>
+
+              <button
+                onClick={handleSolicitarMembresiaPendiente}
+                disabled={procesandoPago}
+                className="btn-solicitar-pendiente"
+              >
+                <FaWallet />
                 <span>Solicitar Membresía Pendiente (Pagar en Recepción)</span>
               </button>
 

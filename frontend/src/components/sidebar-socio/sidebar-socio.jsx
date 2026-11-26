@@ -34,7 +34,7 @@ function SidebarSocio() {
   }, [location.pathname]);
 
   const todasLasOpciones = [
-    { ruta: '/dashboard-socio', nombre: 'Inicio', icono: <FaHouse />, alias: ['/socio/dashboard'], mvp: false },
+    { ruta: '/dashboard-socio', nombre: 'Inicio', icono: <FaHouse />, alias: ['/socio/dashboard'], mvp: true },
     { ruta: '/rutinas-socio', nombre: 'Rutinas', icono: <FaDumbbell />, alias: ['/socio/rutinas', '/rutinas'], mvp: false },
     { ruta: '/ejercicios-socio', nombre: 'Ejercicios', icono: <FaRunning />, alias: ['/socio/ejercicios', '/ejercicios'], mvp: false },
     { ruta: '/asistencia-socio', nombre: 'Asistencia', icono: <FaCalendarCheck />, alias: ['/asistencias', '/socio/asistencia', '/asistencias-socio'], mvp: true },

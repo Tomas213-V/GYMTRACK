@@ -80,10 +80,8 @@ function NavGlobal() {
         <Link
           to={
             esSocio
-              ? mvpMode
-                ? '/asistencia-socio'
-                : '/dashboard-socio'
-              : esEmpleado || mvpMode
+              ? '/dashboard-socio'
+              : esEmpleado
                 ? '/socios-dueño'
                 : '/dashboard-dueño'
           }

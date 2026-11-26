@@ -954,6 +954,28 @@
   border-color: #22c55e;
 }
 
+.btn-solicitar-pendiente {
+  background: rgba(148, 163, 184, 0.08);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  padding: 11px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-solicitar-pendiente:hover {
+  background: rgba(148, 163, 184, 0.16);
+  border-color: rgba(148, 163, 184, 0.4);
+  color: #ffffff;
+}
+
 /* Modal Comprobante */
 .comprobante-card {
   background: #0d1217;

@@ -33,26 +33,22 @@ import {
   FaCalendarAlt,
   FaLock,
   FaBuilding,
-  FaDumbbell,
-  FaCreditCard,
   FaCheckCircle,
   FaExclamationCircle,
   FaEye,
   FaEyeSlash,
   FaSave,
   FaArrowLeft,
-  FaClock,
   FaShieldAlt,
   FaMapMarkerAlt,
-  FaSignOutAlt,
-  FaReceipt
+  FaSignOutAlt
 } from 'react-icons/fa';
 import NavGlobal from '../../components/nav-global/nav-global';
 import Sidebar from '../../components/sidebar-dueno/sidebar';
 import { useGymContext } from '../../context/GymContext';
 import { getPerfilSocio, updatePerfilSocio } from '../../services/socioService';
 import { cambiarContrasena } from '../../services/authService';
-import { formatFechaArgentina, formatHoraArgentina } from '../../utils/dateUtils';
+import { formatFechaArgentina } from '../../utils/dateUtils';
 import './perfil.css';
 
 const estadoTexto = (est) => {
@@ -294,22 +290,8 @@ function Perfil() {
     }
   };
 
-  // Formatear hora de asistencia HH:MM (horario Argentina)
-  const formatearHora = (fechaHoraStr) => {
-    if (!fechaHoraStr) return 'Presente';
-    try {
-      return formatHoraArgentina(fechaHoraStr);
-    } catch {
-      return 'Presente';
-    }
-  };
-
   const socio = perfilData?.socio || perfilData?.perfil || {};
   const gimnasio = perfilData?.gimnasio || gimnasioActivo || socio?.gimnasio || null;
-  const membresia = perfilData?.membresia || null;
-  const estadisticas = perfilData?.estadisticas || {};
-  const ultimosPagos = perfilData?.ultimosPagos || [];
-  const ultimasAsistencias = perfilData?.ultimasAsistencias || [];
 
   return (
     <div className="perfil-page-layout">
@@ -453,36 +435,6 @@ function Perfil() {
                     </div>
                   </div>
                 </div>
-
-                {/* Métricas rápidas (ocultas en la vista del socio) */}
-                {!esSocio && (
-                  <div className="perfil-hero-quick-stats">
-                    <div className="perfil-quick-stat-box">
-                      <span className="perfil-quick-stat-val accent">
-                        {estadisticas.totalAsistencias ?? 0}
-                      </span>
-                      <span className="perfil-quick-stat-label">Asistencias</span>
-                    </div>
-
-                    <div className="perfil-quick-stat-box">
-                      <span className="perfil-quick-stat-val">
-                        {estadisticas.diasRestantes != null
-                          ? estadisticas.diasRestantes > 0
-                            ? `${estadisticas.diasRestantes}d`
-                            : 'Venc.'
-                          : 'N/A'}
-                      </span>
-                      <span className="perfil-quick-stat-label">Días Membr.</span>
-                    </div>
-
-                    <div className="perfil-quick-stat-box">
-                      <span className="perfil-quick-stat-val">
-                        {ultimosPagos.length}
-                      </span>
-                      <span className="perfil-quick-stat-label">Pagos Reg.</span>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Pestañas de Navegación del Perfil */}
@@ -493,28 +445,12 @@ function Perfil() {
                 >
                   <FaUser /> Datos Personales
                 </button>
-                {!esSocio && (
-                  <button
-                    className={`perfil-tab-btn ${pestañaActiva === 'membresia' ? 'activo' : ''}`}
-                    onClick={() => setPestañaActiva('membresia')}
-                  >
-                    <FaDumbbell /> Membresía & Gimnasio
-                  </button>
-                )}
                 <button
                   className={`perfil-tab-btn ${pestañaActiva === 'seguridad' ? 'activo' : ''}`}
                   onClick={() => setPestañaActiva('seguridad')}
                 >
                   <FaShieldAlt /> Seguridad & Contraseña
                 </button>
-                {!esSocio && (
-                  <button
-                    className={`perfil-tab-btn ${pestañaActiva === 'historial' ? 'activo' : ''}`}
-                    onClick={() => setPestañaActiva('historial')}
-                  >
-                    <FaReceipt /> Asistencias & Pagos
-                  </button>
-                )}
               </div>
 
               {/* Contenido de la pestaña 1: Datos Personales */}
@@ -750,142 +686,7 @@ function Perfil() {
                 </div>
               )}
 
-              {/* Contenido de la pestaña 2: Membresía & Gimnasio */}
-              {!esSocio && pestañaActiva === 'membresia' && (
-                <div className="perfil-tab-content">
-                  <div className="perfil-grid-2col">
-                    {/* Tarjeta de Membresía Actual */}
-                    <div className="perfil-card">
-                      <div className="perfil-card-header">
-                        <div className="perfil-card-header-titles">
-                          <div className="perfil-card-header-icon">
-                            <FaDumbbell />
-                          </div>
-                          <div>
-                            <h3>Membresía Actual</h3>
-                            <p>Estado del plan suscrito y vigencia</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {membresia ? (
-                        <div className="perfil-membresia-hero">
-                          <span className="perfil-membresia-badge-plan">
-                            {membresia.estado || 'Activo'}
-                          </span>
-                          <h4 className="perfil-membresia-nombre-plan">
-                            {membresia.membresia_gimnasio?.nombre || 'Plan Contratado'}
-                          </h4>
-                          <div className="perfil-membresia-precio">
-                            ${membresia.precio ?? membresia.membresia_gimnasio?.precio ?? 0}
-                            <span> / período</span>
-                          </div>
-
-                          <div className="perfil-membresia-fechas-grid">
-                            <div className="perfil-fecha-item">
-                              <span>Fecha de Inicio</span>
-                              <strong>{formatearFecha(membresia.fecha_inicio)}</strong>
-                            </div>
-                            <div className="perfil-fecha-item">
-                              <span>Fecha de Vencimiento</span>
-                              <strong>{formatearFecha(membresia.fecha_vencimiento)}</strong>
-                            </div>
-                          </div>
-
-                          {estadisticas.diasRestantes != null && (
-                            <div className="perfil-progress-bar-container">
-                              <div className="perfil-progress-bar-labels">
-                                <span>Vigencia</span>
-                                <strong>
-                                  {estadisticas.diasRestantes > 0
-                                    ? `${estadisticas.diasRestantes} días restantes`
-                                    : 'Membresía Vencida'}
-                                </strong>
-                              </div>
-                              <div className="perfil-progress-bar-track">
-                                <div
-                                  className="perfil-progress-bar-fill"
-                                  style={{
-                                    width: `${Math.max(
-                                      0,
-                                      Math.min(100, (estadisticas.diasRestantes / 30) * 100)
-                                    )}%`,
-                                    background:
-                                      estadisticas.diasRestantes <= 0
-                                        ? 'var(--perfil-danger)'
-                                        : 'linear-gradient(90deg, #84cc16, #a3e635)'
-                                  }}
-                                ></div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="perfil-empty-msg">
-                          El socio no tiene actualmente una membresía activa asignada.
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Historial de Planes / Membresías */}
-                    <div className="perfil-card">
-                      <div className="perfil-card-header">
-                        <div className="perfil-card-header-titles">
-                          <div className="perfil-card-header-icon">
-                            <FaClock />
-                          </div>
-                          <div>
-                            <h3>Historial de Membresías</h3>
-                            <p>Planes contratados anteriormente</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {perfilData?.historialMembresias &&
-                      perfilData.historialMembresias.length > 0 ? (
-                        <div className="perfil-table-container">
-                          <table className="perfil-table">
-                            <thead>
-                              <tr>
-                                <th>Plan</th>
-                                <th>Inicio</th>
-                                <th>Vence</th>
-                                <th>Estado</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {perfilData.historialMembresias.map((m, idx) => (
-                                <tr key={m.id_membresia_socio || idx}>
-                                  <td>
-                                    <strong>
-                                      {m.membresia_gimnasio?.nombre || 'Plan Estándar'}
-                                    </strong>
-                                  </td>
-                                  <td>{formatearFecha(m.fecha_inicio)}</td>
-                                  <td>{formatearFecha(m.fecha_vencimiento)}</td>
-                                  <td>
-                                    <span
-                                      className={`perfil-tag perfil-tag-estado-${m.estado?.toLowerCase()}`}
-                                    >
-                                      {m.estado}
-                                    </span>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        <div className="perfil-empty-msg">
-                          No hay historial de membresías previas.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Contenido de la pestaña 3: Seguridad & Contraseña */}
+              {/* Contenido de la pestaña: Seguridad & Contraseña */}
               {pestañaActiva === 'seguridad' && (
                 <div className="perfil-tab-content">
                   <div className="perfil-grid-2col">
@@ -1041,130 +842,6 @@ function Perfil() {
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Contenido de la pestaña 4: Asistencias & Pagos */}
-              {!esSocio && pestañaActiva === 'historial' && (
-                <div className="perfil-tab-content">
-                  <div className="perfil-grid-2col">
-                    {/* Tabla de Asistencias Recientes */}
-                    <div className="perfil-card">
-                      <div className="perfil-card-header">
-                        <div className="perfil-card-header-titles">
-                          <div className="perfil-card-header-icon">
-                            <FaCalendarAlt />
-                          </div>
-                          <div>
-                            <h3>Últimas Asistencias</h3>
-                            <p>Registro de visitas recientes a entrenar</p>
-                          </div>
-                        </div>
-                        {esSocio && (
-                          <button
-                            className="perfil-btn-primary"
-                            style={{ height: '36px', fontSize: '12px', padding: '0 14px' }}
-                            onClick={() => navigate('/asistencia-socio')}
-                          >
-                            <FaCalendarAlt /> Marcar Asistencia
-                          </button>
-                        )}
-                      </div>
-
-                      {ultimasAsistencias.length > 0 ? (
-                        <div className="perfil-table-container">
-                          <table className="perfil-table">
-                            <thead>
-                              <tr>
-                                <th>Fecha</th>
-                                <th>Sucursal</th>
-                                <th>Ingreso</th>
-                                <th>Salida</th>
-                                <th>Estado</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {ultimasAsistencias.map((a, idx) => (
-                                <tr key={a.id_asistencia_socio || a.id_asistencia || idx}>
-                                  <td>{formatearFecha(a.hora_ingreso || a.fecha)}</td>
-                                  <td>{a.sucursal?.direccion || '-'}</td>
-                                  <td>{formatearHora(a.hora_ingreso || a.hora)} hs</td>
-                                  <td>{a.hora_salida ? `${formatearHora(a.hora_salida)} hs` : 'En curso'}</td>
-                                  <td>
-                                    <span className="perfil-tag perfil-tag-estado-activo">
-                                      {a.estado || 'presente'}
-                                    </span>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        <div className="perfil-empty-msg">
-                          No se han registrado asistencias aún.
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Tabla de Pagos Recientes */}
-                    <div className="perfil-card">
-                      <div className="perfil-card-header">
-                        <div className="perfil-card-header-titles">
-                          <div className="perfil-card-header-icon">
-                            <FaCreditCard />
-                          </div>
-                          <div>
-                            <h3>Últimos Pagos</h3>
-                            <p>Recibos y comprobantes de abono</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {ultimosPagos.length > 0 ? (
-                        <div className="perfil-table-container">
-                          <table className="perfil-table">
-                            <thead>
-                              <tr>
-                                <th>Monto</th>
-                                <th>Fecha</th>
-                                <th>Método</th>
-                                <th>Estado</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {ultimosPagos.map((p, idx) => (
-                                <tr key={p.id_pago || idx}>
-                                  <td>
-                                    <strong style={{ color: 'var(--perfil-green)' }}>
-                                      ${p.monto}
-                                    </strong>
-                                  </td>
-                                  <td>{formatearFecha(p.fecha_pago)}</td>
-                                  <td>{p.metodo_pago || 'Efectivo'}</td>
-                                  <td>
-                                    <span
-                                      className={`perfil-tag perfil-tag-estado-${
-                                        p.estado === 'completado' || p.estado === 'aprobado'
-                                          ? 'activo'
-                                          : 'pendiente'
-                                      }`}
-                                    >
-                                      {p.estado || 'Aprobado'}
-                                    </span>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        <div className="perfil-empty-msg">
-                          No se encontraron pagos registrados para este socio.
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>

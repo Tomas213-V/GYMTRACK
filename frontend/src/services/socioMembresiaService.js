@@ -106,3 +106,17 @@ export async function iniciarPagoMembresia({ id_membresia_gimnasio }) {
     }
   });
 }
+
+/**
+ * Simula la acreditación de un pago con Mercado Pago para presentaciones
+ * (POST /api/socio/pagos/simular-mercadopago).
+ */
+export async function simularPagoMercadoPago({ id_membresia_gimnasio, fecha_inicio = null }) {
+  return apiRequest('/socio/pagos/simular-mercadopago', {
+    method: 'POST',
+    body: {
+      id_membresia_gimnasio: Number(id_membresia_gimnasio),
+      ...(fecha_inicio ? { fecha_inicio: String(fecha_inicio).split('T')[0] } : {})
+    }
+  });
+}

@@ -13,7 +13,12 @@ function SocioCard({ socio, onClick }) {
     (Array.isArray(socio.membresia) ? socio.membresia[0] : socio.membresia) ||
     null;
 
-  const planNombre = memb?.membresia_gimnasio?.nombre || memb?.plan_membresia?.nombre || memb?.tipo || 'Sin Plan';
+  const planNombreBase = memb?.membresia_gimnasio?.nombre || memb?.plan_membresia?.nombre || memb?.tipo || 'Sin Plan';
+  const estadoMembStr = memb?.estado ? String(memb.estado).trim().toLowerCase() : '';
+  const planNombre =
+    memb && estadoMembStr && estadoMembStr !== 'activa' && estadoMembStr !== 'activo'
+      ? `${planNombreBase} (${estadoMembStr.charAt(0).toUpperCase() + estadoMembStr.slice(1)})`
+      : planNombreBase;
   const formatearFecha = (fechaStr) => {
     if (!fechaStr) return 'N/A';
     const partes = String(fechaStr).split('T')[0].split('-');
@@ -21,9 +26,12 @@ function SocioCard({ socio, onClick }) {
   };
   const vencimiento = memb?.fecha_vencimiento ? formatearFecha(memb.fecha_vencimiento) : 'N/A';
 
-  const estadoLabel = typeof socio.estado === 'boolean'
-    ? (socio.estado ? 'activo' : 'inactivo')
-    : String(socio.estado || 'activo').toLowerCase();
+  const estadoRaw = socio.estado_asociacion !== undefined && socio.estado_asociacion !== null
+    ? socio.estado_asociacion
+    : socio.estado;
+  const estadoLabel = typeof estadoRaw === 'boolean'
+    ? (estadoRaw ? 'activo' : 'inactivo')
+    : String(estadoRaw || 'activo').toLowerCase();
 
   return (
     <div className="socio-card" onClick={() => onClick(socio)}>
